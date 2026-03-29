@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>CS1591</WarningsNotAsErrors>
+    <LangVersion>latest</LangVersion>
+
+    <Version>1.0.0</Version>
+    <Authors>Iron Programmer School</Authors>
+    <Company>Iron Programmer School</Company>
+    <Description>IronMapper — compile-time Object-to-Object mapper for .NET. Zero reflection at runtime, Roslyn Source Generator based.</Description>
+    <RepositoryUrl>https://github.com/iron-programmer-school/IronMapper</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>mapper;automapper;source-generator;compile-time</PackageTags>
+  </PropertyGroup>
+</Project>

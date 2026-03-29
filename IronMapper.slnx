@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/IronMapper.Generator/IronMapper.Generator.csproj" />
+    <Project Path="src/IronMapper/IronMapper.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IronMapper.Benchmarks/IronMapper.Benchmarks.csproj" />
+    <Project Path="tests/IronMapper.Generator.Tests/IronMapper.Generator.Tests.csproj" />
+    <Project Path="tests/IronMapper.Tests/IronMapper.Tests.csproj" />
+  </Folder>
+</Solution>
