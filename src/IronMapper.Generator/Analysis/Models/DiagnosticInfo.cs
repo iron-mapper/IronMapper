@@ -11,9 +11,15 @@ namespace IronMapper.Generator.Analysis.Models;
 /// </summary>
 internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
 {
+    /// <summary>The Roslyn <see cref="DiagnosticDescriptor"/> that describes the rule being violated.</summary>
     public DiagnosticDescriptor Descriptor { get; }
+
+    /// <summary>Format arguments to interpolate into <see cref="DiagnosticDescriptor.MessageFormat"/>.</summary>
     public string[] MessageArgs { get; }
 
+    /// <summary>Initialises a new <see cref="DiagnosticInfo"/>.</summary>
+    /// <param name="descriptor">The diagnostic rule descriptor.</param>
+    /// <param name="messageArgs">Arguments for the message format string.</param>
     public DiagnosticInfo(DiagnosticDescriptor descriptor, params string[] messageArgs)
     {
         Descriptor = descriptor;

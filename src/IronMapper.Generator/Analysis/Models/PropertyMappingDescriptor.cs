@@ -21,6 +21,12 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <summary>When true, the generated code should null-check the source member before reading.</summary>
     public bool NeedsNullCheck { get; }
 
+    /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
+    /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
+    /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
+    /// <param name="isIgnored">When <see langword="true"/> the destination member is skipped entirely.</param>
+    /// <param name="converterType">Fully-qualified name of the <c>ITypeConverter</c> to use, or <see langword="null"/>.</param>
+    /// <param name="needsNullCheck">When <see langword="true"/> the generated code wraps the read in a null-check.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,

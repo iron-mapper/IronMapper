@@ -29,6 +29,14 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <summary>True when at least one property uses a custom ITypeConverter.</summary>
     public bool HasCustomConverter { get; }
 
+    /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
+    /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
+    /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
+    /// <param name="destTypeName">Simple (unqualified) name of the destination type.</param>
+    /// <param name="destNamespace">Namespace of the destination type, or <see langword="null"/> for the global namespace.</param>
+    /// <param name="propertyMappings">Per-property mapping instructions in declaration order.</param>
+    /// <param name="diagnostics">Diagnostics to surface when this descriptor is emitted.</param>
+    /// <param name="hasCustomConverter">Whether any property mapping uses a custom <c>ITypeConverter</c>.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,

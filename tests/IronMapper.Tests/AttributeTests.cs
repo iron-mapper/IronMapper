@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using IronMapper.Attributes;
@@ -17,14 +16,14 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MapToAttribute_StoresDestinationType()
+    public void MapToAttribute_WhenConstructedWithType_StoresDestinationType()
     {
         var attr = new MapToAttribute(typeof(string));
         Assert.Equal(typeof(string), attr.DestinationType);
     }
 
     [Fact]
-    public void MapToAttribute_CanBeAppliedToClass()
+    public void MapToAttribute_WhenAppliedToClass_IsReflectedFromType()
     {
         var attrs = typeof(SampleSource).GetCustomAttributes<MapToAttribute>().ToArray();
         Assert.Single(attrs);
@@ -32,13 +31,13 @@ public class AttributeTests
     }
 
     [Fact]
-    public void MapToAttribute_IsSealed()
+    public void MapToAttribute_TypeDefinition_IsSealed()
     {
         Assert.True(typeof(MapToAttribute).IsSealed);
     }
 
     [Fact]
-    public void MapToAttribute_AllowsMultipleOnSameType()
+    public void MapToAttribute_AttributeUsage_AllowsMultiple()
     {
         var usage = typeof(MapToAttribute).GetCustomAttribute<AttributeUsageAttribute>()!;
         Assert.True(usage.AllowMultiple);
@@ -49,14 +48,14 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MapFromAttribute_StoresSourceType()
+    public void MapFromAttribute_WhenConstructedWithType_StoresSourceType()
     {
         var attr = new MapFromAttribute(typeof(int));
         Assert.Equal(typeof(int), attr.SourceType);
     }
 
     [Fact]
-    public void MapFromAttribute_CanBeAppliedToClass()
+    public void MapFromAttribute_WhenAppliedToClass_IsReflectedFromType()
     {
         var attrs = typeof(SampleDestWithMapFrom).GetCustomAttributes<MapFromAttribute>().ToArray();
         Assert.Single(attrs);
@@ -64,7 +63,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void MapFromAttribute_IsSealed()
+    public void MapFromAttribute_TypeDefinition_IsSealed()
     {
         Assert.True(typeof(MapFromAttribute).IsSealed);
     }
@@ -74,14 +73,14 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MapPropertyAttribute_StoresDestinationProperty()
+    public void MapPropertyAttribute_WhenConstructedWithName_StoresDestinationProperty()
     {
         var attr = new MapPropertyAttribute("FullName");
         Assert.Equal("FullName", attr.DestinationProperty);
     }
 
     [Fact]
-    public void MapPropertyAttribute_CanBeAppliedToProperty()
+    public void MapPropertyAttribute_WhenAppliedToProperty_IsReflectedFromMember()
     {
         var prop = typeof(SampleSource).GetProperty(nameof(SampleSource.Name))!;
         var attr = prop.GetCustomAttribute<MapPropertyAttribute>();
@@ -90,7 +89,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void MapPropertyAttribute_IsSealed()
+    public void MapPropertyAttribute_TypeDefinition_IsSealed()
     {
         Assert.True(typeof(MapPropertyAttribute).IsSealed);
     }
@@ -100,7 +99,7 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IgnoreAttribute_CanBeAppliedToProperty()
+    public void IgnoreAttribute_WhenAppliedToProperty_IsReflectedFromMember()
     {
         var prop = typeof(SampleSource).GetProperty(nameof(SampleSource.Secret))!;
         var attr = prop.GetCustomAttribute<IgnoreAttribute>();
@@ -108,7 +107,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void IgnoreAttribute_IsSealed()
+    public void IgnoreAttribute_TypeDefinition_IsSealed()
     {
         Assert.True(typeof(IgnoreAttribute).IsSealed);
     }
@@ -118,14 +117,14 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MapConverterAttribute_StoresConverterType()
+    public void MapConverterAttribute_WhenConstructedWithType_StoresConverterType()
     {
         var attr = new MapConverterAttribute(typeof(SampleConverter));
         Assert.Equal(typeof(SampleConverter), attr.ConverterType);
     }
 
     [Fact]
-    public void MapConverterAttribute_CanBeAppliedToProperty()
+    public void MapConverterAttribute_WhenAppliedToProperty_IsReflectedFromMember()
     {
         var prop = typeof(SampleSource).GetProperty(nameof(SampleSource.Value))!;
         var attr = prop.GetCustomAttribute<MapConverterAttribute>();
@@ -134,7 +133,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void MapConverterAttribute_IsSealed()
+    public void MapConverterAttribute_TypeDefinition_IsSealed()
     {
         Assert.True(typeof(MapConverterAttribute).IsSealed);
     }
@@ -144,7 +143,7 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IMapper_HasMap_ObjectOverload()
+    public void IMapper_Interface_HasMapWithSingleObjectParameter()
     {
         var method = typeof(IMapper).GetMethods()
             .FirstOrDefault(m => m.Name == "Map" && m.GetGenericArguments().Length == 1);
@@ -155,7 +154,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void IMapper_HasMap_TwoGenericOverload()
+    public void IMapper_Interface_HasMapWithTwoGenericParameters()
     {
         var methods = typeof(IMapper).GetMethods()
             .Where(m => m.Name == "Map" && m.GetGenericArguments().Length == 2)
@@ -164,7 +163,7 @@ public class AttributeTests
     }
 
     [Fact]
-    public void IMapper_HasMapCollection_Method()
+    public void IMapper_Interface_HasMapCollectionWithTwoGenericParameters()
     {
         var method = typeof(IMapper).GetMethod("MapCollection");
         Assert.NotNull(method);
@@ -176,14 +175,14 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void ITypeConverter_Generic_HasConvertMethod()
+    public void ITypeConverterGeneric_Interface_HasConvertMethod()
     {
         var method = typeof(ITypeConverter<string, int>).GetMethod("Convert");
         Assert.NotNull(method);
     }
 
     [Fact]
-    public void ITypeConverter_Generic_InheritsFromNonGeneric()
+    public void ITypeConverterGeneric_TypeHierarchy_InheritsFromNonGenericMarker()
     {
         Assert.True(typeof(ITypeConverter).IsAssignableFrom(typeof(ITypeConverter<string, int>)));
     }
@@ -193,13 +192,13 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MappingProfile_ImplementsIMappingProfile()
+    public void MappingProfile_TypeHierarchy_ImplementsIMappingProfile()
     {
         Assert.True(typeof(IMappingProfile).IsAssignableFrom(typeof(MappingProfile)));
     }
 
     [Fact]
-    public void MappingProfile_CreateMap_ReturnsIMappingExpression()
+    public void MappingProfile_CreateMap_ReturnsNonNullIMappingExpression()
     {
         var profile = new SampleProfile();
         Assert.NotNull(profile.GetExpression());
@@ -210,19 +209,19 @@ public class AttributeTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void MappingException_IsExceptionSubclass()
+    public void MappingException_TypeHierarchy_DerivesFromException()
     {
         Assert.True(typeof(Exception).IsAssignableFrom(typeof(MappingException)));
     }
 
     [Fact]
-    public void MappingConfigurationException_IsMappingExceptionSubclass()
+    public void MappingConfigurationException_TypeHierarchy_DerivesFromMappingException()
     {
         Assert.True(typeof(MappingException).IsAssignableFrom(typeof(MappingConfigurationException)));
     }
 
     [Fact]
-    public void MappingConfigurationException_MessageContainsTypeNames()
+    public void MappingConfigurationException_WhenConstructedWithTypes_MessageContainsTypeNames()
     {
         var ex = new MappingConfigurationException(typeof(SampleSource), typeof(SampleDest));
         Assert.Contains(nameof(SampleSource), ex.Message);

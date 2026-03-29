@@ -7,11 +7,11 @@ namespace IronMapper.Generator.Tests;
 public class BasicGeneratorTests
 {
     // ------------------------------------------------------------------
-    // TestSimpleMapping
+    // Simple mapping
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestSimpleMapping_GeneratesMapToMethod()
+    public void SimpleMapping_WhenMapToAttributeApplied_GeneratesMapToExtensionMethod()
     {
         var source = """
             using IronMapper.Attributes;
@@ -32,9 +32,7 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.Empty(errors);
-
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.NotEmpty(generatedSources);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("MapToDestClass", code);
@@ -45,7 +43,7 @@ public class BasicGeneratorTests
     }
 
     [Fact]
-    public void TestSimpleMapping_GeneratedCodeHasNullGuard()
+    public void SimpleMapping_WhenSourceCouldBeNull_GeneratedCodeContainsArgumentNullGuard()
     {
         var source = """
             using IronMapper.Attributes;
@@ -62,11 +60,11 @@ public class BasicGeneratorTests
     }
 
     // ------------------------------------------------------------------
-    // TestPropertyNameMapping ([MapProperty])
+    // MapProperty attribute
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestPropertyNameMapping_RenamesProperty()
+    public void MapPropertyAttribute_WhenDestNameProvided_RemapsToDestPropertyName()
     {
         var source = """
             using IronMapper.Attributes;
@@ -86,22 +84,19 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.Empty(errors);
-
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("FullName = source.Name", code);
-        // "Name" (the source property) should not appear as a destination property name.
-        // Check there is no assignment of the form "  Name = source." (a dest prop named Name).
+        // "Name" must not appear as a destination property (only as source).
         Assert.DoesNotContain("                Name = source.", code);
     }
 
     // ------------------------------------------------------------------
-    // TestIgnoreAttribute ([Ignore])
+    // Ignore attribute
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestIgnoreAttribute_PropertyNotMapped()
+    public void IgnoreAttribute_WhenAppliedToSourceProperty_ExcludesFromGeneratedMapping()
     {
         var source = """
             using IronMapper.Attributes;
@@ -123,22 +118,19 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.Empty(errors);
-
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("Id = source.Id", code);
         Assert.DoesNotContain("InternalToken", code);
     }
 
     // ------------------------------------------------------------------
-    // TestDiagnosticMissingProperty (IM0001)
+    // IM0001 diagnostic
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestDiagnosticMissingProperty_EmitsIM0001Warning()
+    public void UnmappedDestinationProperty_WhenNoSourceMatch_EmitsIM0001Diagnostic()
     {
-        // DestClass has ExtraProperty that doesn't exist on SourceClass.
         var source = """
             using IronMapper.Attributes;
 
@@ -157,7 +149,7 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        // Code is still generated (partial mapping).
+        // Partial mapping is still generated.
         Assert.NotEmpty(generatedSources);
 
         var im0001 = diagnostics.Where(d => d.Id == "IM0001").ToList();
@@ -166,11 +158,11 @@ public class BasicGeneratorTests
     }
 
     // ------------------------------------------------------------------
-    // TestMapFrom ([MapFrom])
+    // MapFrom attribute
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestMapFrom_GeneratesMapToMethod()
+    public void MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod()
     {
         var source = """
             using IronMapper.Attributes;
@@ -189,20 +181,18 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.Empty(errors);
-
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("MapToUserDto", code);
         Assert.Contains("Username = source.Username", code);
     }
 
     // ------------------------------------------------------------------
-    // TestMultipleMapTo (AllowMultiple)
+    // Multiple [MapTo] attributes
     // ------------------------------------------------------------------
 
     [Fact]
-    public void TestMultipleMapTo_GeneratesTwoMethods()
+    public void MapToAttribute_WhenAppliedMultipleTimes_GeneratesOneMethodPerDestination()
     {
         var source = """
             using IronMapper.Attributes;
@@ -220,9 +210,7 @@ public class BasicGeneratorTests
 
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var errors = diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
-        Assert.Empty(errors);
-
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("MapToDestA", code);
         Assert.Contains("MapToDestB", code);

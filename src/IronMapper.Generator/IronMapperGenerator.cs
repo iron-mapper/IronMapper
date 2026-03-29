@@ -20,6 +20,11 @@ namespace IronMapper.Generator;
 [Generator]
 public sealed class IronMapperGenerator : IIncrementalGenerator
 {
+    /// <summary>
+    /// Registers the incremental pipeline.  Called once by the Roslyn host on startup.
+    /// Two parallel pipelines handle <c>[MapTo]</c> and <c>[MapFrom]</c> independently
+    /// so that each trigger type benefits from fine-grained caching.
+    /// </summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // [MapTo(typeof(TDest))] on source class → extract descriptors (one per attribute).
@@ -70,6 +75,10 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         return true;
     }
 
+    /// <summary>
+    /// Reports any analysis diagnostics collected in <paramref name="descriptor"/> and then
+    /// adds the generated source file to the compilation.
+    /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor)
     {
         // Report any diagnostics collected during analysis.
