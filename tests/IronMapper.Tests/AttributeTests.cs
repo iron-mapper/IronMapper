@@ -58,9 +58,9 @@ public class AttributeTests
     [Fact]
     public void MapFromAttribute_CanBeAppliedToClass()
     {
-        var attrs = typeof(SampleDest).GetCustomAttributes<MapFromAttribute>().ToArray();
+        var attrs = typeof(SampleDestWithMapFrom).GetCustomAttributes<MapFromAttribute>().ToArray();
         Assert.Single(attrs);
-        Assert.Equal(typeof(SampleSource), attrs[0].SourceType);
+        Assert.Equal(typeof(SampleSourceForMapFrom), attrs[0].SourceType);
     }
 
     [Fact]
@@ -249,7 +249,6 @@ file class SampleSource
     public int Value { get; set; }
 }
 
-[MapFrom(typeof(SampleSource))]
 file class SampleDest
 {
     public string FullName { get; set; } = string.Empty;
@@ -260,6 +259,12 @@ file sealed class SampleConverter : ITypeConverter<int, string>
 {
     public string Convert(int source) => source.ToString();
 }
+
+// Separate fixtures for [MapFrom] test — no overlap with [MapTo] fixtures above.
+file class SampleSourceForMapFrom { public int Id { get; set; } }
+
+[MapFrom(typeof(SampleSourceForMapFrom))]
+file class SampleDestWithMapFrom { public int Id { get; set; } }
 
 file sealed class SampleProfile : MappingProfile
 {

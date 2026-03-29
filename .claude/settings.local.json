@@ -4,7 +4,9 @@
       "Bash(dotnet new:*)",
       "Bash(dotnet sln:*)",
       "Bash(dotnet build:*)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(dotnet list:*)",
+      "Read(//c/Users/algmironov/.claude/projects/c--Users-algmironov-source-repos-IronMapper/3e7d1772-87c7-4c1f-b013-f6345822d10f/tool-results/**)"
     ]
   }
 }
