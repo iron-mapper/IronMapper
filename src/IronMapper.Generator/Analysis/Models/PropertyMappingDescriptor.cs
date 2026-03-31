@@ -63,8 +63,10 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && LambdaBody == other.LambdaBody;
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as PropertyMappingDescriptor);
 
+    /// <inheritdoc/>
     public override int GetHashCode()
     {
         var hash = 17;

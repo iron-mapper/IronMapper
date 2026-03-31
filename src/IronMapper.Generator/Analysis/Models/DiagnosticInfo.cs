@@ -35,8 +35,10 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
         return true;
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DiagnosticInfo other && Equals(other);
 
+    /// <inheritdoc/>
     public override int GetHashCode()
     {
         var hash = Descriptor.Id.GetHashCode();

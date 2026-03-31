@@ -3,6 +3,10 @@ using IronMapper.Generator.Analysis.Models;
 
 namespace IronMapper.Generator.CodeGeneration;
 
+/// <summary>
+/// Converts a <see cref="MappingDescriptor"/> into a C# source file containing a single
+/// static extension method inside <c>IronMapper.Generated.GeneratedMappers</c>.
+/// </summary>
 internal static class MapperCodeEmitter
 {
     /// <summary>

@@ -1,12 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet new:*)",
-      "Bash(dotnet sln:*)",
-      "Bash(dotnet build:*)",
-      "Bash(dotnet test:*)",
-      "Bash(dotnet list:*)",
-      "Read(//c/Users/algmironov/.claude/projects/c--Users-algmironov-source-repos-IronMapper/3e7d1772-87c7-4c1f-b013-f6345822d10f/tool-results/**)"
+      "Bash(dotnet*)",
+      "Bash(grep*)",
+      "Bash(cat*)",
+      "Bash(find*)",
+      "Bash(sed*)",
+      "Bash(echo*)",
+      "Bash(for*)",
+      "Bash(do*)",
+      "Bash(done*)",
+      "Bash(python3*)",
+      "Bash(reportgenerator*)",
+      "Bash(ls*)",
+      "Bash(mkdir*)",
+      "Bash(cp*)",
+      "Bash(mv*)",
+      "Read(**)"
     ]
   }
 }

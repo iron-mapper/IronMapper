@@ -16,7 +16,7 @@ public class ProfileTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void TestFluentMapping_ForMemberMapFrom_ConcatenatesSourceProperties()
+    public void FluentMapping_ForMemberMapFrom_ConcatenatesSourceProperties()
     {
         var entity = new PersonEntity
         {
@@ -34,7 +34,7 @@ public class ProfileTests
     }
 
     [Fact]
-    public void TestLambdaExpression_MapFromLambda_IsEvaluatedCorrectly()
+    public void LambdaExpression_MapFromLambda_IsEvaluatedCorrectly()
     {
         var entity = new PersonEntity
         {
@@ -53,7 +53,7 @@ public class ProfileTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void TestForMemberIgnore_IgnoredProperty_RemainsDefault()
+    public void ForMemberIgnore_IgnoredProperty_RemainsDefault()
     {
         var entity = new PersonEntity
         {
@@ -74,7 +74,7 @@ public class ProfileTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void TestWhenCondition_ConditionTrue_ReturnsMappedObject()
+    public void WhenCondition_ConditionTrue_ReturnsMappedObject()
     {
         var entity = new PersonEntity { Id = 3, FirstName = "Bob", LastName = "Builder", IsActive = true };
 
@@ -84,7 +84,7 @@ public class ProfileTests
     }
 
     [Fact]
-    public void TestWhenCondition_ConditionFalse_ReturnsDefault()
+    public void WhenCondition_ConditionFalse_ReturnsDefault()
     {
         var entity = new PersonEntity { Id = 4, FirstName = "Inactive", LastName = "User", IsActive = false };
 
@@ -99,7 +99,7 @@ public class ProfileTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void TestReverseMap_GeneratesReverseExtensionMethod()
+    public void ReverseMap_ReverseExtensionMethod_MapsDestToSource()
     {
         var dto = new AddressDto { Id = 7, Street = "Main St" };
 
@@ -111,7 +111,7 @@ public class ProfileTests
     }
 
     [Fact]
-    public void TestReverseMap_ForwardMappingStillWorks()
+    public void ReverseMap_ForwardMapping_StillWorks()
     {
         var entity = new AddressEntity { Id = 8, Street = "Oak Ave" };
 
@@ -126,7 +126,7 @@ public class ProfileTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void TestSimpleProfileMapping_MatchingProperties_AreCopiedByName()
+    public void SimpleProfileMapping_MatchingProperties_AreCopiedByName()
     {
         var src = new SimpleSource { Value = 42, Label = "hello" };
 

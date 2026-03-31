@@ -86,8 +86,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         return true;
     }
 
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingDescriptor);
 
+    /// <inheritdoc/>
     public override int GetHashCode()
     {
         var hash = 17;
