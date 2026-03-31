@@ -29,6 +29,14 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <summary>True when at least one property uses a custom ITypeConverter.</summary>
     public bool HasCustomConverter { get; }
 
+    /// <summary>
+    /// When non-null, the generated mapper wraps the entire mapping in a condition.
+    /// This is a verbatim C# expression (using "source" as the source variable) emitted as:
+    /// <code>if (!(conditionBody)) return default!;</code>
+    /// Produced by When(src =&gt; ...) in a MappingProfile.
+    /// </summary>
+    public string? WhenConditionBody { get; }
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -37,6 +45,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="propertyMappings">Per-property mapping instructions in declaration order.</param>
     /// <param name="diagnostics">Diagnostics to surface when this descriptor is emitted.</param>
     /// <param name="hasCustomConverter">Whether any property mapping uses a custom <c>ITypeConverter</c>.</param>
+    /// <param name="whenConditionBody">Optional verbatim C# condition expression (uses "source") emitted as a guard before mapping.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -44,7 +53,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string? destNamespace,
         ImmutableArray<PropertyMappingDescriptor> propertyMappings,
         ImmutableArray<DiagnosticInfo> diagnostics,
-        bool hasCustomConverter)
+        bool hasCustomConverter,
+        string? whenConditionBody = null)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -53,6 +63,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         PropertyMappings = propertyMappings;
         Diagnostics = diagnostics;
         HasCustomConverter = hasCustomConverter;
+        WhenConditionBody = whenConditionBody;
     }
 
     public bool Equals(MappingDescriptor? other)
@@ -64,7 +75,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || SourceNamespace != other.SourceNamespace
             || DestTypeName != other.DestTypeName
             || DestNamespace != other.DestNamespace
-            || HasCustomConverter != other.HasCustomConverter)
+            || HasCustomConverter != other.HasCustomConverter
+            || WhenConditionBody != other.WhenConditionBody)
             return false;
 
         if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
@@ -84,6 +96,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + DestTypeName.GetHashCode();
         hash = hash * 31 + (DestNamespace?.GetHashCode() ?? 0);
         hash = hash * 31 + HasCustomConverter.GetHashCode();
+        hash = hash * 31 + (WhenConditionBody?.GetHashCode() ?? 0);
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
         return hash;

@@ -4,6 +4,7 @@ using IronMapper.Generator.CodeGeneration;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Immutable;
 
 namespace IronMapper.Generator;
 
@@ -47,6 +48,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             EmitDescriptor(spc, descriptor));
 
         context.RegisterSourceOutput(fromMapFrom, static (spc, descriptor) =>
+            EmitDescriptor(spc, descriptor));
+
+        // MappingProfile subclass pipeline — analyses constructor bodies for CreateMap<,>() chains.
+        var fromProfiles = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: ProfileAnalyzer.IsCandidateClass,
+                transform: static (ctx, ct) => ProfileAnalyzer.ExtractFromProfile(ctx, ct))
+            .SelectMany(static (arr, _) => arr);
+
+        context.RegisterSourceOutput(fromProfiles, static (spc, descriptor) =>
             EmitDescriptor(spc, descriptor));
     }
 

@@ -21,24 +21,34 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <summary>When true, the generated code should null-check the source member before reading.</summary>
     public bool NeedsNullCheck { get; }
 
+    /// <summary>
+    /// When non-null, this is a C# expression (with "source" as the source object variable) that
+    /// should be emitted verbatim as the right-hand side of the assignment.
+    /// Produced by ForMember(..., opt => opt.MapFrom(src => ...)) in a MappingProfile.
+    /// </summary>
+    public string? LambdaBody { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
     /// <param name="isIgnored">When <see langword="true"/> the destination member is skipped entirely.</param>
     /// <param name="converterType">Fully-qualified name of the <c>ITypeConverter</c> to use, or <see langword="null"/>.</param>
     /// <param name="needsNullCheck">When <see langword="true"/> the generated code wraps the read in a null-check.</param>
+    /// <param name="lambdaBody">Optional verbatim C# expression to emit for the right-hand side (uses "source" as the source variable).</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
         bool isIgnored,
         string? converterType,
-        bool needsNullCheck)
+        bool needsNullCheck,
+        string? lambdaBody = null)
     {
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
         IsIgnored = isIgnored;
         ConverterType = converterType;
         NeedsNullCheck = needsNullCheck;
+        LambdaBody = lambdaBody;
     }
 
     public bool Equals(PropertyMappingDescriptor? other)
@@ -49,7 +59,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && DestPropertyName == other.DestPropertyName
             && IsIgnored == other.IsIgnored
             && ConverterType == other.ConverterType
-            && NeedsNullCheck == other.NeedsNullCheck;
+            && NeedsNullCheck == other.NeedsNullCheck
+            && LambdaBody == other.LambdaBody;
     }
 
     public override bool Equals(object? obj) => Equals(obj as PropertyMappingDescriptor);
@@ -62,6 +73,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + IsIgnored.GetHashCode();
         hash = hash * 31 + (ConverterType?.GetHashCode() ?? 0);
         hash = hash * 31 + NeedsNullCheck.GetHashCode();
+        hash = hash * 31 + (LambdaBody?.GetHashCode() ?? 0);
         return hash;
     }
 }

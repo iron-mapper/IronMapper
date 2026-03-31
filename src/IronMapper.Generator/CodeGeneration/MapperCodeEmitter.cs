@@ -28,6 +28,13 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        public static {destFullName} {methodName}(this {sourceFullName} source)");
         sb.AppendLine("        {");
         sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
+
+        // When() guard — emit before the object initializer.
+        if (descriptor.WhenConditionBody is not null)
+        {
+            sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;");
+        }
+
         sb.AppendLine($"            return new {destFullName}");
         sb.AppendLine("            {");
 
@@ -35,7 +42,12 @@ internal static class MapperCodeEmitter
         {
             if (prop.IsIgnored) continue;
 
-            if (prop.ConverterType is not null)
+            if (prop.LambdaBody is not null)
+            {
+                // ForMember(..., opt => opt.MapFrom(src => <body>)) — emit lambda body verbatim.
+                sb.AppendLine($"                {prop.DestPropertyName} = {prop.LambdaBody},");
+            }
+            else if (prop.ConverterType is not null)
             {
                 sb.AppendLine($"                {prop.DestPropertyName} = new global::{prop.ConverterType}().Convert(source.{prop.SourcePropertyName}),");
             }
