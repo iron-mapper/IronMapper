@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>IronMapper.CodeFixes</PackageId>
+    <RootNamespace>IronMapper.CodeFixes</RootNamespace>
+    <AssemblyName>IronMapper.CodeFixes</AssemblyName>
+    <!-- Code fix providers require workspace-level APIs; do not enforce generator-only rules here. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

@@ -89,6 +89,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// <summary>
     /// Reports any analysis diagnostics collected in <paramref name="descriptor"/> and then
     /// adds the generated source file to the compilation.
+    /// Sentinel descriptors (SourceTypeName is empty) carry only diagnostics and produce no source.
     /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor)
     {
@@ -98,6 +99,9 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             spc.ReportDiagnostic(
                 Diagnostic.Create(diag.Descriptor, Location.None, diag.MessageArgs));
         }
+
+        // Sentinel descriptors (e.g. empty MappingProfile) carry diagnostics only.
+        if (descriptor.SourceTypeName.Length == 0) return;
 
         var (hintName, source) = MapperCodeEmitter.Emit(descriptor);
         spc.AddSource(hintName, source);

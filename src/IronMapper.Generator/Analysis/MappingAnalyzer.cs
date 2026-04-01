@@ -84,6 +84,25 @@ internal static class MappingAnalyzer
         var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
         var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
 
+        var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
+        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+
+        // IM0008: destination type is abstract or an interface.
+        if (destSymbol.IsAbstract || destSymbol.TypeKind == TypeKind.Interface)
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                DiagnosticDescriptors.AbstractDestinationType,
+                destSymbol.Name));
+            return new MappingDescriptor(
+                sourceTypeName: sourceSymbol.Name,
+                sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
+                destTypeName: destSymbol.Name,
+                destNamespace: SymbolHelpers.GetNamespace(destSymbol),
+                propertyMappings: propertyMappings.ToImmutable(),
+                diagnostics: diagnostics.ToImmutable(),
+                hasCustomConverter: false);
+        }
+
         // Index source props by name for fast case-insensitive lookup.
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
             System.StringComparer.OrdinalIgnoreCase);
@@ -101,12 +120,52 @@ internal static class MappingAnalyzer
                 sourceByDestName[destName] = sourceProp;
         }
 
-        var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
-        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        // Build set of destination property names for IM0006 validation.
+        var destPropNames = new System.Collections.Generic.HashSet<string>(
+            System.StringComparer.OrdinalIgnoreCase);
+        foreach (var p in destProps)
+            destPropNames.Add(p.Name);
+
+        // IM0006: validate that every [MapProperty] destination name actually exists.
+        foreach (var kv in sourceByDestName)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!destPropNames.Contains(kv.Key))
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    DiagnosticDescriptors.MapPropertyDestinationNotFound,
+                    kv.Key,
+                    destSymbol.Name));
+            }
+        }
+
+        // IM0009: for record destinations, warn about primary constructor parameters
+        // that have no matching source property.
+        if (destSymbol.IsRecord)
+        {
+            foreach (var ctor in destSymbol.Constructors)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (ctor.IsImplicitlyDeclared) continue;
+                foreach (var param in ctor.Parameters)
+                {
+                    if (!sourcePropsByName.ContainsKey(param.Name))
+                    {
+                        diagnostics.Add(new DiagnosticInfo(
+                            DiagnosticDescriptors.RecordParameterNotMapped,
+                            param.Name,
+                            destSymbol.Name));
+                    }
+                }
+            }
+        }
 
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
+
+            // Destination property explicitly ignored via [Ignore] — skip silently.
+            if (HasIgnoreAttribute(destProp)) continue;
 
             // Priority 1: explicit [MapProperty("DestName")] on a source property.
             if (sourceByDestName.TryGetValue(destProp.Name, out var mappedProp))

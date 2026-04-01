@@ -3,6 +3,7 @@
     <Project Path="src/IronMapper.Generator/IronMapper.Generator.csproj" />
     <Project Path="src/IronMapper/IronMapper.csproj" />
     <Project Path="src/IronMapper.Extensions.DI/IronMapper.Extensions.DI.csproj" />
+    <Project Path="src/IronMapper.CodeFixes/IronMapper.CodeFixes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IronMapper.Benchmarks/IronMapper.Benchmarks.csproj" />

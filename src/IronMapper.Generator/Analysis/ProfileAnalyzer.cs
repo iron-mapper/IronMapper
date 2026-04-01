@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
 using IronMapper.Generator.Analysis.Models;
+using IronMapper.Generator.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,9 +21,19 @@ internal static class ProfileAnalyzer
     /// <summary>
     /// Returns true when the syntax node is a class declaration
     /// that might extend MappingProfile (quick filter before semantic check).
+    /// File-scoped classes (<c>file class</c>) are excluded because they cannot be
+    /// referenced from generated code.
     /// </summary>
     public static bool IsCandidateClass(SyntaxNode node, CancellationToken _)
-        => node is ClassDeclarationSyntax { BaseList: not null };
+    {
+        if (node is not ClassDeclarationSyntax { BaseList: not null } classDecl) return false;
+
+        // Skip file-scoped types — they are invisible outside their file.
+        foreach (var modifier in classDecl.Modifiers)
+            if (modifier.IsKind(SyntaxKind.FileKeyword)) return false;
+
+        return true;
+    }
 
     /// <summary>
     /// Performs the full semantic check and extracts all mapping descriptors
@@ -58,6 +69,22 @@ internal static class ProfileAnalyzer
                 var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, ct);
                 builder.AddRange(descriptors);
             }
+        }
+
+        // IM0005: profile class exists but defines no mappings.
+        if (builder.Count == 0)
+        {
+            var sentinel = new MappingDescriptor(
+                sourceTypeName: string.Empty,
+                sourceNamespace: null,
+                destTypeName: string.Empty,
+                destNamespace: null,
+                propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
+                diagnostics: ImmutableArray.Create(new DiagnosticInfo(
+                    DiagnosticDescriptors.EmptyMappingProfile,
+                    classSymbol.Name)),
+                hasCustomConverter: false);
+            return ImmutableArray.Create(sentinel);
         }
 
         return builder.ToImmutable();
@@ -197,6 +224,25 @@ internal static class ProfileAnalyzer
         SemanticModel model,
         CancellationToken ct)
     {
+        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+
+        // IM0008: destination type is abstract or an interface.
+        if (destSymbol.IsAbstract || destSymbol.TypeKind == TypeKind.Interface)
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                DiagnosticDescriptors.AbstractDestinationType,
+                destSymbol.Name));
+            return new MappingDescriptor(
+                sourceTypeName: sourceSymbol.Name,
+                sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
+                destTypeName: destSymbol.Name,
+                destNamespace: SymbolHelpers.GetNamespace(destSymbol),
+                propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
+                diagnostics: diagnostics.ToImmutable(),
+                hasCustomConverter: false,
+                whenConditionBody: null);
+        }
+
         var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
         var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
 
@@ -250,7 +296,7 @@ internal static class ProfileAnalyzer
             destTypeName: destSymbol.Name,
             destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
-            diagnostics: ImmutableArray<DiagnosticInfo>.Empty,
+            diagnostics: diagnostics.ToImmutable(),
             hasCustomConverter: false,
             whenConditionBody: whenCondition);
     }
