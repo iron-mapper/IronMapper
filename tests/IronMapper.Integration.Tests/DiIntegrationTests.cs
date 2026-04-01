@@ -1,0 +1,168 @@
+using IronMapper.Attributes;
+using IronMapper.Configuration;
+using IronMapper.Exceptions;
+using IronMapper.Extensions.DI;
+using IronMapper.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace IronMapper.Integration.Tests;
+
+// -----------------------------------------------------------------------
+// Test fixtures — NOT file-scoped so the source generator can discover them.
+// -----------------------------------------------------------------------
+
+public class OrderEntity
+{
+    public int Id { get; set; }
+    public string Product { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+
+public class OrderDto
+{
+    public int Id { get; set; }
+    public string Product { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+
+/// <summary>Registers <see cref="OrderEntity"/> → <see cref="OrderDto"/> via a profile.</summary>
+public class OrderProfile : MappingProfile
+{
+    public OrderProfile()
+    {
+        CreateMap<OrderEntity, OrderDto>();
+    }
+}
+
+// Used for the converter test — maps via [MapConverter] attribute on the source.
+public class PriceConverter : ITypeConverter<decimal, string>
+{
+    public string Convert(decimal source) =>
+        source.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+}
+
+[MapTo(typeof(PricedDto))]
+public class PricedEntity
+{
+    public int Id { get; set; }
+
+    [MapConverter(typeof(PriceConverter))]
+    public decimal Amount { get; set; }
+}
+
+public class PricedDto
+{
+    public int Id { get; set; }
+    public string Amount { get; set; } = string.Empty;
+}
+
+// -----------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------
+
+/// <summary>
+/// End-to-end tests for <see cref="IronMapperServiceCollectionExtensions"/> and
+/// <see cref="RuntimeMapper"/>.
+/// </summary>
+public class DiIntegrationTests
+{
+    // ------------------------------------------------------------------
+    // Registration
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddIronMapper_RegistersIMapper()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+
+        var mapper = sp.GetService<IMapper>();
+
+        Assert.NotNull(mapper);
+        Assert.IsType<RuntimeMapper>(mapper);
+    }
+
+    [Fact]
+    public void AddIronMapper_AutoScansProfiles_RegistersProfileTypesAsSingletons()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+
+        // OrderProfile is a concrete MappingProfile in this assembly — it must be registered.
+        var profile = sp.GetService<OrderProfile>();
+
+        Assert.NotNull(profile);
+    }
+
+    [Fact]
+    public void AddIronMapper_ActionOverload_RegistersIMapper()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(opt =>
+            opt.AddProfilesFromAssembly(typeof(DiIntegrationTests).Assembly));
+        using var sp = services.BuildServiceProvider();
+
+        var mapper = sp.GetService<IMapper>();
+
+        Assert.NotNull(mapper);
+    }
+
+    // ------------------------------------------------------------------
+    // Mapping via IMapper
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Mapper_MapsCorrectly_ViaIMapper()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entity = new OrderEntity { Id = 7, Product = "Widget", Price = 9.99m };
+        var dto = mapper.Map<OrderDto>(entity);
+
+        Assert.Equal(7, dto.Id);
+        Assert.Equal("Widget", dto.Product);
+        Assert.Equal(9.99m, dto.Price);
+    }
+
+    [Fact]
+    public void Mapper_WithCustomConverter_ViaServiceProvider()
+    {
+        // PricedEntity has [MapTo(PricedDto)] with [MapConverter(PriceConverter)] on Amount.
+        // The generated code calls new PriceConverter().Convert(...).
+        // AddConverter registers PriceConverter so it is also resolvable from DI.
+        var services = new ServiceCollection();
+        services.AddIronMapper(opt =>
+        {
+            opt.AddProfilesFromAssembly(typeof(DiIntegrationTests).Assembly);
+            opt.AddConverter<PriceConverter>();
+        });
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entity = new PricedEntity { Id = 3, Amount = 12.5m };
+        var dto = mapper.Map<PricedDto>(entity);
+
+        Assert.Equal(3, dto.Id);
+        Assert.Equal("12.50", dto.Amount);
+        // Converter is also resolvable from DI.
+        Assert.NotNull(sp.GetService<PriceConverter>());
+    }
+
+    [Fact]
+    public void Mapper_ThrowsForUnregisteredMapping()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        // int has no registered mapping to OrderDto.
+        Assert.Throws<MappingException>(() => mapper.Map<OrderDto>(42));
+    }
+}

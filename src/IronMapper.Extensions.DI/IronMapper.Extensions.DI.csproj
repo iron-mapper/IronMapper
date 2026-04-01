@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.1;net10.0</TargetFrameworks>
+    <PackageId>IronMapper.Extensions.DI</PackageId>
+    <RootNamespace>IronMapper.Extensions.DI</RootNamespace>
+    <AssemblyName>IronMapper.Extensions.DI</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper\IronMapper.csproj" />
+  </ItemGroup>
+
+</Project>
