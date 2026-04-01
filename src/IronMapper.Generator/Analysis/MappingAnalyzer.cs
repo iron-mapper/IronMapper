@@ -81,8 +81,8 @@ internal static class MappingAnalyzer
         INamedTypeSymbol destSymbol,
         CancellationToken ct)
     {
-        var sourceProps = GetPublicReadableProperties(sourceSymbol);
-        var destProps = GetPublicSettableProperties(destSymbol);
+        var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
+        var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
 
         // Index source props by name for fast case-insensitive lookup.
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
@@ -142,9 +142,9 @@ internal static class MappingAnalyzer
 
         return new MappingDescriptor(
             sourceTypeName: sourceSymbol.Name,
-            sourceNamespace: GetNamespace(sourceSymbol),
+            sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
             destTypeName: destSymbol.Name,
-            destNamespace: GetNamespace(destSymbol),
+            destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: diagnostics.ToImmutable(),
             hasCustomConverter: propertyMappings.Count > 0 && HasAnyConverter(propertyMappings));
@@ -153,56 +153,6 @@ internal static class MappingAnalyzer
     // -----------------------------------------------------------------------
     // Symbol helpers
     // -----------------------------------------------------------------------
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicReadableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.GetMethod is not null)
-                {
-                    result.Add(prop);
-                }
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicSettableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.SetMethod is { DeclaredAccessibility: Accessibility.Public })
-                {
-                    result.Add(prop);
-                }
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static string? GetNamespace(INamedTypeSymbol symbol)
-    {
-        var ns = symbol.ContainingNamespace;
-        return ns is null || ns.IsGlobalNamespace ? null : ns.ToDisplayString();
-    }
 
     private static string? GetMapPropertyDestName(IPropertySymbol prop)
     {
@@ -236,7 +186,7 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol converterSymbol)
             {
-                var ns = GetNamespace(converterSymbol);
+                var ns = SymbolHelpers.GetNamespace(converterSymbol);
                 return ns is null
                     ? converterSymbol.Name
                     : $"{ns}.{converterSymbol.Name}";

@@ -197,8 +197,8 @@ internal static class ProfileAnalyzer
         SemanticModel model,
         CancellationToken ct)
     {
-        var sourceProps = GetPublicReadableProperties(sourceSymbol);
-        var destProps = GetPublicSettableProperties(destSymbol);
+        var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
+        var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
 
         // Index source props by name (case-insensitive).
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
@@ -246,9 +246,9 @@ internal static class ProfileAnalyzer
 
         return new MappingDescriptor(
             sourceTypeName: sourceSymbol.Name,
-            sourceNamespace: GetNamespace(sourceSymbol),
+            sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
             destTypeName: destSymbol.Name,
-            destNamespace: GetNamespace(destSymbol),
+            destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: ImmutableArray<DiagnosticInfo>.Empty,
             hasCustomConverter: false,
@@ -329,7 +329,7 @@ internal static class ProfileAnalyzer
     }
 
     // -----------------------------------------------------------------------
-    // Symbol helpers (mirrors those in MappingAnalyzer)
+    // Symbol helpers
     // -----------------------------------------------------------------------
 
     private static bool InheritsFrom(INamedTypeSymbol symbol, string baseTypeFqn)
@@ -341,52 +341,6 @@ internal static class ProfileAnalyzer
             current = current.BaseType;
         }
         return false;
-    }
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicReadableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.GetMethod is not null)
-                    result.Add(prop);
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicSettableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.SetMethod is { DeclaredAccessibility: Accessibility.Public })
-                    result.Add(prop);
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static string? GetNamespace(INamedTypeSymbol symbol)
-    {
-        var ns = symbol.ContainingNamespace;
-        return ns is null || ns.IsGlobalNamespace ? null : ns.ToDisplayString();
     }
 
     /// <summary>

@@ -33,14 +33,14 @@ public sealed class RuntimeMapper : IMapper
     public TDest Map<TDest>(object source)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return (TDest)MapInternal(source.GetType(), typeof(TDest), source)!;
+        return (TDest)MapInternal(source.GetType(), typeof(TDest), source)!; // safe: MapInternal throws MappingException rather than returning null
     }
 
     /// <inheritdoc/>
     public TDest Map<TSource, TDest>(TSource source)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return (TDest)MapInternal(typeof(TSource), typeof(TDest), source)!;
+        return (TDest)MapInternal(typeof(TSource), typeof(TDest), source)!; // safe: MapInternal throws MappingException rather than returning null
     }
 
     /// <inheritdoc/>
