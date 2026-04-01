@@ -8,7 +8,7 @@ namespace IronMapper.Generator.Tests;
 
 /// <summary>
 /// Branch-coverage tests for <see cref="MappingDescriptor"/>, <see cref="PropertyMappingDescriptor"/>,
-/// and <see cref="DiagnosticInfo"/> equality members.
+/// and <see cref="IronMapper.Generator.Analysis.Models.DiagnosticInfo"/> equality members.
 /// </summary>
 public class ModelEqualityTests
 {

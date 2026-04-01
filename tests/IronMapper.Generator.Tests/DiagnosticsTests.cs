@@ -283,7 +283,7 @@ public class DiagnosticsTests
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void NoIM0001_WhenSourcePropertyHasIgnore()
+    public void IM0001_WhenSourcePropertyIsIgnored_DiagnosticNotEmitted()
     {
         var source = """
             using IronMapper.Attributes;

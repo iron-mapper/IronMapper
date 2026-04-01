@@ -51,6 +51,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         LambdaBody = lambdaBody;
     }
 
+    /// <inheritdoc/>
     public bool Equals(PropertyMappingDescriptor? other)
     {
         if (other is null) return false;

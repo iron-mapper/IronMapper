@@ -36,6 +36,7 @@ internal static class MapperCodeEmitter
         // When() guard — emit before the object initializer.
         if (descriptor.WhenConditionBody is not null)
         {
+            // safe: default! is intentional — When() guard returns typed default for reference types
             sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;");
         }
 

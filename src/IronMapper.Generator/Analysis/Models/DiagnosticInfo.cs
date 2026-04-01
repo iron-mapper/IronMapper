@@ -26,6 +26,7 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
         MessageArgs = messageArgs;
     }
 
+    /// <inheritdoc/>
     public bool Equals(DiagnosticInfo other)
     {
         if (Descriptor.Id != other.Descriptor.Id) return false;

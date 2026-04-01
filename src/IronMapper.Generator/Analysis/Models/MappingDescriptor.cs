@@ -66,6 +66,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WhenConditionBody = whenConditionBody;
     }
 
+    /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
     {
         if (other is null) return false;
