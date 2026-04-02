@@ -29,19 +29,23 @@ jobs:
       - name: Test (Release)
         run: dotnet test --no-build -c Release
 
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
       - name: Pack
         run: >
           dotnet pack src/IronMapper/IronMapper.csproj
           --no-build -c Release
           -o ./nupkgs
-          /p:PackageVersion=${{ github.ref_name }}
+          /p:PackageVersion=${{ steps.version.outputs.VERSION }}
 
       - name: Pack DI extension
         run: >
           dotnet pack src/IronMapper.Extensions.DI/IronMapper.Extensions.DI.csproj
           --no-build -c Release
           -o ./nupkgs
-          /p:PackageVersion=${{ github.ref_name }}
+          /p:PackageVersion=${{ steps.version.outputs.VERSION }}
 
       - name: Push to NuGet.org
         run: >
