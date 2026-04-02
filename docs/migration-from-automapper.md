@@ -1,5 +1,7 @@
 # Migrating from AutoMapper
 
+> 📖 **[Русская версия](migration-from-automapper.ru.md)**
+
 IronMapper was designed to make migration from AutoMapper as low-friction as possible. The fluent API is intentionally similar.
 
 ---

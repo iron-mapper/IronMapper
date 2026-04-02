@@ -67,3 +67,6 @@ appsettings.Development.json
 # Generated sources (optional — can keep for debugging)
 # Uncomment to ignore generated source files:
 # *.g.cs
+
+# Claude
+.claude/

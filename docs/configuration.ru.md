@@ -1,19 +1,19 @@
-# Configuration Reference
+# Справочник по конфигурации
 
-> 📖 **[Русская версия](configuration.ru.md)**
+> 🌐 **[English version](configuration.md)**
 
-## Attributes
+## Атрибуты
 
 ### `[MapTo(typeof(TDest))]`
 
-Applied to the **source** type. Tells the generator to emit a `MapToTDest()` extension method.
+Применяется к **source**-типу. Указывает генератору создать extension method `MapToTDest()`.
 
 ```csharp
 [MapTo(typeof(ProductDto))]
 public class ProductEntity { ... }
 ```
 
-Multiple destinations are supported — apply the attribute more than once:
+Поддерживается несколько destination-типов — применяй атрибут несколько раз:
 
 ```csharp
 [MapTo(typeof(ProductDto))]
@@ -25,7 +25,7 @@ public class ProductEntity { ... }
 
 ### `[MapFrom(typeof(TSource))]`
 
-Applied to the **destination** type. Functionally identical to `[MapTo]` on the source — use whichever placement makes more sense in your codebase.
+Применяется к **destination**-типу. Функционально идентичен `[MapTo]` на source — используй тот вариант, который лучше вписывается в структуру кода.
 
 ```csharp
 [MapFrom(typeof(ProductEntity))]
@@ -36,7 +36,7 @@ public class ProductDto { ... }
 
 ### `[MapProperty("DestPropertyName")]`
 
-Applied to a **source property**. Remaps the value to a destination property with a different name.
+Применяется к **свойству source-типа**. Перенаправляет значение в свойство destination-типа с другим именем.
 
 ```csharp
 [MapTo(typeof(PersonDto))]
@@ -56,7 +56,7 @@ public class PersonDto
 
 ### `[Ignore]`
 
-Applied to a **source property**. The property is excluded from both the creating and in-place mapping methods.
+Применяется к **свойству source-типа**. Свойство исключается из обоих вариантов mapping — создающего и in-place.
 
 ```csharp
 [MapTo(typeof(OrderDto))]
@@ -73,7 +73,7 @@ public class Order
 
 ### `[MapConverter(typeof(TConverter))]`
 
-Applied to a **source property** when the source and destination property types differ and a custom conversion is needed.
+Применяется к **свойству source-типа**, когда типы source и destination отличаются и нужна кастомная конвертация.
 
 ```csharp
 public class PriceConverter : ITypeConverter<decimal, string>
@@ -100,7 +100,7 @@ public class InvoiceDto
 
 ### `CreateMap<TSource, TDest>()`
 
-Registers a mapping pair inside a `MappingProfile` constructor.
+Регистрирует пару маппинга внутри конструктора `MappingProfile`.
 
 ```csharp
 public class OrderProfile : MappingProfile
@@ -116,7 +116,7 @@ public class OrderProfile : MappingProfile
 
 ### `ForMember(dest => dest.Prop, opt => opt.MapFrom(...))`
 
-Customises how a specific destination property is populated.
+Настраивает, как заполняется конкретное свойство destination.
 
 ```csharp
 CreateMap<Employee, EmployeeDto>()
@@ -127,7 +127,7 @@ CreateMap<Employee, EmployeeDto>()
 
 ### `ForMember(dest => dest.Prop, opt => opt.Ignore())`
 
-Excludes a destination property from the mapping.
+Исключает свойство destination из маппинга.
 
 ```csharp
 CreateMap<User, UserDto>()
@@ -138,7 +138,7 @@ CreateMap<User, UserDto>()
 
 ### `ForMember(dest => dest.Prop, opt => opt.UseConverter<TConverter>())`
 
-Applies a type converter to a single property.
+Применяет type converter к одному свойству.
 
 ```csharp
 CreateMap<Product, ProductDto>()
@@ -149,7 +149,7 @@ CreateMap<Product, ProductDto>()
 
 ### `ConvertUsing<TConverter>()`
 
-Replaces the entire object initializer with a single converter call.
+Заменяет весь object initializer единственным вызовом converter.
 
 ```csharp
 public class FullOrderConverter : ITypeConverter<OrderEntity, OrderDto>
@@ -165,7 +165,7 @@ CreateMap<OrderEntity, OrderDto>()
 
 ### `ConvertUsing(src => ...)`
 
-Lambda-based whole-object conversion. The expression body is emitted verbatim by the generator.
+Lambda-based конвертация всего объекта. Тело выражения генератор вставляет дословно.
 
 ```csharp
 CreateMap<Point, PointDto>()
@@ -176,7 +176,7 @@ CreateMap<Point, PointDto>()
 
 ### `When(src => condition)`
 
-Adds a guard: the mapping only executes when the predicate is true; otherwise `default` is returned.
+Добавляет guard: mapping выполняется только когда предикат истинен; иначе возвращается `default`.
 
 ```csharp
 CreateMap<UserEntity, UserDto>()
@@ -185,9 +185,9 @@ CreateMap<UserEntity, UserDto>()
 
 ---
 
-## Custom Converters (`ITypeConverter<TSource, TDest>`)
+## Кастомные Converters (`ITypeConverter<TSource, TDest>`)
 
-Implement `ITypeConverter<TSource, TDest>` for reusable conversions:
+Реализуй `ITypeConverter<TSource, TDest>` для переиспользуемых конвертаций:
 
 ```csharp
 public class DateToStringConverter : ITypeConverter<DateTime, string>
@@ -196,7 +196,7 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 }
 ```
 
-Register with DI so converters are resolvable as services:
+Зарегистрируй через DI, чтобы converters были доступны как сервисы:
 
 ```csharp
 services.AddIronMapper(opt =>

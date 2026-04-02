@@ -1,5 +1,7 @@
 # Getting Started with IronMapper
 
+> 📖 **[Русская версия](getting-started.ru.md)**
+
 ## Installation
 
 ```bash

@@ -4,6 +4,8 @@
 [![Build](https://github.com/algmironov/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/algmironov/IronMapper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+> 📖 **[Русская документация](README.ru.md)**
+
 **Zero-reflection, compile-time object mapper for .NET.**
 
 IronMapper generates all mapping code at build time using a Roslyn Source Generator — no runtime reflection, no IL emit, no dynamic proxies. Just plain, readable, debuggable C# that the compiler can optimize like any other code.
@@ -153,6 +155,28 @@ public class OrdersController(IMapper mapper) : ControllerBase
 {
     public OrderDto Get(int id) => mapper.Map<OrderDto>(_repo.GetById(id));
 }
+```
+
+---
+
+## Demo Application
+
+We've built a sample console app that showcases all IronMapper features
+using the real Open Library API (no API key required).
+
+**What the demo covers:**
+- Simple attribute-based mapping (`[MapTo]`)
+- Fluent API with `MappingProfile`
+- Collection mapping (`List<BookDoc>` → `List<BookSummary>`)
+- Nested object mapping (Book + Author)
+- Custom type converters (HTML bio cleaner)
+- Conditional mapping (living authors only)
+
+**Run it:**
+```bash
+git clone https://github.com/iron-mapper/IronMapper
+cd IronMapper
+dotnet run --project samples/IronMapper.Demo
 ```
 
 ---

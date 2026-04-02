@@ -1,5 +1,7 @@
 # Advanced Topics
 
+> 📖 **[Русская версия](advanced.ru.md)**
+
 ## Nested objects
 
 When a property's type also has a `[MapTo]` or `[MapFrom]` attribute (or a `MappingProfile` mapping), the generator automatically emits a nested call.

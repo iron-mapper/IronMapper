@@ -1,5 +1,7 @@
 # Compiler Diagnostics
 
+> 📖 **[Русская версия](diagnostics.ru.md)**
+
 IronMapper emits compiler diagnostics (errors and warnings) when it detects mapping configuration issues at build time.
 
 ---
