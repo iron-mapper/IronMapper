@@ -1,10 +1,7 @@
-using System;
-using System.Threading.Tasks;
-using IronMapper.Generated;
 using IronMapper.Demo.Models.Api;
-using IronMapper.Demo.Models.App;
 using IronMapper.Demo.Profiles;
 using IronMapper.Demo.Services;
+using IronMapper.Generated;
 
 namespace IronMapper.Demo.Demos;
 
@@ -18,19 +15,19 @@ public static class Demo5_CustomConverter
 
     public static async Task RunAsync(OpenLibraryService api)
     {
-        PrintHeader("DEMO 5 — Кастомный конвертер BioConverter");
+        PrintHeader("DEMO 5 — Custom converter BioConverter");
 
-        Console.WriteLine("Загружаем данные автора из Open Library...\n");
+        Console.WriteLine("Loading author's data from Open Library...\n");
         var author = await api.GetAuthorAsync(TolkienAuthorId) ?? FallbackAuthor();
 
         // ── Before conversion ─────────────────────────────────────────────
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("ДО  AuthorResponse.Bio (сырые данные):");
+        Console.WriteLine("BEFORE  AuthorResponse.Bio (raw data):");
         if (author.Bio is not null)
         {
             var preview = author.Bio.Length > 200 ? author.Bio.Substring(0, 200) + "..." : author.Bio;
             Console.WriteLine($"  \"{preview}\"");
-            Console.WriteLine($"  Длина: {author.Bio.Length} символов");
+            Console.WriteLine($"  Length: {author.Bio.Length} chars");
         }
         else
         {
@@ -47,11 +44,11 @@ public static class Demo5_CustomConverter
         var authorInfo = author.MapToAuthorInfo();
 
         Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine("\nПОСЛЕ  AuthorInfo.Biography (после BioConverter):");
+        Console.WriteLine("\nAFTER  AuthorInfo.Biography (after BioConverter):");
         if (authorInfo.Biography is not null)
         {
             Console.WriteLine($"  \"{authorInfo.Biography}\"");
-            Console.WriteLine($"  Длина: {authorInfo.Biography.Length} символов");
+            Console.WriteLine($"  Length: {authorInfo.Biography.Length} chars");
         }
         else
         {
@@ -62,16 +59,16 @@ public static class Demo5_CustomConverter
         Console.ForegroundColor = ConsoleColor.Gray;
         Console.WriteLine();
         Console.WriteLine("  BioConverter : ITypeConverter<string?, string?>");
-        Console.WriteLine("  - Убирает HTML-теги через Regex.Replace");
-        Console.WriteLine("  - Обрезает до 300 символов");
-        Console.WriteLine("  - Вызывается из сгенерированного кода, не через рефлексию");
+        Console.WriteLine("  - Removes HTML-tags with Regex.Replace");
+        Console.WriteLine("  - Cuts to 300 chars");
+        Console.WriteLine("  - Calls from generated code, with no reflection");
 
         // Demonstrate converter standalone
         var htmlSample = "This is <b>bold</b> and <i>italic</i> text with <a href=\"#\">a link</a>.";
         var converter = new BioConverter();
         var cleaned = converter.Convert(htmlSample);
         Console.WriteLine();
-        Console.WriteLine($"  Пример: \"{htmlSample}\"");
+        Console.WriteLine($"  Example: \"{htmlSample}\"");
         Console.WriteLine($"  → \"{cleaned}\"");
         Console.ResetColor();
     }

@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using IronMapper.Attributes;
-using IronMapper.Generated;
 using IronMapper.Demo.Models.Api;
 using IronMapper.Demo.Services;
+using IronMapper.Generated;
 
 namespace IronMapper.Demo.Demos;
 
@@ -34,9 +31,9 @@ public static class Demo1_SimpleMapping
 {
     public static async Task RunAsync(OpenLibraryService api)
     {
-        PrintHeader("DEMO 1 — Простой маппинг атрибутами [MapTo]");
+        PrintHeader("DEMO 1 — Simple attribute mapping [MapTo]");
 
-        Console.WriteLine("Ищем книгу через Open Library API...\n");
+        Console.WriteLine("Searching book with Open Library API...\n");
         var response = await api.SearchBooksAsync("Lord of the Rings", 1);
         var doc = response?.Docs?.Count > 0 ? response.Docs[0] : null;
 
@@ -61,7 +58,7 @@ public static class Demo1_SimpleMapping
         };
 
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("ИСТОЧНИК  [MapTo(typeof(BookQuickView))] BookRawEntry:");
+        Console.WriteLine("SOURCE  [MapTo(typeof(BookQuickView))] BookRawEntry:");
         Console.WriteLine($"  Key:              {raw.Key}");
         Console.WriteLine($"  Title:            {raw.Title}");
         Console.WriteLine($"  FirstPublishYear: {raw.FirstPublishYear}");
@@ -73,7 +70,7 @@ public static class Demo1_SimpleMapping
         var view = raw.MapToBookQuickView();
 
         Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine("\nРЕЗУЛЬТАТ  BookQuickView:");
+        Console.WriteLine("\nRESULT  BookQuickView:");
         Console.WriteLine($"  Key:              {view.Key}");
         Console.WriteLine($"  Title:            {view.Title}");
         Console.WriteLine($"  FirstPublishYear: {view.FirstPublishYear}");
@@ -81,8 +78,8 @@ public static class Demo1_SimpleMapping
 
         Console.ForegroundColor = ConsoleColor.Gray;
         Console.WriteLine();
-        Console.WriteLine("  Маппинг выполнен в compile time — нет рефлексии, нет DI.");
-        Console.WriteLine("  Сгенерированный вызов: raw.MapToBookQuickView()");
+        Console.WriteLine("  Mapping applied at compile time — no reflection, no DI.");
+        Console.WriteLine("  Generated call: raw.MapToBookQuickView()");
         Console.ResetColor();
 
         await Task.CompletedTask;

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace IronMapper.Demo.Models.App;
 
 public class BookSummary
@@ -10,5 +8,5 @@ public class BookSummary
     public int? PublishedYear { get; set; }
     public string EditionsInfo { get; set; } = string.Empty;
     public string CoverUrl { get; set; } = string.Empty;
-    public List<string> TopSubjects { get; set; } = new();
+    public List<string> TopSubjects { get; set; } = [];
 }

@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using IronMapper.Demo.Models.Api;
 
 namespace IronMapper.Demo.Services;
@@ -11,7 +7,7 @@ public class OpenLibraryService
 {
     private readonly HttpClient _http;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
@@ -24,7 +20,7 @@ public class OpenLibraryService
         _http.DefaultRequestHeaders.Add(
             "User-Agent",
             "IronMapper-Demo/1.0 (github.com/algmironov/IronMapper)");
-        _http.Timeout = TimeSpan.FromSeconds(10);
+        _http.Timeout = TimeSpan.FromSeconds(60);
     }
 
     public async Task<BookSearchResponse?> SearchBooksAsync(string query, int limit = 5)
@@ -35,7 +31,7 @@ public class OpenLibraryService
         try
         {
             var json = await _http.GetStringAsync(url);
-            return JsonSerializer.Deserialize<BookSearchResponse>(json, JsonOptions);
+            return JsonSerializer.Deserialize<BookSearchResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -50,7 +46,7 @@ public class OpenLibraryService
         try
         {
             var json = await _http.GetStringAsync(url);
-            return JsonSerializer.Deserialize<WorkResponse>(json, JsonOptions);
+            return JsonSerializer.Deserialize<WorkResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -65,7 +61,7 @@ public class OpenLibraryService
         try
         {
             var json = await _http.GetStringAsync(url);
-            return JsonSerializer.Deserialize<AuthorResponse>(json, JsonOptions);
+            return JsonSerializer.Deserialize<AuthorResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -89,8 +85,8 @@ public class OpenLibraryService
     private static void PrintApiError(string operation, Exception ex)
     {
         Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.WriteLine($"  [API] {operation} недоступен: {ex.Message}");
-        Console.WriteLine("  Используем статические демо-данные.");
+        Console.WriteLine($"  [API] {operation} unavaliable: {ex.Message}");
+        Console.WriteLine("  Using static demo data.");
         Console.ResetColor();
     }
 }

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using IronMapper.Configuration;
 using IronMapper.Demo.Models.Api;
 using IronMapper.Demo.Models.App;

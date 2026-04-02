@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using IronMapper.Demo.Demos;
 using IronMapper.Demo.Services;
 
@@ -7,28 +5,28 @@ var api = new OpenLibraryService();
 
 Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine("╔══════════════════════════════════════════════════════════╗");
-Console.WriteLine("║             IronMapper Demo Application                 ║");
-Console.WriteLine("║   Compile-time Object Mapper — zero reflection          ║");
+Console.WriteLine("║             IronMapper Demo Application                  ║");
+Console.WriteLine("║   Compile-time Object Mapper — zero reflection           ║");
 Console.WriteLine("╚══════════════════════════════════════════════════════════╝");
 Console.ResetColor();
-Console.WriteLine("Использует Open Library API (openlibrary.org)");
-Console.WriteLine("При недоступном API используются статические демо-данные.");
+Console.WriteLine("Using Open Library API (openlibrary.org)");
+Console.WriteLine("Uses static data if API is unavailable.");
 
 var running = true;
 while (running)
 {
     Console.WriteLine();
     Console.ForegroundColor = ConsoleColor.White;
-    Console.WriteLine("Выберите сценарий:");
-    Console.WriteLine("  1. Простой маппинг атрибутами [MapTo]");
-    Console.WriteLine("  2. Fluent API — профиль маппингов");
-    Console.WriteLine("  3. Маппинг коллекций (список книг)");
-    Console.WriteLine("  4. Вложенные объекты (книга + автор)");
-    Console.WriteLine("  5. Кастомный конвертер (очистка Bio)");
-    Console.WriteLine("  6. Условный маппинг (только живые авторы)");
-    Console.WriteLine("  0. Выход");
+    Console.WriteLine("Choose scenario:");
+    Console.WriteLine("  1. Simple attribute mapping [MapTo]");
+    Console.WriteLine("  2. Fluent API — mapping profiles");
+    Console.WriteLine("  3. Mapping Collections (lists of books)");
+    Console.WriteLine("  4. Nested objects (book + author)");
+    Console.WriteLine("  5. Custom converter (cleaning Bio)");
+    Console.WriteLine("  6. Conditional mapping (only alive authors)");
+    Console.WriteLine("  0. Exit");
     Console.ResetColor();
-    Console.Write("\nВвод: ");
+    Console.Write("\nInput: ");
 
     var input = Console.ReadLine()?.Trim();
     Console.WriteLine();
@@ -48,7 +46,7 @@ while (running)
                 break;
             default:
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Неверный выбор. Введите цифру от 0 до 6.");
+                Console.WriteLine("Invalid input. Must be digit from 0 to 6.");
                 Console.ResetColor();
                 break;
         }
@@ -56,11 +54,11 @@ while (running)
     catch (Exception ex)
     {
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"Ошибка: {ex.Message}");
+        Console.WriteLine($"Error: {ex.Message}");
         Console.ResetColor();
     }
 }
 
 Console.ForegroundColor = ConsoleColor.Cyan;
-Console.WriteLine("\nДо свидания! IronMapper — compile-time mapping, zero reflection.");
+Console.WriteLine("\nGood luck! IronMapper — compile-time mapping, zero reflection.");
 Console.ResetColor();

@@ -1,12 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
-using IronMapper.Generated;
 using IronMapper.Demo.Models.Api;
-using IronMapper.Demo.Models.App;
 using IronMapper.Demo.Services;
+using IronMapper.Generated;
 
 namespace IronMapper.Demo.Demos;
 
@@ -18,26 +13,26 @@ public static class Demo3_Collections
 {
     public static async Task RunAsync(OpenLibraryService api)
     {
-        PrintHeader("DEMO 3 — Маппинг коллекций");
+        PrintHeader("DEMO 3 — Mapping collections");
 
-        Console.WriteLine("Ищем книги по запросу \"design patterns\"...\n");
+        Console.WriteLine("Searching books with query \"design patterns\"...\n");
         var response = await api.SearchBooksAsync("design patterns", 5);
         var docs = response?.Docs;
 
         if (docs is null || docs.Count == 0)
         {
-            docs = new List<BookDoc>
-            {
-                new() { Key = "/works/OL18991W",  Title = "Design Patterns",            AuthorName = new() { "Gang of Four" },        FirstPublishYear = 1994, EditionCount = 80  },
-                new() { Key = "/works/OL2750836W", Title = "Head First Design Patterns", AuthorName = new() { "Eric Freeman" },         FirstPublishYear = 2004, EditionCount = 30  },
-                new() { Key = "/works/OL5854686W", Title = "Patterns of Enterprise Application Architecture", AuthorName = new() { "Martin Fowler" }, FirstPublishYear = 2002, EditionCount = 40 },
-                new() { Key = "/works/OL3924963W", Title = "Clean Architecture",         AuthorName = new() { "Robert C. Martin" },     FirstPublishYear = 2017, EditionCount = 25  },
-                new() { Key = "/works/OL18992W",   Title = "Refactoring",                AuthorName = new() { "Martin Fowler" },        FirstPublishYear = 1999, EditionCount = 35  },
-            };
+            docs =
+            [
+                new() { Key = "/works/OL18991W",  Title = "Design Patterns", AuthorName = ["Gang of Four"], FirstPublishYear = 1994, EditionCount = 80  },
+                new() { Key = "/works/OL2750836W", Title = "Head First Design Patterns", AuthorName = ["Eric Freeman"], FirstPublishYear = 2004, EditionCount = 30  },
+                new() { Key = "/works/OL5854686W", Title = "Patterns of Enterprise Application Architecture", AuthorName = ["Martin Fowler"], FirstPublishYear = 2002, EditionCount = 40 },
+                new() { Key = "/works/OL3924963W", Title = "Clean Architecture", AuthorName = ["Robert C. Martin"], FirstPublishYear = 2017, EditionCount = 25  },
+                new() { Key = "/works/OL18992W",   Title = "Refactoring", AuthorName = ["Martin Fowler"], FirstPublishYear = 1999, EditionCount = 35  },
+            ];
         }
 
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"ИСТОЧНИК  List<BookDoc> — {docs.Count} элементов:");
+        Console.WriteLine($"SOURCE  List<BookDoc> — {docs.Count} elements:");
         foreach (var d in docs)
             Console.WriteLine($"  {d.Key,-30}  {d.Title}");
 
@@ -50,7 +45,7 @@ public static class Demo3_Collections
         sw.Stop();
 
         Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine($"\nРЕЗУЛЬТАТ  List<BookSummary> — {summaries.Count} элементов:");
+        Console.WriteLine($"\nRESULT  List<BookSummary> — {summaries.Count} elements:");
         foreach (var s in summaries)
         {
             Console.WriteLine($"  {s.Id,-25} | {s.Title,-45} | {s.AuthorsDisplay}");
@@ -58,8 +53,8 @@ public static class Demo3_Collections
 
         Console.ForegroundColor = ConsoleColor.Gray;
         Console.WriteLine();
-        Console.WriteLine($"  Замаплено {summaries.Count} книг за {sw.Elapsed.TotalMilliseconds:F3} мс");
-        Console.WriteLine($"  Одна строка: var summaries = docs.MapToBookSummaryList();");
+        Console.WriteLine($"  Mapped {summaries.Count} books for {sw.Elapsed.TotalMilliseconds:F3} ms");
+        Console.WriteLine($"  Single string: var summaries = docs.MapToBookSummaryList();");
         Console.ResetColor();
     }
 

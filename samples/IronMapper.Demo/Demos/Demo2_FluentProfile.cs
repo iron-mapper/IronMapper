@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using IronMapper.Generated;
 using IronMapper.Demo.Models.Api;
-using IronMapper.Demo.Models.App;
 using IronMapper.Demo.Services;
+using IronMapper.Generated;
 
 namespace IronMapper.Demo.Demos;
 
@@ -16,9 +12,9 @@ public static class Demo2_FluentProfile
 {
     public static async Task RunAsync(OpenLibraryService api)
     {
-        PrintHeader("DEMO 2 — Fluent API: профиль маппингов");
+        PrintHeader("DEMO 2 — Fluent API: mapping profiles");
 
-        Console.WriteLine("Ищем книги по запросу \"clean code\"...\n");
+        Console.WriteLine("Searching books with query \"clean code\"...\n");
         var response = await api.SearchBooksAsync("clean code", 1);
         var doc = response?.Docs?.Count > 0 ? response.Docs[0] : null;
 
@@ -28,20 +24,20 @@ public static class Demo2_FluentProfile
             {
                 Key            = "/works/OL17802W",
                 Title          = "Clean Code",
-                AuthorName     = new List<string> { "Robert C. Martin" },
+                AuthorName     = ["Robert C. Martin"],
                 FirstPublishYear = 2008,
                 EditionCount   = 55,
-                Subject        = new List<string> { "Computer programming", "Software engineering", "Agile" },
+                Subject        = ["Computer programming", "Software engineering", "Agile"],
                 CoverI         = 8091016
             };
         }
 
         // ── Before ──────────────────────────────────────────────────────────
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine("ИСТОЧНИК  BookDoc (сырые данные из API):");
+        Console.WriteLine("SOURCE  BookDoc (raw data from API):");
         Console.WriteLine($"  Key:           {doc.Key}");
         Console.WriteLine($"  Title:         {doc.Title}");
-        Console.WriteLine($"  AuthorName:    [{string.Join(", ", doc.AuthorName ?? new List<string>())}]");
+        Console.WriteLine($"  AuthorName:    [{string.Join(", ", doc.AuthorName ?? [])}]");
         Console.WriteLine($"  FirstPublishYear: {doc.FirstPublishYear}");
         Console.WriteLine($"  EditionCount:  {doc.EditionCount}");
         Console.WriteLine($"  CoverI:        {doc.CoverI}");
@@ -54,7 +50,7 @@ public static class Demo2_FluentProfile
         var summary = doc.MapToBookSummary();
 
         Console.ForegroundColor = ConsoleColor.White;
-        Console.WriteLine("\nРЕЗУЛЬТАТ  BookSummary (после маппинга профилем):");
+        Console.WriteLine("\nRESULT  BookSummary (after mapping with profile):");
         Console.WriteLine($"  Id:             {summary.Id}");
         Console.WriteLine($"  Title:          {summary.Title}");
         Console.WriteLine($"  AuthorsDisplay: {summary.AuthorsDisplay}");
@@ -66,11 +62,11 @@ public static class Demo2_FluentProfile
         Console.ForegroundColor = ConsoleColor.Gray;
         Console.WriteLine();
         Console.WriteLine("  BookMappingProfile.CreateMap<BookDoc, BookSummary>()");
-        Console.WriteLine("  Трансформации применены без рефлексии в compile time.");
+        Console.WriteLine("  Mapping applied without reflection at compile time.");
         Console.ResetColor();
     }
 
-    private static string TakeSubjects(System.Collections.Generic.List<string>? subjects)
+    private static string TakeSubjects(List<string>? subjects)
     {
         if (subjects is null || subjects.Count == 0) return "(none)";
         return string.Join(", ", subjects.Count > 3 ? subjects.GetRange(0, 3) : subjects);
