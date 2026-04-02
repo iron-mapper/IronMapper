@@ -11,14 +11,14 @@ internal sealed class MemberConfigurationExpression<TSource, TDest>
     : IMemberConfigurationExpression<TSource, TDest>
 {
     /// <inheritdoc/>
-    public void MapFrom<TMember>(Expression<Func<TSource, TMember>> sourceMember) { }
+    public IMemberConfigurationExpression<TSource, TDest> MapFrom<TMember>(Expression<Func<TSource, TMember>> sourceMember) => this;
 
     /// <inheritdoc/>
-    public void MapFrom(Func<TSource, object?> resolver) { }
+    public IMemberConfigurationExpression<TSource, TDest> MapFrom(Func<TSource, object?> resolver) => this;
 
     /// <inheritdoc/>
-    public void Ignore() { }
+    public IMemberConfigurationExpression<TSource, TDest> Ignore() => this;
 
     /// <inheritdoc/>
-    public void UseConverter<TConverter>() where TConverter : ITypeConverter { }
+    public IMemberConfigurationExpression<TSource, TDest> UseConverter<TConverter>() where TConverter : ITypeConverter => this;
 }

@@ -19,6 +19,13 @@ public interface IMappingExpression<TSource, TDest>
     /// <param name="dest">Expression selecting the destination member to configure.</param>
     /// <param name="opts">A delegate that receives the member configuration builder.</param>
     /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;User, UserDto&gt;()
+    ///     .ForMember(d => d.FullName,
+    ///                o => o.MapFrom(s => s.FirstName + " " + s.LastName));
+    /// </code>
+    /// </example>
     IMappingExpression<TSource, TDest> ForMember(
         Expression<Func<TDest, object?>> dest,
         Action<IMemberConfigurationExpression<TSource, TDest>> opts);
@@ -48,6 +55,14 @@ public interface IMappingExpression<TSource, TDest>
     /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
     IMappingExpression<TSource, TDest> ConvertUsing<TConverter>()
         where TConverter : ITypeConverter<TSource, TDest>;
+
+    /// <summary>
+    /// Specifies that the entire mapping is delegated to a custom conversion function.
+    /// The generator extracts the lambda body and emits it verbatim as the method return expression.
+    /// </summary>
+    /// <param name="converter">A function that converts a <typeparamref name="TSource"/> to <typeparamref name="TDest"/>.</param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    IMappingExpression<TSource, TDest> ConvertUsing(Func<TSource, TDest> converter);
 
     /// <summary>
     /// Also registers the reverse mapping from <typeparamref name="TDest"/> to

@@ -5,6 +5,12 @@
     <PackageId>IronMapper</PackageId>
     <RootNamespace>IronMapper</RootNamespace>
     <AssemblyName>IronMapper</AssemblyName>
+    <PackageDescription>Zero-reflection, compile-time object mapper for .NET. Free alternative to AutoMapper. By Iron Programmer School.</PackageDescription>
+    <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

@@ -4,6 +4,7 @@ using IronMapper.Generator.CodeGeneration;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Immutable;
 
 namespace IronMapper.Generator;
 
@@ -48,6 +49,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(fromMapFrom, static (spc, descriptor) =>
             EmitDescriptor(spc, descriptor));
+
+        // MappingProfile subclass pipeline — analyses constructor bodies for CreateMap<,>() chains.
+        var fromProfiles = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: ProfileAnalyzer.IsCandidateClass,
+                transform: static (ctx, ct) => ProfileAnalyzer.ExtractFromProfile(ctx, ct))
+            .SelectMany(static (arr, _) => arr);
+
+        context.RegisterSourceOutput(fromProfiles, static (spc, descriptor) =>
+            EmitDescriptor(spc, descriptor));
     }
 
     /// <summary>
@@ -78,6 +89,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// <summary>
     /// Reports any analysis diagnostics collected in <paramref name="descriptor"/> and then
     /// adds the generated source file to the compilation.
+    /// Sentinel descriptors (SourceTypeName is empty) carry only diagnostics and produce no source.
     /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor)
     {
@@ -87,6 +99,9 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             spc.ReportDiagnostic(
                 Diagnostic.Create(diag.Descriptor, Location.None, diag.MessageArgs));
         }
+
+        // Sentinel descriptors (e.g. empty MappingProfile) carry diagnostics only.
+        if (descriptor.SourceTypeName.Length == 0) return;
 
         var (hintName, source) = MapperCodeEmitter.Emit(descriptor);
         spc.AddSource(hintName, source);

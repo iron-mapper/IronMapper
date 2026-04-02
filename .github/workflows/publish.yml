@@ -1,0 +1,58 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Pack & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --no-restore -c Release
+
+      - name: Test (Release)
+        run: dotnet test --no-build -c Release
+
+      - name: Pack
+        run: >
+          dotnet pack src/IronMapper/IronMapper.csproj
+          --no-build -c Release
+          -o ./nupkgs
+          /p:PackageVersion=${{ github.ref_name }}
+
+      - name: Pack DI extension
+        run: >
+          dotnet pack src/IronMapper.Extensions.DI/IronMapper.Extensions.DI.csproj
+          --no-build -c Release
+          -o ./nupkgs
+          /p:PackageVersion=${{ github.ref_name }}
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push ./nupkgs/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Push symbols (.snupkg)
+        run: >
+          dotnet nuget push ./nupkgs/*.snupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

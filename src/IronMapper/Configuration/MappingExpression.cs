@@ -35,6 +35,10 @@ internal sealed class MappingExpression<TSource, TDest> : IMappingExpression<TSo
         => this;
 
     /// <inheritdoc/>
+    public IMappingExpression<TSource, TDest> ConvertUsing(Func<TSource, TDest> converter)
+        => this;
+
+    /// <inheritdoc/>
     public IMappingExpression<TSource, TDest> ReverseMap()
         => this;
 }

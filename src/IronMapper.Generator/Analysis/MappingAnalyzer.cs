@@ -81,8 +81,27 @@ internal static class MappingAnalyzer
         INamedTypeSymbol destSymbol,
         CancellationToken ct)
     {
-        var sourceProps = GetPublicReadableProperties(sourceSymbol);
-        var destProps = GetPublicSettableProperties(destSymbol);
+        var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
+        var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
+
+        var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
+        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+
+        // IM0008: destination type is abstract or an interface.
+        if (destSymbol.IsAbstract || destSymbol.TypeKind == TypeKind.Interface)
+        {
+            diagnostics.Add(new DiagnosticInfo(
+                DiagnosticDescriptors.AbstractDestinationType,
+                destSymbol.Name));
+            return new MappingDescriptor(
+                sourceTypeName: sourceSymbol.Name,
+                sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
+                destTypeName: destSymbol.Name,
+                destNamespace: SymbolHelpers.GetNamespace(destSymbol),
+                propertyMappings: propertyMappings.ToImmutable(),
+                diagnostics: diagnostics.ToImmutable(),
+                hasCustomConverter: false);
+        }
 
         // Index source props by name for fast case-insensitive lookup.
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
@@ -101,34 +120,88 @@ internal static class MappingAnalyzer
                 sourceByDestName[destName] = sourceProp;
         }
 
-        var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
-        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        // Build set of destination property names for IM0006 validation.
+        var destPropNames = new System.Collections.Generic.HashSet<string>(
+            System.StringComparer.OrdinalIgnoreCase);
+        foreach (var p in destProps)
+            destPropNames.Add(p.Name);
+
+        // IM0006: validate that every [MapProperty] destination name actually exists.
+        foreach (var kv in sourceByDestName)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!destPropNames.Contains(kv.Key))
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                    DiagnosticDescriptors.MapPropertyDestinationNotFound,
+                    kv.Key,
+                    destSymbol.Name));
+            }
+        }
+
+        // IM0009: for record destinations, warn about primary constructor parameters
+        // that have no matching source property.
+        if (destSymbol.IsRecord)
+        {
+            foreach (var ctor in destSymbol.Constructors)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (ctor.IsImplicitlyDeclared) continue;
+                foreach (var param in ctor.Parameters)
+                {
+                    if (!sourcePropsByName.ContainsKey(param.Name))
+                    {
+                        diagnostics.Add(new DiagnosticInfo(
+                            DiagnosticDescriptors.RecordParameterNotMapped,
+                            param.Name,
+                            destSymbol.Name));
+                    }
+                }
+            }
+        }
 
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
 
+            // Destination property explicitly ignored via [Ignore] — skip silently.
+            if (HasIgnoreAttribute(destProp)) continue;
+
+            bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
+
             // Priority 1: explicit [MapProperty("DestName")] on a source property.
             if (sourceByDestName.TryGetValue(destProp.Name, out var mappedProp))
             {
+                var (collectionMapMethod, collectionOutputType) =
+                    DetectCollectionMapping(mappedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: mappedProp.Name,
                     destPropertyName: destProp.Name,
                     isIgnored: HasIgnoreAttribute(mappedProp),
                     converterType: GetConverterTypeName(mappedProp),
-                    needsNullCheck: mappedProp.Type.IsReferenceType));
+                    needsNullCheck: mappedProp.Type.IsReferenceType,
+                    lambdaBody: null,
+                    isInitOnly: isInitOnly,
+                    collectionElementMapMethod: collectionMapMethod,
+                    collectionOutputType: collectionOutputType));
                 continue;
             }
 
             // Priority 2: matching name (case-insensitive).
             if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
+                var (collectionMapMethod, collectionOutputType) =
+                    DetectCollectionMapping(namedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
                     isIgnored: HasIgnoreAttribute(namedProp),
                     converterType: GetConverterTypeName(namedProp),
-                    needsNullCheck: namedProp.Type.IsReferenceType));
+                    needsNullCheck: namedProp.Type.IsReferenceType,
+                    lambdaBody: null,
+                    isInitOnly: isInitOnly,
+                    collectionElementMapMethod: collectionMapMethod,
+                    collectionOutputType: collectionOutputType));
                 continue;
             }
 
@@ -142,9 +215,9 @@ internal static class MappingAnalyzer
 
         return new MappingDescriptor(
             sourceTypeName: sourceSymbol.Name,
-            sourceNamespace: GetNamespace(sourceSymbol),
+            sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
             destTypeName: destSymbol.Name,
-            destNamespace: GetNamespace(destSymbol),
+            destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: diagnostics.ToImmutable(),
             hasCustomConverter: propertyMappings.Count > 0 && HasAnyConverter(propertyMappings));
@@ -153,56 +226,6 @@ internal static class MappingAnalyzer
     // -----------------------------------------------------------------------
     // Symbol helpers
     // -----------------------------------------------------------------------
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicReadableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.GetMethod is not null)
-                {
-                    result.Add(prop);
-                }
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static IReadOnlyList<IPropertySymbol> GetPublicSettableProperties(INamedTypeSymbol type)
-    {
-        var result = new List<IPropertySymbol>();
-        var current = type;
-        while (current is not null && current.SpecialType != SpecialType.System_Object)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member is IPropertySymbol prop
-                    && prop.DeclaredAccessibility == Accessibility.Public
-                    && !prop.IsStatic
-                    && !prop.IsIndexer
-                    && prop.SetMethod is { DeclaredAccessibility: Accessibility.Public })
-                {
-                    result.Add(prop);
-                }
-            }
-            current = current.BaseType;
-        }
-        return result;
-    }
-
-    private static string? GetNamespace(INamedTypeSymbol symbol)
-    {
-        var ns = symbol.ContainingNamespace;
-        return ns is null || ns.IsGlobalNamespace ? null : ns.ToDisplayString();
-    }
 
     private static string? GetMapPropertyDestName(IPropertySymbol prop)
     {
@@ -236,7 +259,7 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol converterSymbol)
             {
-                var ns = GetNamespace(converterSymbol);
+                var ns = SymbolHelpers.GetNamespace(converterSymbol);
                 return ns is null
                     ? converterSymbol.Name
                     : $"{ns}.{converterSymbol.Name}";
@@ -250,5 +273,31 @@ internal static class MappingAnalyzer
         foreach (var m in mappings)
             if (m.ConverterType is not null) return true;
         return false;
+    }
+
+    /// <summary>
+    /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are
+    /// collection types whose element types differ, returns the name of the mapping method
+    /// to call on each element and the output collection kind.  Otherwise returns (null, null).
+    /// </summary>
+    private static (string? mapMethod, string? outputType) DetectCollectionMapping(
+        ITypeSymbol sourcePropType,
+        ITypeSymbol destPropType)
+    {
+        if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem)
+            || srcElem is null)
+            return (null, null);
+
+        if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem)
+            || dstElem is null)
+            return (null, null);
+
+        // Only generate Select() when element types differ — same-element collections are copied directly.
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
+            return (null, null);
+
+        var mapMethod = $"MapTo{dstElem.Name}";
+        var outputType = SymbolHelpers.GetCollectionOutputType(destPropType);
+        return (mapMethod, outputType);
     }
 }

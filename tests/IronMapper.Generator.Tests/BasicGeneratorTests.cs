@@ -191,6 +191,71 @@ public class BasicGeneratorTests
     // Multiple [MapTo] attributes
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // MapConverter attribute
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void MapConverterAttribute_WhenAppliedToSource_EmitsConverterInstantiationInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Attributes;
+            using IronMapper.Interfaces;
+
+            public class PriceConverter : ITypeConverter<decimal, string>
+            {
+                public string Convert(decimal source) => source.ToString("F2");
+            }
+
+            [MapTo(typeof(PricedDto))]
+            public class PricedEntity
+            {
+                public int Id { get; set; }
+
+                [MapConverter(typeof(PriceConverter))]
+                public decimal Amount { get; set; }
+            }
+
+            public class PricedDto
+            {
+                public int Id { get; set; }
+                public string Amount { get; set; } = "";
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToPricedDto", code);
+        Assert.Contains("PriceConverter", code);  // converter type is referenced in emitted code
+        Assert.Contains(".Convert(", code);        // .Convert(...) call is emitted
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 3 — MapToList + MapToArray collection helpers
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void MapToAttribute_AlwaysEmitsListAndArrayCollectionHelpers()
+    {
+        var source = """
+            using IronMapper.Attributes;
+
+            [MapTo(typeof(SnapshotDto))]
+            public class SnapshotEntity { public int Id { get; set; } }
+            public class SnapshotDto    { public int Id { get; set; } }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToSnapshotDtoList", code);
+        Assert.Contains("MapToSnapshotDtoArray", code);
+        Assert.Contains("Array.Empty<", code);
+    }
+
     [Fact]
     public void MapToAttribute_WhenAppliedMultipleTimes_GeneratesOneMethodPerDestination()
     {
