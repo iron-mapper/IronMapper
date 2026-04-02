@@ -41,6 +41,10 @@ public sealed class ValidationResult
     /// <summary>
     /// Formats all errors and warnings into a multi-line human-readable string.
     /// </summary>
+    /// <returns>
+    /// A string with each error prefixed by <c>[ERROR]</c> and each warning by <c>[WARNING]</c>,
+    /// one per line, with trailing whitespace trimmed. Returns an empty string when there are no messages.
+    /// </returns>
     public string FormatMessages()
     {
         var sb = new StringBuilder();

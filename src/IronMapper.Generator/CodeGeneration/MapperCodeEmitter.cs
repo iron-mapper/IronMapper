@@ -21,6 +21,10 @@ internal static class MapperCodeEmitter
     /// <summary>
     /// Generates the source text for a single mapping and returns it together with a unique hint name.
     /// </summary>
+    /// <returns>
+    /// A tuple of <c>(hintName, source)</c> where <c>hintName</c> is used as the AddSource key
+    /// and <c>source</c> is the full C# text of the generated file.
+    /// </returns>
     public static (string hintName, string source) Emit(MappingDescriptor descriptor)
     {
         var sourceFullName = GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
