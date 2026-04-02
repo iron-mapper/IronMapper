@@ -11,4 +11,7 @@
     <Project Path="tests/IronMapper.Tests/IronMapper.Tests.csproj" />
     <Project Path="tests/IronMapper.Integration.Tests/IronMapper.Integration.Tests.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/IronMapper.Demo/IronMapper.Demo.csproj" />
+  </Folder>
 </Solution>
