@@ -786,7 +786,7 @@ docs/diagnostics.md:
   <PackageDescription>Zero-reflection, compile-time object mapper for .NET. Free alternative to AutoMapper. By Iron Programmer School.</PackageDescription>
   <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
   <PackageLicenseExpression>MIT</PackageLicenseExpression>
-  <PackageProjectUrl>https://github.com/iron-programmer/IronMapper</PackageProjectUrl>
+  <PackageProjectUrl>https://github.com/algmironov/IronMapper</PackageProjectUrl>
   <PackageReadmeFile>README.md</PackageReadmeFile>
   <PackageIcon>icon.png</PackageIcon>
   <GenerateDocumentationFile>true</GenerateDocumentationFile>
