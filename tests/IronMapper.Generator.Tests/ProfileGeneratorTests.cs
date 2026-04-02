@@ -379,4 +379,213 @@ public class ProfileGeneratorTests
         // Title is mapped from InternalCode which carries [Ignore] — must not appear in output.
         Assert.DoesNotContain("Title = source.InternalCode", code);
     }
+
+    // ------------------------------------------------------------------
+    // БЛОК 1 — ConvertUsing<TConverter>() for the whole object
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void ConvertUsing_WholeObjectConverter_EmitsConverterCallInsteadOfInitializer()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using IronMapper.Interfaces;
+
+            public class ShapeEntity { public int Width { get; set; } public int Height { get; set; } }
+            public class ShapeDto    { public int Area { get; set; } }
+
+            public class ShapeConverter : ITypeConverter<ShapeEntity, ShapeDto>
+            {
+                public ShapeDto Convert(ShapeEntity source)
+                    => new ShapeDto { Area = source.Width * source.Height };
+            }
+
+            public class ShapeProfile : MappingProfile
+            {
+                public ShapeProfile()
+                {
+                    CreateMap<ShapeEntity, ShapeDto>().ConvertUsing<ShapeConverter>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToShapeDto", code);
+        // Should delegate to converter, NOT use object initializer
+        Assert.Contains("ShapeConverter", code);
+        Assert.Contains(".Convert(source)", code);
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 1 — ConvertUsing(lambda)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void ConvertUsing_LambdaBody_EmitsLambdaReturnInsteadOfInitializer()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using System;
+
+            public class TempEntity { public double Celsius { get; set; } }
+            public class TempDto    { public double Fahrenheit { get; set; } }
+
+            public class TempProfile : MappingProfile
+            {
+                public TempProfile()
+                {
+                    CreateMap<TempEntity, TempDto>()
+                        .ConvertUsing(src => new TempDto { Fahrenheit = src.Celsius * 9.0 / 5.0 + 32.0 });
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToTempDto", code);
+        // Lambda body must appear verbatim (with source renaming)
+        Assert.Contains("source.Celsius", code);
+        Assert.Contains("Fahrenheit", code);
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 1 — ForMember UseConverter<T>() on a single property
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void UseConverter_SingleProperty_EmitsConverterCallForThatProperty()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using IronMapper.Interfaces;
+
+            public class PaymentEntity { public int Id { get; set; } public decimal Amount { get; set; } }
+            public class PaymentDto    { public int Id { get; set; } public string Amount { get; set; } = ""; }
+
+            public class DecimalToStringConverter : ITypeConverter<decimal, string>
+            {
+                public string Convert(decimal source) => source.ToString("F2");
+            }
+
+            public class PaymentProfile : MappingProfile
+            {
+                public PaymentProfile()
+                {
+                    CreateMap<PaymentEntity, PaymentDto>()
+                        .ForMember(dest => dest.Amount,
+                                   opt  => opt.UseConverter<DecimalToStringConverter>());
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToPaymentDto", code);
+        Assert.Contains("Id = source.Id", code);
+        Assert.Contains("DecimalToStringConverter", code);
+        Assert.Contains(".Convert(source.Amount)", code);
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 3 — MapToDestTypeList and MapToDestTypeArray are always generated
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Generator_AlwaysEmitsListAndArrayCollectionMethods()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class NoteEntity { public int Id { get; set; } }
+            public class NoteDto    { public int Id { get; set; } }
+
+            public class NoteProfile : MappingProfile
+            {
+                public NoteProfile()
+                {
+                    CreateMap<NoteEntity, NoteDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToNoteDtoList", code);
+        Assert.Contains("MapToNoteDtoArray", code);
+        Assert.Contains("IEnumerable", code);
+        Assert.Contains("Array.Empty", code);
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 4 — Nested List<T> property mapped via Select
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void NestedList_MappedPropertyType_EmitsSelectInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Attributes;
+            using System.Collections.Generic;
+
+            [MapTo(typeof(OrderDto))]
+            public class OrderEntity
+            {
+                public int Id { get; set; }
+                public List<LineItemEntity> Items { get; set; } = new();
+            }
+
+            [MapTo(typeof(LineItemDto))]
+            public class LineItemEntity { public int Quantity { get; set; } }
+            public class LineItemDto    { public int Quantity { get; set; } }
+
+            public class OrderDto
+            {
+                public int Id { get; set; }
+                public List<LineItemDto> Items { get; set; } = new();
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToOrderDto", code);
+        // Nested collection should emit Select call with MapToLineItemDto
+        Assert.Contains("MapToLineItemDto", code);
+        Assert.Contains("Select", code);
+    }
+
+    // ------------------------------------------------------------------
+    // БЛОК 2 — In-place void overload is always generated
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void Generator_AlwaysEmitsInPlaceVoidOverload()
+    {
+        var source = """
+            using IronMapper.Attributes;
+
+            [MapTo(typeof(WidgetDto))]
+            public class WidgetEntity { public int Id { get; set; } public string Name { get; set; } = ""; }
+            public class WidgetDto    { public int Id { get; set; } public string Name { get; set; } = ""; }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // In-place method: void return, two parameters (source, destination)
+        Assert.Contains("void MapToWidgetDto", code);
+        Assert.Contains("destination.Id = source.Id", code);
+        Assert.Contains("destination.Name = source.Name", code);
+    }
 }

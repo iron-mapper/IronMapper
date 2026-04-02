@@ -167,27 +167,41 @@ internal static class MappingAnalyzer
             // Destination property explicitly ignored via [Ignore] — skip silently.
             if (HasIgnoreAttribute(destProp)) continue;
 
+            bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
+
             // Priority 1: explicit [MapProperty("DestName")] on a source property.
             if (sourceByDestName.TryGetValue(destProp.Name, out var mappedProp))
             {
+                var (collectionMapMethod, collectionOutputType) =
+                    DetectCollectionMapping(mappedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: mappedProp.Name,
                     destPropertyName: destProp.Name,
                     isIgnored: HasIgnoreAttribute(mappedProp),
                     converterType: GetConverterTypeName(mappedProp),
-                    needsNullCheck: mappedProp.Type.IsReferenceType));
+                    needsNullCheck: mappedProp.Type.IsReferenceType,
+                    lambdaBody: null,
+                    isInitOnly: isInitOnly,
+                    collectionElementMapMethod: collectionMapMethod,
+                    collectionOutputType: collectionOutputType));
                 continue;
             }
 
             // Priority 2: matching name (case-insensitive).
             if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
+                var (collectionMapMethod, collectionOutputType) =
+                    DetectCollectionMapping(namedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
                     isIgnored: HasIgnoreAttribute(namedProp),
                     converterType: GetConverterTypeName(namedProp),
-                    needsNullCheck: namedProp.Type.IsReferenceType));
+                    needsNullCheck: namedProp.Type.IsReferenceType,
+                    lambdaBody: null,
+                    isInitOnly: isInitOnly,
+                    collectionElementMapMethod: collectionMapMethod,
+                    collectionOutputType: collectionOutputType));
                 continue;
             }
 
@@ -259,5 +273,31 @@ internal static class MappingAnalyzer
         foreach (var m in mappings)
             if (m.ConverterType is not null) return true;
         return false;
+    }
+
+    /// <summary>
+    /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are
+    /// collection types whose element types differ, returns the name of the mapping method
+    /// to call on each element and the output collection kind.  Otherwise returns (null, null).
+    /// </summary>
+    private static (string? mapMethod, string? outputType) DetectCollectionMapping(
+        ITypeSymbol sourcePropType,
+        ITypeSymbol destPropType)
+    {
+        if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem)
+            || srcElem is null)
+            return (null, null);
+
+        if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem)
+            || dstElem is null)
+            return (null, null);
+
+        // Only generate Select() when element types differ — same-element collections are copied directly.
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
+            return (null, null);
+
+        var mapMethod = $"MapTo{dstElem.Name}";
+        var outputType = SymbolHelpers.GetCollectionOutputType(destPropType);
+        return (mapMethod, outputType);
     }
 }

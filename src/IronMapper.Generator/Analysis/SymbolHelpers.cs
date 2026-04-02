@@ -70,4 +70,72 @@ internal static class SymbolHelpers
         var ns = symbol.ContainingNamespace;
         return ns is null || ns.IsGlobalNamespace ? null : ns.ToDisplayString();
     }
+
+    // -----------------------------------------------------------------------
+    // Collection type helpers
+    // -----------------------------------------------------------------------
+
+    private const string IEnumerableOfTFqn = "System.Collections.Generic.IEnumerable<T>";
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="type"/> is an array or implements
+    /// <c>IEnumerable&lt;T&gt;</c>, and sets <paramref name="elementType"/> to the element type.
+    /// </summary>
+    public static bool TryGetCollectionElementType(ITypeSymbol type, out ITypeSymbol? elementType)
+    {
+        // T[] — element type is direct
+        if (type is IArrayTypeSymbol arrayType)
+        {
+            elementType = arrayType.ElementType;
+            return true;
+        }
+
+        if (type is INamedTypeSymbol namedType && namedType.IsGenericType)
+        {
+            // Check if the type itself is IEnumerable<T>
+            if (namedType.OriginalDefinition.ToDisplayString() == IEnumerableOfTFqn)
+            {
+                elementType = namedType.TypeArguments[0];
+                return true;
+            }
+
+            // Check implemented interfaces for IEnumerable<T>
+            foreach (var iface in namedType.AllInterfaces)
+            {
+                if (iface.IsGenericType
+                    && iface.OriginalDefinition.ToDisplayString() == IEnumerableOfTFqn)
+                {
+                    elementType = iface.TypeArguments[0];
+                    return true;
+                }
+            }
+        }
+
+        elementType = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Returns the collection materialisation kind for the generated LINQ call:
+    /// <c>"Array"</c> for arrays, <c>"List"</c> for <c>List&lt;T&gt;</c> / <c>IList&lt;T&gt;</c>
+    /// / <c>ICollection&lt;T&gt;</c>, or <c>"Enumerable"</c> for <c>IEnumerable&lt;T&gt;</c>
+    /// and other types.
+    /// </summary>
+    public static string GetCollectionOutputType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol) return "Array";
+
+        if (type is INamedTypeSymbol { IsGenericType: true } namedType)
+        {
+            var def = namedType.OriginalDefinition.ToDisplayString();
+            if (def == "System.Collections.Generic.List<T>"
+                || def == "System.Collections.Generic.IList<T>"
+                || def == "System.Collections.Generic.ICollection<T>"
+                || def == "System.Collections.Generic.IReadOnlyList<T>"
+                || def == "System.Collections.Generic.IReadOnlyCollection<T>")
+                return "List";
+        }
+
+        return "Enumerable";
+    }
 }

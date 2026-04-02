@@ -123,8 +123,11 @@ internal static class ProfileAnalyzer
         if (sourceSymbol is null || destSymbol is null) return System.Array.Empty<MappingDescriptor>();
 
         // Walk calls from innermost (CreateMap) outward, collecting config.
-        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore)>();
+        // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
+        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)>();
         string? whenConditionBody = null;
+        string? wholeObjectConverterType = null;
+        string? wholeObjectLambdaBody = null;
         bool reverseMap = false;
 
         // calls[Count-1] = CreateMap, calls[0] = outermost
@@ -138,19 +141,41 @@ internal static class ProfileAnalyzer
             switch (methodName)
             {
                 case "ForMember":
-                    ParseForMember(inv, forMemberConfigs);
+                    ParseForMember(inv, forMemberConfigs, model, ct);
                     break;
 
                 case "Ignore" when inv.ArgumentList.Arguments.Count == 1:
                     // Standalone .Ignore(dest => dest.Prop) — not inside ForMember
                     var ignoreDestProp = ExtractMemberName(inv.ArgumentList.Arguments[0].Expression);
                     if (ignoreDestProp is not null)
-                        forMemberConfigs.Add((ignoreDestProp, null, true));
+                        forMemberConfigs.Add((ignoreDestProp, null, true, null));
                     break;
 
                 case "When" when inv.ArgumentList.Arguments.Count == 1:
                     whenConditionBody = ExtractLambdaBody(
                         inv.ArgumentList.Arguments[0].Expression, "source");
+                    break;
+
+                case "ConvertUsing":
+                    if (inv.ArgumentList.Arguments.Count == 0)
+                    {
+                        // ConvertUsing<TConverter>() — extract generic type argument.
+                        var methodSym = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
+                        if (methodSym?.TypeArguments.Length > 0
+                            && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
+                        {
+                            var ns = SymbolHelpers.GetNamespace(convSym);
+                            wholeObjectConverterType = ns is null
+                                ? convSym.Name
+                                : $"{ns}.{convSym.Name}";
+                        }
+                    }
+                    else if (inv.ArgumentList.Arguments.Count == 1)
+                    {
+                        // ConvertUsing(src => ...) — extract lambda body.
+                        wholeObjectLambdaBody = ExtractLambdaBody(
+                            inv.ArgumentList.Arguments[0].Expression, "source");
+                    }
                     break;
 
                 case "ReverseMap":
@@ -162,7 +187,8 @@ internal static class ProfileAnalyzer
         var results = new List<MappingDescriptor>();
 
         var forward = BuildDescriptorFromProfile(
-            sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody, model, ct);
+            sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody,
+            wholeObjectConverterType, wholeObjectLambdaBody, model, ct);
         if (forward is not null) results.Add(forward);
 
         if (reverseMap)
@@ -170,8 +196,10 @@ internal static class ProfileAnalyzer
             // Reverse: swap source/dest, use simple name matching (no ForMember customisations).
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
-                new List<(string, string?, bool)>(),
+                new List<(string, string?, bool, string?)>(),
                 whenCondition: null,
+                wholeObjectConverterType: null,
+                wholeObjectLambdaBody: null,
                 model, ct);
             if (reverse is not null) results.Add(reverse);
         }
@@ -181,7 +209,9 @@ internal static class ProfileAnalyzer
 
     private static void ParseForMember(
         InvocationExpressionSyntax inv,
-        List<(string destProp, string? lambdaBody, bool isIgnore)> configs)
+        List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> configs,
+        SemanticModel model,
+        CancellationToken ct)
     {
         var args = inv.ArgumentList.Arguments;
         if (args.Count < 2) return;
@@ -200,7 +230,21 @@ internal static class ProfileAnalyzer
 
         if (optMethod == "Ignore")
         {
-            configs.Add((destPropName, null, true));
+            configs.Add((destPropName, null, true, null));
+            return;
+        }
+
+        if (optMethod == "UseConverter")
+        {
+            // UseConverter<TConverter>() — extract generic type argument.
+            var methodSym = model.GetSymbolInfo(optBody, ct).Symbol as IMethodSymbol;
+            if (methodSym?.TypeArguments.Length > 0
+                && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
+            {
+                var ns = SymbolHelpers.GetNamespace(convSym);
+                var converterTypeName = ns is null ? convSym.Name : $"{ns}.{convSym.Name}";
+                configs.Add((destPropName, null, false, converterTypeName));
+            }
             return;
         }
 
@@ -208,7 +252,7 @@ internal static class ProfileAnalyzer
         {
             var mapFromArg = optBody.ArgumentList.Arguments[0].Expression;
             var body = ExtractLambdaBody(mapFromArg, "source");
-            configs.Add((destPropName, body, false));
+            configs.Add((destPropName, body, false, null));
         }
     }
 
@@ -219,8 +263,10 @@ internal static class ProfileAnalyzer
     private static MappingDescriptor? BuildDescriptorFromProfile(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
-        List<(string destProp, string? lambdaBody, bool isIgnore)> forMemberConfigs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> forMemberConfigs,
         string? whenCondition,
+        string? wholeObjectConverterType,
+        string? wholeObjectLambdaBody,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -253,16 +299,18 @@ internal static class ProfileAnalyzer
             sourcePropsByName[p.Name] = p;
 
         // Index ForMember configs by dest property name.
-        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore)>(
+        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, string? converterType)>(
             System.StringComparer.OrdinalIgnoreCase);
-        foreach (var (dp, lb, ign) in forMemberConfigs)
-            configByDest[dp] = (lb, ign);
+        foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
+            configByDest[dp] = (lb, ign, cvt);
 
         var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
 
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
+
+            bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
 
             if (configByDest.TryGetValue(destProp.Name, out var cfg))
             {
@@ -271,21 +319,28 @@ internal static class ProfileAnalyzer
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
                     isIgnored: cfg.isIgnore,
-                    converterType: null,
+                    converterType: cfg.converterType,
                     needsNullCheck: false,
-                    lambdaBody: cfg.lambdaBody));
+                    lambdaBody: cfg.lambdaBody,
+                    isInitOnly: isInitOnly));
                 continue;
             }
 
             // Default: match by name.
             if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
+                var (collectionMapMethod, collectionOutputType) =
+                    DetectCollectionMapping(namedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
                     isIgnored: false,
                     converterType: null,
-                    needsNullCheck: namedProp.Type.IsReferenceType));
+                    needsNullCheck: namedProp.Type.IsReferenceType,
+                    lambdaBody: null,
+                    isInitOnly: isInitOnly,
+                    collectionElementMapMethod: collectionMapMethod,
+                    collectionOutputType: collectionOutputType));
             }
             // Unmatched destination properties are silently skipped in profile-based mapping.
         }
@@ -298,7 +353,27 @@ internal static class ProfileAnalyzer
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: diagnostics.ToImmutable(),
             hasCustomConverter: false,
-            whenConditionBody: whenCondition);
+            whenConditionBody: whenCondition,
+            wholeObjectConverterType: wholeObjectConverterType,
+            wholeObjectLambdaBody: wholeObjectLambdaBody);
+    }
+
+    /// <summary>
+    /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are
+    /// collection types whose element types differ, returns the mapping method name and output kind.
+    /// </summary>
+    private static (string? mapMethod, string? outputType) DetectCollectionMapping(
+        ITypeSymbol sourcePropType,
+        ITypeSymbol destPropType)
+    {
+        if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null)
+            return (null, null);
+        if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null)
+            return (null, null);
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
+            return (null, null);
+
+        return ($"MapTo{dstElem.Name}", SymbolHelpers.GetCollectionOutputType(destPropType));
     }
 
     // -----------------------------------------------------------------------

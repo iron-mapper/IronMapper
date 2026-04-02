@@ -37,6 +37,19 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// </summary>
     public string? WhenConditionBody { get; }
 
+    /// <summary>
+    /// When non-null, the entire mapping is delegated to a custom <c>ITypeConverter</c> implementation.
+    /// This is the fully-qualified type name (e.g. <c>"MyApp.Converters.OrderConverter"</c>).
+    /// Produced by <c>ConvertUsing&lt;TConverter&gt;()</c> in a MappingProfile.
+    /// </summary>
+    public string? WholeObjectConverterType { get; }
+
+    /// <summary>
+    /// When non-null, the generated method body is this verbatim C# expression (using "source").
+    /// Produced by <c>ConvertUsing(src =&gt; ...)</c> in a MappingProfile.
+    /// </summary>
+    public string? WholeObjectLambdaBody { get; }
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -46,6 +59,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="diagnostics">Diagnostics to surface when this descriptor is emitted.</param>
     /// <param name="hasCustomConverter">Whether any property mapping uses a custom <c>ITypeConverter</c>.</param>
     /// <param name="whenConditionBody">Optional verbatim C# condition expression (uses "source") emitted as a guard before mapping.</param>
+    /// <param name="wholeObjectConverterType">Fully-qualified name of an <c>ITypeConverter</c> that converts the entire source object, or <see langword="null"/>.</param>
+    /// <param name="wholeObjectLambdaBody">Verbatim C# expression that returns the entire destination object, or <see langword="null"/>.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -54,7 +69,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         ImmutableArray<PropertyMappingDescriptor> propertyMappings,
         ImmutableArray<DiagnosticInfo> diagnostics,
         bool hasCustomConverter,
-        string? whenConditionBody = null)
+        string? whenConditionBody = null,
+        string? wholeObjectConverterType = null,
+        string? wholeObjectLambdaBody = null)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -64,6 +81,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         Diagnostics = diagnostics;
         HasCustomConverter = hasCustomConverter;
         WhenConditionBody = whenConditionBody;
+        WholeObjectConverterType = wholeObjectConverterType;
+        WholeObjectLambdaBody = wholeObjectLambdaBody;
     }
 
     /// <inheritdoc/>
@@ -77,7 +96,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestTypeName != other.DestTypeName
             || DestNamespace != other.DestNamespace
             || HasCustomConverter != other.HasCustomConverter
-            || WhenConditionBody != other.WhenConditionBody)
+            || WhenConditionBody != other.WhenConditionBody
+            || WholeObjectConverterType != other.WholeObjectConverterType
+            || WholeObjectLambdaBody != other.WholeObjectLambdaBody)
             return false;
 
         if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
@@ -100,6 +121,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (DestNamespace?.GetHashCode() ?? 0);
         hash = hash * 31 + HasCustomConverter.GetHashCode();
         hash = hash * 31 + (WhenConditionBody?.GetHashCode() ?? 0);
+        hash = hash * 31 + (WholeObjectConverterType?.GetHashCode() ?? 0);
+        hash = hash * 31 + (WholeObjectLambdaBody?.GetHashCode() ?? 0);
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
         return hash;

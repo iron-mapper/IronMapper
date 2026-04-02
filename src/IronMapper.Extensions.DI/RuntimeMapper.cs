@@ -21,6 +21,7 @@ public sealed class RuntimeMapper : IMapper
 {
     // null value = mapping was looked up and not found (negative cache).
     private readonly ConcurrentDictionary<(Type Source, Type Dest), MethodInfo?> _cache = new();
+    private readonly ConcurrentDictionary<(Type Source, Type Dest), MethodInfo?> _inPlaceCache = new();
     private readonly IServiceProvider _provider;
 
     /// <summary>Initialises the mapper with the application's <see cref="IServiceProvider"/>.</summary>
@@ -44,16 +45,32 @@ public sealed class RuntimeMapper : IMapper
     }
 
     /// <inheritdoc/>
-    /// <exception cref="NotSupportedException">
-    /// Always thrown — IronMapper generated code creates new destination instances and does not
-    /// support populating an existing object in-place.  Use <see cref="Map{TSource,TDest}(TSource)"/>
-    /// instead.
-    /// </exception>
+    /// <remarks>
+    /// Populates <paramref name="destination"/> in-place by calling the generated
+    /// <c>MapToDestType(source, destination)</c> extension method.
+    /// Init-only destination properties are silently skipped.
+    /// </remarks>
     public void Map<TSource, TDest>(TSource source, TDest destination)
     {
-        throw new NotSupportedException(
-            "IronMapper generated code creates new destination instances. " +
-            "In-place population is not supported. Use Map<TSource, TDest>(source) instead.");
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (destination is null) throw new ArgumentNullException(nameof(destination));
+
+        var key = (typeof(TSource), typeof(TDest));
+        if (!_inPlaceCache.TryGetValue(key, out var method))
+        {
+            method = FindGeneratedInPlaceMethod(typeof(TSource), typeof(TDest));
+            _inPlaceCache.TryAdd(key, method);
+        }
+
+        if (method is null)
+        {
+            throw new MappingException(
+                $"No in-place mapping registered from '{typeof(TSource).Name}' to '{typeof(TDest).Name}'. " +
+                "Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the " +
+                "IronMapper Source Generator has run on the project that owns these types.");
+        }
+
+        method.Invoke(null, new object[] { source, destination });
     }
 
     /// <inheritdoc/>
@@ -91,12 +108,26 @@ public sealed class RuntimeMapper : IMapper
 
     /// <summary>
     /// Scans all loaded assemblies for the generated <c>IronMapper.Generated.GeneratedMappers</c>
-    /// static class and returns the extension method matching the requested type pair.
+    /// static class and returns the single-parameter extension method matching the requested type pair.
     /// </summary>
     private static MethodInfo? FindGeneratedMethod(Type sourceType, Type destType)
     {
         var expectedName = $"MapTo{destType.Name}";
+        return FindInGeneratedClass(expectedName, new[] { sourceType });
+    }
 
+    /// <summary>
+    /// Scans all loaded assemblies for the two-parameter in-place extension method
+    /// <c>MapToDestType(source, destination)</c>.
+    /// </summary>
+    private static MethodInfo? FindGeneratedInPlaceMethod(Type sourceType, Type destType)
+    {
+        var expectedName = $"MapTo{destType.Name}";
+        return FindInGeneratedClass(expectedName, new[] { sourceType, destType });
+    }
+
+    private static MethodInfo? FindInGeneratedClass(string methodName, Type[] paramTypes)
+    {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
             // Fast path: skip known framework / system assemblies.
@@ -111,10 +142,10 @@ public sealed class RuntimeMapper : IMapper
             if (generatedClass is null) continue;
 
             var method = generatedClass.GetMethod(
-                expectedName,
+                methodName,
                 BindingFlags.Public | BindingFlags.Static,
                 null,
-                new[] { sourceType },
+                paramTypes,
                 null);
 
             if (method is not null) return method;

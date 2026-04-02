@@ -232,6 +232,30 @@ public class BasicGeneratorTests
         Assert.Contains(".Convert(", code);        // .Convert(...) call is emitted
     }
 
+    // ------------------------------------------------------------------
+    // БЛОК 3 — MapToList + MapToArray collection helpers
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void MapToAttribute_AlwaysEmitsListAndArrayCollectionHelpers()
+    {
+        var source = """
+            using IronMapper.Attributes;
+
+            [MapTo(typeof(SnapshotDto))]
+            public class SnapshotEntity { public int Id { get; set; } }
+            public class SnapshotDto    { public int Id { get; set; } }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToSnapshotDtoList", code);
+        Assert.Contains("MapToSnapshotDtoArray", code);
+        Assert.Contains("Array.Empty<", code);
+    }
+
     [Fact]
     public void MapToAttribute_WhenAppliedMultipleTimes_GeneratesOneMethodPerDestination()
     {

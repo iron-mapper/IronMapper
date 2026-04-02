@@ -200,11 +200,41 @@ public class DiIntegrationTests
     }
 
     // ------------------------------------------------------------------
-    // RuntimeMapper — in-place (void) overload always throws
+    // RuntimeMapper — in-place (void) overload
     // ------------------------------------------------------------------
 
     [Fact]
-    public void RuntimeMapper_MapInPlace_AlwaysThrowsNotSupportedException()
+    public void RuntimeMapper_MapInPlace_UpdatesExistingObject()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entity = new OrderEntity { Id = 7, Product = "Gadget", Price = 3.5m };
+        var dto    = new OrderDto   { Id = 0, Product = "Old",    Price = 0m   };
+
+        mapper.Map<OrderEntity, OrderDto>(entity, dto);
+
+        Assert.Equal(7, dto.Id);
+        Assert.Equal("Gadget", dto.Product);
+        Assert.Equal(3.5m, dto.Price);
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapInPlace_NullSource_ThrowsArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var dto = new OrderDto();
+        Assert.Throws<ArgumentNullException>(() => mapper.Map<OrderEntity, OrderDto>(null!, dto));
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapInPlace_NullDestination_ThrowsArgumentNullException()
     {
         var services = new ServiceCollection();
         services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
@@ -212,9 +242,7 @@ public class DiIntegrationTests
         var mapper = sp.GetRequiredService<IMapper>();
 
         var entity = new OrderEntity { Id = 1 };
-        var dto    = new OrderDto();
-
-        Assert.Throws<NotSupportedException>(() => mapper.Map<OrderEntity, OrderDto>(entity, dto));
+        Assert.Throws<ArgumentNullException>(() => mapper.Map<OrderEntity, OrderDto>(entity, null!));
     }
 
     // ------------------------------------------------------------------
