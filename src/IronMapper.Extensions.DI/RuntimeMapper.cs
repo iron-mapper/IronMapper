@@ -25,6 +25,8 @@ public sealed class RuntimeMapper : IMapper
     private readonly IServiceProvider _provider;
 
     /// <summary>Initialises the mapper with the application's <see cref="IServiceProvider"/>.</summary>
+    /// <param name="provider">The application service provider used for dependency resolution.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is <see langword="null"/>.</exception>
     public RuntimeMapper(IServiceProvider provider)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));

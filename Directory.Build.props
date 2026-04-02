@@ -10,9 +10,11 @@
     <Version>1.0.0</Version>
     <Authors>Iron Programmer School</Authors>
     <Company>Iron Programmer School</Company>
-    <Description>IronMapper — compile-time Object-to-Object mapper for .NET. Zero reflection at runtime, Roslyn Source Generator based.</Description>
-    <RepositoryUrl>https://github.com/iron-programmer-school/IronMapper</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageTags>mapper;automapper;source-generator;compile-time</PackageTags>
+    <PackageProjectUrl>https://github.com/algmironov/IronMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/algmironov/IronMapper</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 </Project>

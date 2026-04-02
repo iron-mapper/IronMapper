@@ -17,18 +17,21 @@ public interface IMemberConfigurationExpression<TSource, TDest>
     /// </summary>
     /// <typeparam name="TMember">The member value type.</typeparam>
     /// <param name="sourceMember">Lambda expression selecting the source property or field.</param>
-    void MapFrom<TMember>(Expression<Func<TSource, TMember>> sourceMember);
+    /// <returns>The current <see cref="IMemberConfigurationExpression{TSource,TDest}"/> for fluent chaining.</returns>
+    IMemberConfigurationExpression<TSource, TDest> MapFrom<TMember>(Expression<Func<TSource, TMember>> sourceMember);
 
     /// <summary>
     /// Specifies a custom resolver function to compute the destination member value.
     /// </summary>
     /// <param name="resolver">A function that receives the source object and returns the value.</param>
-    void MapFrom(Func<TSource, object?> resolver);
+    /// <returns>The current <see cref="IMemberConfigurationExpression{TSource,TDest}"/> for fluent chaining.</returns>
+    IMemberConfigurationExpression<TSource, TDest> MapFrom(Func<TSource, object?> resolver);
 
     /// <summary>
     /// Instructs the mapper to skip this destination member; it will retain its default value.
     /// </summary>
-    void Ignore();
+    /// <returns>The current <see cref="IMemberConfigurationExpression{TSource,TDest}"/> for fluent chaining.</returns>
+    IMemberConfigurationExpression<TSource, TDest> Ignore();
 
     /// <summary>
     /// Specifies a custom <see cref="ITypeConverter"/> to convert the value for this member.
@@ -36,5 +39,6 @@ public interface IMemberConfigurationExpression<TSource, TDest>
     /// <typeparam name="TConverter">
     /// A type implementing <see cref="ITypeConverter"/> for the source and destination member types.
     /// </typeparam>
-    void UseConverter<TConverter>() where TConverter : ITypeConverter;
+    /// <returns>The current <see cref="IMemberConfigurationExpression{TSource,TDest}"/> for fluent chaining.</returns>
+    IMemberConfigurationExpression<TSource, TDest> UseConverter<TConverter>() where TConverter : ITypeConverter;
 }
