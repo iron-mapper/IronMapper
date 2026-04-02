@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using IronMapper.Attributes;
 using IronMapper.Configuration;
 using IronMapper.Exceptions;
@@ -164,5 +166,129 @@ public class DiIntegrationTests
 
         // int has no registered mapping to OrderDto.
         Assert.Throws<MappingException>(() => mapper.Map<OrderDto>(42));
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — strongly-typed generic overload
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapTwoGenerics_NullSource_ThrowsArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        Assert.Throws<ArgumentNullException>(() => mapper.Map<OrderEntity, OrderDto>(null!));
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapTwoGenerics_ValidSource_ReturnsMappedResult()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entity = new OrderEntity { Id = 5, Product = "Gadget", Price = 19.99m };
+        var dto = mapper.Map<OrderEntity, OrderDto>(entity);
+
+        Assert.Equal(5, dto.Id);
+        Assert.Equal("Gadget", dto.Product);
+        Assert.Equal(19.99m, dto.Price);
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — in-place (void) overload always throws
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapInPlace_AlwaysThrowsNotSupportedException()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entity = new OrderEntity { Id = 1 };
+        var dto    = new OrderDto();
+
+        Assert.Throws<NotSupportedException>(() => mapper.Map<OrderEntity, OrderDto>(entity, dto));
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — collection overload
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapCollection_MapsAllItems()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        var entities = new[]
+        {
+            new OrderEntity { Id = 1, Product = "A", Price = 1.0m },
+            new OrderEntity { Id = 2, Product = "B", Price = 2.0m },
+        };
+
+        var dtos = mapper.MapCollection<OrderEntity, OrderDto>(entities).ToList();
+
+        Assert.Equal(2, dtos.Count);
+        Assert.Equal(1, dtos[0].Id);
+        Assert.Equal("B", dtos[1].Product);
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapCollection_NullSource_ThrowsArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        Assert.Throws<ArgumentNullException>(() =>
+            mapper.MapCollection<OrderEntity, OrderDto>(null!).ToList());
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — constructor guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_NullProvider_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new RuntimeMapper(null!));
+    }
+
+    // ------------------------------------------------------------------
+    // IronMapperOptions.AddProfile<T>
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void IronMapperOptions_AddProfile_RegistersProfileAssembly()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(opt => opt.AddProfile<OrderProfile>());
+        using var sp = services.BuildServiceProvider();
+
+        // OrderProfile lives in this assembly — AddProfile<T> must cause it to be registered.
+        var profile = sp.GetService<OrderProfile>();
+        Assert.NotNull(profile);
+    }
+
+    // ------------------------------------------------------------------
+    // AddIronMapper — null configure guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddIronMapper_NullConfigure_ThrowsArgumentNullException()
+    {
+        var services = new ServiceCollection();
+        Assert.Throws<ArgumentNullException>(() =>
+            services.AddIronMapper((Action<IronMapperOptions>)null!));
     }
 }

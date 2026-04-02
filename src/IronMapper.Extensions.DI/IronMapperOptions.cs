@@ -20,6 +20,8 @@ public sealed class IronMapperOptions
     /// Registers the assembly containing <typeparamref name="TProfile"/> for profile scanning.
     /// The profile type itself must have a public parameterless constructor.
     /// </summary>
+    /// <typeparam name="TProfile">A concrete <see cref="MappingProfile"/> subclass with a public parameterless constructor.</typeparam>
+    /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddProfile<TProfile>() where TProfile : MappingProfile, new()
     {
         ProfileAssemblies.Add(typeof(TProfile).Assembly);
@@ -30,6 +32,8 @@ public sealed class IronMapperOptions
     /// Scans <paramref name="assembly"/> for all concrete <see cref="MappingProfile"/> subclasses
     /// and registers their assemblies so the mapper is aware of any mappings they declare.
     /// </summary>
+    /// <param name="assembly">The assembly to scan for <see cref="MappingProfile"/> subclasses.</param>
+    /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddProfilesFromAssembly(Assembly assembly)
     {
         ProfileAssemblies.Add(assembly);
@@ -40,6 +44,8 @@ public sealed class IronMapperOptions
     /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service
     /// so it can be resolved alongside the generated mapping code.
     /// </summary>
+    /// <typeparam name="TConverter">A concrete type implementing <see cref="ITypeConverter"/>.</typeparam>
+    /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddConverter<TConverter>() where TConverter : class, ITypeConverter
     {
         ConverterTypes.Add(typeof(TConverter));

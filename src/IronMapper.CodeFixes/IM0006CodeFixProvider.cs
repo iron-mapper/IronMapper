@@ -145,6 +145,9 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
     }
 
     /// <summary>Computes the Levenshtein edit distance between two strings.</summary>
+    /// <param name="s">The first string.</param>
+    /// <param name="t">The second string.</param>
+    /// <returns>The minimum number of single-character edits (insertions, deletions, substitutions) needed to transform <paramref name="s"/> into <paramref name="t"/>.</returns>
     private static int LevenshteinDistance(string s, string t)
     {
         if (s.Length == 0) return t.Length;

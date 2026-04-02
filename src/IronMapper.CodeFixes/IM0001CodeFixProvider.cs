@@ -80,6 +80,9 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 
+    /// <summary>Extracts the first single-quoted token from the diagnostic message as the property name.</summary>
+    /// <param name="diagnostic">The IM0001 diagnostic whose message contains the property name.</param>
+    /// <returns>The property name, or <see langword="null"/> if the message format is not recognised.</returns>
     private static string? ExtractPropertyNameFromMessage(Diagnostic diagnostic)
     {
         // Message format: "Property '{0}' on destination type '{1}' has no corresponding…"

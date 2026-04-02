@@ -276,6 +276,73 @@ public class ProfileGeneratorTests
     }
 
     // ------------------------------------------------------------------
+    // Branch-coverage: three-level profile inheritance
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void ProfileDetection_ThreeLevelInheritance_ProfileIsRecognized()
+    {
+        // GoodsProfile → BaseProfile → MappingProfile (three levels deep).
+        // InheritsFrom walks the full base-type chain, so this must be detected.
+        var source = """
+            using IronMapper.Configuration;
+
+            public class GoodsEntity { public int Id { get; set; } }
+            public class GoodsDto    { public int Id { get; set; } }
+
+            public abstract class BaseProfile : MappingProfile { }
+
+            public class GoodsProfile : BaseProfile
+            {
+                public GoodsProfile()
+                {
+                    CreateMap<GoodsEntity, GoodsDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToGoodsDto", code);
+        Assert.Contains("Id = source.Id", code);
+    }
+
+    // ------------------------------------------------------------------
+    // Branch-coverage: standalone chain .Ignore(dest => dest.Prop)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void StandaloneIgnore_TopLevelChainIgnoreCall_IgnoresNamedProperty()
+    {
+        // Uses the chain-level .Ignore(dest => dest.Prop) shorthand instead of
+        // .ForMember(dest => dest.Prop, opt => opt.Ignore()).
+        var source = """
+            using IronMapper.Configuration;
+
+            public class TaskEntity { public int Id { get; set; } public string InternalRef { get; set; } = ""; }
+            public class TaskDto    { public int Id { get; set; } public string InternalRef { get; set; } = ""; }
+
+            public class TaskProfile : MappingProfile
+            {
+                public TaskProfile()
+                {
+                    CreateMap<TaskEntity, TaskDto>()
+                        .Ignore(dest => dest.InternalRef);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("Id = source.Id", code);
+        Assert.DoesNotContain("InternalRef = source.InternalRef", code);
+    }
+
+    // ------------------------------------------------------------------
     // Branch-coverage: MappingAnalyzer — [MapProperty] + [Ignore] on the same source property
     // ------------------------------------------------------------------
 

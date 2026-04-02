@@ -191,6 +191,47 @@ public class BasicGeneratorTests
     // Multiple [MapTo] attributes
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // MapConverter attribute
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void MapConverterAttribute_WhenAppliedToSource_EmitsConverterInstantiationInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Attributes;
+            using IronMapper.Interfaces;
+
+            public class PriceConverter : ITypeConverter<decimal, string>
+            {
+                public string Convert(decimal source) => source.ToString("F2");
+            }
+
+            [MapTo(typeof(PricedDto))]
+            public class PricedEntity
+            {
+                public int Id { get; set; }
+
+                [MapConverter(typeof(PriceConverter))]
+                public decimal Amount { get; set; }
+            }
+
+            public class PricedDto
+            {
+                public int Id { get; set; }
+                public string Amount { get; set; } = "";
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToPricedDto", code);
+        Assert.Contains("PriceConverter", code);  // converter type is referenced in emitted code
+        Assert.Contains(".Convert(", code);        // .Convert(...) call is emitted
+    }
+
     [Fact]
     public void MapToAttribute_WhenAppliedMultipleTimes_GeneratesOneMethodPerDestination()
     {

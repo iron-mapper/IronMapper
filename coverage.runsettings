@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <!-- Exclude Roslyn auto-generated .g.cs files from coverage metrics. -->
+          <ExcludeByFile>**/*.g.cs,**/*.Generated.cs</ExcludeByFile>
+          <!-- Also exclude types decorated with [GeneratedCode] or [ExcludeFromCodeCoverage]. -->
+          <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

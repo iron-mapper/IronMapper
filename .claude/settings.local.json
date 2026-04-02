@@ -17,7 +17,11 @@
       "Bash(cp*)",
       "Bash(mv*)",
       "Read(**)",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Read(//c/Users/algmironov/.claude/projects/c--Users-algmironov-source-repos-IronMapper/3e7d1772-87c7-4c1f-b013-f6345822d10f/tool-results/**)",
+      "Bash(where python3:*)",
+      "Bash(where python:*)",
+      "Bash(powershell -Command ':*)"
     ]
   }
 }

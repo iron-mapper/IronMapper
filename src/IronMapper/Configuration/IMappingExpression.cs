@@ -19,6 +19,13 @@ public interface IMappingExpression<TSource, TDest>
     /// <param name="dest">Expression selecting the destination member to configure.</param>
     /// <param name="opts">A delegate that receives the member configuration builder.</param>
     /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;User, UserDto&gt;()
+    ///     .ForMember(d => d.FullName,
+    ///                o => o.MapFrom(s => s.FirstName + " " + s.LastName));
+    /// </code>
+    /// </example>
     IMappingExpression<TSource, TDest> ForMember(
         Expression<Func<TDest, object?>> dest,
         Action<IMemberConfigurationExpression<TSource, TDest>> opts);
