@@ -70,3 +70,6 @@ appsettings.Development.json
 
 # Claude
 .claude/
+/agents/api-checker-agent.md
+/agents/review-agent.md
+/agents/test-agent.md
