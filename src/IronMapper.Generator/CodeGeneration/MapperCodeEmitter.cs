@@ -51,7 +51,11 @@ internal static class MapperCodeEmitter
         sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
 
         if (descriptor.WhenConditionBody is not null)
-            sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;");
+            sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;"); // safe: `default!` is part of the emitted C# text, not a local operator
+
+        var hasHooks = descriptor.BeforeMapLambdaBody is not null || descriptor.AfterMapLambdaBody is not null;
+        var beforeMapMethodName = $"BeforeMap_{descriptor.SourceTypeName}_{descriptor.DestTypeName}";
+        var afterMapMethodName  = $"AfterMap_{descriptor.SourceTypeName}_{descriptor.DestTypeName}";
 
         if (descriptor.WholeObjectConverterType is not null)
         {
@@ -60,6 +64,25 @@ internal static class MapperCodeEmitter
         else if (descriptor.WholeObjectLambdaBody is not null)
         {
             sb.AppendLine($"            return {descriptor.WholeObjectLambdaBody};");
+        }
+        else if (hasHooks)
+        {
+            // Two-step pattern required when BeforeMap or AfterMap hooks are present.
+            sb.AppendLine($"            var destination = new {destFullName}();");
+
+            if (descriptor.BeforeMapLambdaBody is not null)
+                sb.AppendLine($"            {beforeMapMethodName}(source, destination);");
+
+            foreach (var prop in descriptor.PropertyMappings)
+            {
+                if (prop.IsIgnored || prop.IsInitOnly) continue;
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop)};");
+            }
+
+            if (descriptor.AfterMapLambdaBody is not null)
+                sb.AppendLine($"            {afterMapMethodName}(source, destination);");
+
+            sb.AppendLine("            return destination;");
         }
         else
         {
@@ -114,6 +137,29 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"                ? global::System.Array.Empty<{destFullName}>()");
         sb.AppendLine($"                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => x.{methodName}()));");
 
+        // ------------------------------------------------------------------
+        // Private hook helpers (only emitted when BeforeMap/AfterMap are set)
+        // ------------------------------------------------------------------
+        if (descriptor.BeforeMapLambdaBody is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private static void {beforeMapMethodName}({sourceFullName} source, {destFullName} destination)");
+            sb.AppendLine("        {");
+            foreach (var line in descriptor.BeforeMapLambdaBody.Split('\n'))
+                sb.AppendLine($"            {line.TrimEnd()}");
+            sb.AppendLine("        }");
+        }
+
+        if (descriptor.AfterMapLambdaBody is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private static void {afterMapMethodName}({sourceFullName} source, {destFullName} destination)");
+            sb.AppendLine("        {");
+            foreach (var line in descriptor.AfterMapLambdaBody.Split('\n'))
+                sb.AppendLine($"            {line.TrimEnd()}");
+            sb.AppendLine("        }");
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
@@ -163,11 +209,11 @@ internal static class MapperCodeEmitter
         return prop.CollectionOutputType switch
         {
             "Array" =>
-                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToArray({selectExpr})",
+                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToArray({selectExpr})", // safe: `null!` is part of the emitted C# text
             "List" =>
-                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToList({selectExpr})",
+                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToList({selectExpr})", // safe: `null!` is part of the emitted C# text
             _ =>
-                $"{srcExpr} is null ? null! : {selectExpr}",
+                $"{srcExpr} is null ? null! : {selectExpr}", // safe: `null!` is part of the emitted C# text
         };
     }
 

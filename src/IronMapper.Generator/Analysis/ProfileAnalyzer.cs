@@ -128,6 +128,8 @@ internal static class ProfileAnalyzer
         string? whenConditionBody = null;
         string? wholeObjectConverterType = null;
         string? wholeObjectLambdaBody = null;
+        string? beforeMapBody = null;
+        string? afterMapBody = null;
         bool reverseMap = false;
 
         // calls[Count-1] = CreateMap, calls[0] = outermost
@@ -178,6 +180,16 @@ internal static class ProfileAnalyzer
                     }
                     break;
 
+                case "BeforeMap" when inv.ArgumentList.Arguments.Count == 1:
+                    beforeMapBody = ExtractTwoParamLambdaBody(
+                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    break;
+
+                case "AfterMap" when inv.ArgumentList.Arguments.Count == 1:
+                    afterMapBody = ExtractTwoParamLambdaBody(
+                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    break;
+
                 case "ReverseMap":
                     reverseMap = true;
                     break;
@@ -188,18 +200,21 @@ internal static class ProfileAnalyzer
 
         var forward = BuildDescriptorFromProfile(
             sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody,
-            wholeObjectConverterType, wholeObjectLambdaBody, model, ct);
+            wholeObjectConverterType, wholeObjectLambdaBody,
+            beforeMapBody, afterMapBody, model, ct);
         if (forward is not null) results.Add(forward);
 
         if (reverseMap)
         {
-            // Reverse: swap source/dest, use simple name matching (no ForMember customisations).
+            // Reverse: swap source/dest, use simple name matching (no ForMember/hook customisations).
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
                 new List<(string, string?, bool, string?)>(),
                 whenCondition: null,
                 wholeObjectConverterType: null,
                 wholeObjectLambdaBody: null,
+                beforeMapBody: null,
+                afterMapBody: null,
                 model, ct);
             if (reverse is not null) results.Add(reverse);
         }
@@ -267,6 +282,8 @@ internal static class ProfileAnalyzer
         string? whenCondition,
         string? wholeObjectConverterType,
         string? wholeObjectLambdaBody,
+        string? beforeMapBody,
+        string? afterMapBody,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -355,7 +372,9 @@ internal static class ProfileAnalyzer
             hasCustomConverter: false,
             whenConditionBody: whenCondition,
             wholeObjectConverterType: wholeObjectConverterType,
-            wholeObjectLambdaBody: wholeObjectLambdaBody);
+            wholeObjectLambdaBody: wholeObjectLambdaBody,
+            beforeMapLambdaBody: beforeMapBody,
+            afterMapLambdaBody: afterMapBody);
     }
 
     /// <summary>
@@ -406,6 +425,51 @@ internal static class ProfileAnalyzer
         {
             bodyText = ReplaceIdentifier(bodyText, paramName, replacementParam);
         }
+
+        return bodyText;
+    }
+
+    /// <summary>
+    /// Extracts the body from a two-parameter lambda such as
+    /// <c>(src, dest) =&gt; dest.Prop = value</c> or
+    /// <c>(src, dest) =&gt; { ... }</c>, renaming both parameters to
+    /// <paramref name="param1Replacement"/> and <paramref name="param2Replacement"/>.
+    /// For expression bodies the result is a single statement (semicolon appended).
+    /// For block bodies the inner statements are returned verbatim (without outer braces).
+    /// Returns <see langword="null"/> when the expression is not a two-parameter lambda.
+    /// </summary>
+    private static string? ExtractTwoParamLambdaBody(
+        ExpressionSyntax expr,
+        string param1Replacement,
+        string param2Replacement)
+    {
+        if (expr is not ParenthesizedLambdaExpressionSyntax lambda) return null;
+        if (lambda.ParameterList.Parameters.Count < 2) return null;
+
+        var param1 = lambda.ParameterList.Parameters[0].Identifier.Text;
+        var param2 = lambda.ParameterList.Parameters[1].Identifier.Text;
+
+        string bodyText;
+        if (lambda.Body is BlockSyntax block)
+        {
+            // Join all statements, trimming leading whitespace from each.
+            var sb = new System.Text.StringBuilder();
+            foreach (var stmt in block.Statements)
+            {
+                sb.AppendLine(stmt.ToString().TrimStart());
+            }
+            bodyText = sb.ToString().TrimEnd();
+        }
+        else
+        {
+            // Expression body — turn into a statement by appending a semicolon.
+            bodyText = lambda.Body.ToString() + ";";
+        }
+
+        if (!string.IsNullOrEmpty(param1) && param1 != param1Replacement)
+            bodyText = ReplaceIdentifier(bodyText, param1, param1Replacement);
+        if (!string.IsNullOrEmpty(param2) && param2 != param2Replacement)
+            bodyText = ReplaceIdentifier(bodyText, param2, param2Replacement);
 
         return bodyText;
     }

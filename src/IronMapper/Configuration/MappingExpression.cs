@@ -41,4 +41,12 @@ internal sealed class MappingExpression<TSource, TDest> : IMappingExpression<TSo
     /// <inheritdoc/>
     public IMappingExpression<TSource, TDest> ReverseMap()
         => this;
+
+    /// <inheritdoc/>
+    public IMappingExpression<TSource, TDest> BeforeMap(Action<TSource, TDest> action)
+        => this;
+
+    /// <inheritdoc/>
+    public IMappingExpression<TSource, TDest> AfterMap(Action<TSource, TDest> action)
+        => this;
 }

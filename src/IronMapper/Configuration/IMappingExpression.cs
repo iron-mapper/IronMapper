@@ -70,4 +70,33 @@ public interface IMappingExpression<TSource, TDest>
     /// </summary>
     /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
     IMappingExpression<TSource, TDest> ReverseMap();
+
+    /// <summary>
+    /// Registers an action to be called immediately after the destination object is created
+    /// and before any properties are assigned. The destination object is empty at this point.
+    /// The generator extracts the lambda body and emits it as a private helper method.
+    /// </summary>
+    /// <param name="action">An action receiving the source and the (empty) destination objects.</param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;UserEntity, UserDto&gt;()
+    ///     .BeforeMap((src, dest) => Console.WriteLine($"Mapping {src.Id}"));
+    /// </code>
+    /// </example>
+    IMappingExpression<TSource, TDest> BeforeMap(Action<TSource, TDest> action);
+
+    /// <summary>
+    /// Registers an action to be called after all properties have been assigned to the destination.
+    /// The generator extracts the lambda body and emits it as a private helper method.
+    /// </summary>
+    /// <param name="action">An action receiving the source and the fully-populated destination objects.</param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;UserEntity, UserDto&gt;()
+    ///     .AfterMap((src, dest) => dest.MappedAt = DateTime.UtcNow);
+    /// </code>
+    /// </example>
+    IMappingExpression<TSource, TDest> AfterMap(Action<TSource, TDest> action);
 }
