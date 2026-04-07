@@ -64,6 +64,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// </summary>
     public string? AfterMapLambdaBody { get; }
 
+    /// <summary>Profile-level value transformers to apply to name-matched properties by type.</summary>
+    public ImmutableArray<ValueTransformerDescriptor> ValueTransformers { get; }
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -77,6 +80,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="wholeObjectLambdaBody">Verbatim C# expression that returns the entire destination object, or <see langword="null"/>.</param>
     /// <param name="beforeMapLambdaBody">Verbatim C# statements for the BeforeMap hook, or <see langword="null"/>.</param>
     /// <param name="afterMapLambdaBody">Verbatim C# statements for the AfterMap hook, or <see langword="null"/>.</param>
+    /// <param name="valueTransformers">Profile-level value transformers, or default.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -89,7 +93,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string? wholeObjectConverterType = null,
         string? wholeObjectLambdaBody = null,
         string? beforeMapLambdaBody = null,
-        string? afterMapLambdaBody = null)
+        string? afterMapLambdaBody = null,
+        ImmutableArray<ValueTransformerDescriptor> valueTransformers = default)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -103,6 +108,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WholeObjectLambdaBody = wholeObjectLambdaBody;
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
+        ValueTransformers = valueTransformers.IsDefault ? ImmutableArray<ValueTransformerDescriptor>.Empty : valueTransformers;
     }
 
     /// <inheritdoc/>
@@ -127,6 +133,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         for (var i = 0; i < PropertyMappings.Length; i++)
             if (!PropertyMappings[i].Equals(other.PropertyMappings[i])) return false;
 
+        if (ValueTransformers.Length != other.ValueTransformers.Length) return false;
+        for (var i = 0; i < ValueTransformers.Length; i++)
+            if (!ValueTransformers[i].Equals(other.ValueTransformers[i])) return false;
+
         return true;
     }
 
@@ -149,6 +159,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (AfterMapLambdaBody?.GetHashCode() ?? 0);
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
+        foreach (var vt in ValueTransformers)
+            hash = hash * 31 + vt.GetHashCode();
         return hash;
     }
 }

@@ -59,14 +59,24 @@ internal static class ProfileAnalyzer
             if (ctor is not ConstructorDeclarationSyntax ctorDecl) continue;
             if (ctorDecl.Body is null) continue;
 
-            // Walk all expression-statements in the constructor body looking for
-            // CreateMap<Src, Dest>().ForMember(...).When(...) chains.
+            // Pass 1: collect AddTransformer declarations.
+            var transformersByType = new Dictionary<string, ValueTransformerDescriptor>();
+            foreach (var statement in ctorDecl.Body.Statements)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (statement is not ExpressionStatementSyntax exprStmt) continue;
+                if (TryExtractTransformer(exprStmt.Expression, ctx.SemanticModel, ct, out var t) && t is not null)
+                    transformersByType[t.FullyQualifiedTypeName] = t; // last registration wins per type
+            }
+            var transformers = ImmutableArray.CreateRange(transformersByType.Values);
+
+            // Pass 2: process CreateMap chains.
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
                 if (statement is not ExpressionStatementSyntax exprStmt) continue;
 
-                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, ct);
+                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, ct);
                 builder.AddRange(descriptors);
             }
         }
@@ -102,6 +112,7 @@ internal static class ProfileAnalyzer
     private static IReadOnlyList<MappingDescriptor> AnalyseChain(
         ExpressionSyntax expr,
         SemanticModel model,
+        ImmutableArray<ValueTransformerDescriptor> transformers,
         CancellationToken ct)
     {
         // Collect all method calls in the chain from outermost to innermost.
@@ -201,7 +212,7 @@ internal static class ProfileAnalyzer
         var forward = BuildDescriptorFromProfile(
             sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody,
             wholeObjectConverterType, wholeObjectLambdaBody,
-            beforeMapBody, afterMapBody, model, ct);
+            beforeMapBody, afterMapBody, transformers, model, ct);
         if (forward is not null) results.Add(forward);
 
         if (reverseMap)
@@ -215,7 +226,7 @@ internal static class ProfileAnalyzer
                 wholeObjectLambdaBody: null,
                 beforeMapBody: null,
                 afterMapBody: null,
-                model, ct);
+                transformers, model, ct);
             if (reverse is not null) results.Add(reverse);
         }
 
@@ -272,6 +283,46 @@ internal static class ProfileAnalyzer
     }
 
     // -----------------------------------------------------------------------
+    // Transformer extraction
+    // -----------------------------------------------------------------------
+
+    private static bool TryExtractTransformer(
+        ExpressionSyntax expr,
+        SemanticModel model,
+        CancellationToken ct,
+        out ValueTransformerDescriptor? result)
+    {
+        result = null;
+        if (expr is not InvocationExpressionSyntax inv) return false;
+
+        var methodName = inv.Expression switch
+        {
+            GenericNameSyntax gn => gn.Identifier.Text,
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax mgn } => mgn.Identifier.Text,
+            _ => null
+        };
+        if (methodName != "AddTransformer") return false;
+        if (inv.ArgumentList.Arguments.Count != 1) return false;
+
+        var methodSym = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
+        if (methodSym?.TypeArguments.Length != 1) return false;
+
+        var typeArg = methodSym.TypeArguments[0];
+        var fqn = typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var friendlyName = typeArg.Name; // "String", "Decimal", etc.
+
+        var lambdaBody = ExtractLambdaBody(inv.ArgumentList.Arguments[0].Expression, "value");
+        if (lambdaBody is null) return false;
+
+        result = new ValueTransformerDescriptor(
+            fullyQualifiedTypeName: fqn,
+            friendlyTypeName: friendlyName,
+            lambdaBody: lambdaBody,
+            methodName: $"TransformValue_{friendlyName}");
+        return true;
+    }
+
+    // -----------------------------------------------------------------------
     // Descriptor builder
     // -----------------------------------------------------------------------
 
@@ -284,6 +335,7 @@ internal static class ProfileAnalyzer
         string? wholeObjectLambdaBody,
         string? beforeMapBody,
         string? afterMapBody,
+        ImmutableArray<ValueTransformerDescriptor> transformers,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -348,6 +400,7 @@ internal static class ProfileAnalyzer
             {
                 var (collectionMapMethod, collectionOutputType) =
                     DetectCollectionMapping(namedProp.Type, destProp.Type);
+                var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
@@ -357,7 +410,8 @@ internal static class ProfileAnalyzer
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     collectionElementMapMethod: collectionMapMethod,
-                    collectionOutputType: collectionOutputType));
+                    collectionOutputType: collectionOutputType,
+                    sourcePropertyTypeFqn: typeFqn));
             }
             // Unmatched destination properties are silently skipped in profile-based mapping.
         }
@@ -374,7 +428,8 @@ internal static class ProfileAnalyzer
             wholeObjectConverterType: wholeObjectConverterType,
             wholeObjectLambdaBody: wholeObjectLambdaBody,
             beforeMapLambdaBody: beforeMapBody,
-            afterMapLambdaBody: afterMapBody);
+            afterMapLambdaBody: afterMapBody,
+            valueTransformers: transformers);
     }
 
     /// <summary>

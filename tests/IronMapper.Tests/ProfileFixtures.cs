@@ -1,3 +1,4 @@
+using System;
 using IronMapper.Configuration;
 
 // These types are NOT file-scoped so the source generator can discover them.
@@ -158,5 +159,45 @@ public class HookOrderProfile : MappingProfile
         CreateMap<HookOrderEntity, HookOrderDto>()
             .BeforeMap((src, dest) => dest.IdAtBeforeMap = dest.Id)
             .AfterMap((src, dest) => dest.IdAtAfterMap = dest.Id);
+    }
+}
+
+// -----------------------------------------------------------------------
+// TransformerEntity / TransformerDto — used to test AddTransformer.
+// -----------------------------------------------------------------------
+
+public class TransformerEntity { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+public class TransformerDto    { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+
+/// <summary>Profile that exercises AddTransformer for string trimming and decimal rounding.</summary>
+public class TransformerProfile : MappingProfile
+{
+    public TransformerProfile()
+    {
+        AddTransformer<string>(v => v.Trim());
+        AddTransformer<decimal>(v => Math.Round(v, 2));
+        CreateMap<TransformerEntity, TransformerDto>();
+    }
+}
+
+// -----------------------------------------------------------------------
+// TransformerForMemberEntity / TransformerForMemberDto — used to verify
+// that transformers do NOT apply to ForMember-configured properties.
+// -----------------------------------------------------------------------
+
+public class TransformerForMemberEntity { public string Name { get; set; } = ""; public string Tag { get; set; } = ""; }
+public class TransformerForMemberDto    { public string Name { get; set; } = ""; public string Tag { get; set; } = ""; }
+
+/// <summary>
+/// Profile that registers a string transformer but explicitly configures Tag via ForMember.
+/// The transformer should trim Name but leave Tag's custom lambda untouched.
+/// </summary>
+public class TransformerForMemberProfile : MappingProfile
+{
+    public TransformerForMemberProfile()
+    {
+        AddTransformer<string>(v => v.Trim());
+        CreateMap<TransformerForMemberEntity, TransformerForMemberDto>()
+            .ForMember(dest => dest.Tag, opt => opt.MapFrom(src => src.Tag + "_raw"));
     }
 }

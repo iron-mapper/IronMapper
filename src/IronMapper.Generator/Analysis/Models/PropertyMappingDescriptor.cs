@@ -48,6 +48,13 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// </summary>
     public string? CollectionOutputType { get; }
 
+    /// <summary>
+    /// The <c>global::</c>-prefixed fully-qualified type name of the source property.
+    /// Only populated for name-matched properties (not ForMember-configured ones).
+    /// Used by value transformers to match on type.
+    /// </summary>
+    public string? SourcePropertyTypeFqn { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
@@ -58,6 +65,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="isInitOnly">When <see langword="true"/> the destination setter is <c>init</c>-only; the in-place mapper skips this property.</param>
     /// <param name="collectionElementMapMethod">Name of the generated method used to map each collection element, or <see langword="null"/>.</param>
     /// <param name="collectionOutputType">Output materialisation kind: <c>"Array"</c>, <c>"List"</c>, <c>"Enumerable"</c>, or <see langword="null"/>.</param>
+    /// <param name="sourcePropertyTypeFqn">The <c>global::</c>-prefixed FQN of the source property type, or <see langword="null"/> for ForMember-configured properties.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -67,7 +75,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         string? lambdaBody = null,
         bool isInitOnly = false,
         string? collectionElementMapMethod = null,
-        string? collectionOutputType = null)
+        string? collectionOutputType = null,
+        string? sourcePropertyTypeFqn = null)
     {
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
@@ -78,6 +87,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         IsInitOnly = isInitOnly;
         CollectionElementMapMethod = collectionElementMapMethod;
         CollectionOutputType = collectionOutputType;
+        SourcePropertyTypeFqn = sourcePropertyTypeFqn;
     }
 
     /// <inheritdoc/>
@@ -93,7 +103,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && LambdaBody == other.LambdaBody
             && IsInitOnly == other.IsInitOnly
             && CollectionElementMapMethod == other.CollectionElementMapMethod
-            && CollectionOutputType == other.CollectionOutputType;
+            && CollectionOutputType == other.CollectionOutputType
+            && SourcePropertyTypeFqn == other.SourcePropertyTypeFqn;
     }
 
     /// <inheritdoc/>
@@ -112,6 +123,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + IsInitOnly.GetHashCode();
         hash = hash * 31 + (CollectionElementMapMethod?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionOutputType?.GetHashCode() ?? 0);
+        hash = hash * 31 + (SourcePropertyTypeFqn?.GetHashCode() ?? 0);
         return hash;
     }
 }

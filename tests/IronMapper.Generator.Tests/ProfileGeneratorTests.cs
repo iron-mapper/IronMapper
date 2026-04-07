@@ -565,6 +565,41 @@ public class ProfileGeneratorTests
     }
 
     // ------------------------------------------------------------------
+    // AddTransformer — transformer calls and helper methods are emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddTransformer_StringAndDecimal_EmitsTransformerCallsAndHelperMethods()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using System;
+
+            public class PriceEntity { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+            public class PriceDto    { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+
+            public class PriceProfile : MappingProfile
+            {
+                public PriceProfile()
+                {
+                    AddTransformer<string>(v => v.Trim());
+                    AddTransformer<decimal>(v => Math.Round(v, 2));
+                    CreateMap<PriceEntity, PriceDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("TransformValue_String_PriceEntity_PriceDto(source.Name)", code);
+        Assert.Contains("TransformValue_Decimal_PriceEntity_PriceDto(source.Price)", code);
+        Assert.Contains("private static string TransformValue_String_PriceEntity_PriceDto", code);
+        Assert.Contains("private static decimal TransformValue_Decimal_PriceEntity_PriceDto", code);
+    }
+
+    // ------------------------------------------------------------------
     // БЛОК 2 — In-place void overload is always generated
     // ------------------------------------------------------------------
 
