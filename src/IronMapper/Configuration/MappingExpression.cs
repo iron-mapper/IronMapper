@@ -49,4 +49,9 @@ internal sealed class MappingExpression<TSource, TDest> : IMappingExpression<TSo
     /// <inheritdoc/>
     public IMappingExpression<TSource, TDest> AfterMap(Action<TSource, TDest> action)
         => this;
+
+    /// <inheritdoc/>
+    public IMappingExpression<TSource, TDest> IncludeMembers(
+        params Expression<Func<TSource, object?>>[] memberExpressions)
+        => this;
 }

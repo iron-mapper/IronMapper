@@ -136,6 +136,7 @@ internal static class ProfileAnalyzer
         // Walk calls from innermost (CreateMap) outward, collecting config.
         // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
         var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)>();
+        var includedMembers = new List<string>();
         string? whenConditionBody = null;
         string? wholeObjectConverterType = null;
         string? wholeObjectLambdaBody = null;
@@ -201,6 +202,10 @@ internal static class ProfileAnalyzer
                         inv.ArgumentList.Arguments[0].Expression, "source", "destination");
                     break;
 
+                case "IncludeMembers":
+                    ParseIncludeMembers(inv, includedMembers);
+                    break;
+
                 case "ReverseMap":
                     reverseMap = true;
                     break;
@@ -209,8 +214,12 @@ internal static class ProfileAnalyzer
 
         var results = new List<MappingDescriptor>();
 
+        var includedMembersArray = includedMembers.Count > 0
+            ? ImmutableArray.CreateRange(includedMembers)
+            : ImmutableArray<string>.Empty;
+
         var forward = BuildDescriptorFromProfile(
-            sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody,
+            sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
             wholeObjectConverterType, wholeObjectLambdaBody,
             beforeMapBody, afterMapBody, transformers, model, ct);
         if (forward is not null) results.Add(forward);
@@ -218,9 +227,11 @@ internal static class ProfileAnalyzer
         if (reverseMap)
         {
             // Reverse: swap source/dest, use simple name matching (no ForMember/hook customisations).
+            // IncludeMembers is intentionally not propagated to the reverse mapping.
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
                 new List<(string, string?, bool, string?)>(),
+                ImmutableArray<string>.Empty,
                 whenCondition: null,
                 wholeObjectConverterType: null,
                 wholeObjectLambdaBody: null,
@@ -282,6 +293,18 @@ internal static class ProfileAnalyzer
         }
     }
 
+    private static void ParseIncludeMembers(
+        InvocationExpressionSyntax inv,
+        List<string> includedMembers)
+    {
+        foreach (var arg in inv.ArgumentList.Arguments)
+        {
+            var memberName = ExtractMemberName(arg.Expression);
+            if (memberName is not null)
+                includedMembers.Add(memberName);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Transformer extraction
     // -----------------------------------------------------------------------
@@ -330,6 +353,7 @@ internal static class ProfileAnalyzer
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
         List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> forMemberConfigs,
+        ImmutableArray<string> includedMembers,
         string? whenCondition,
         string? wholeObjectConverterType,
         string? wholeObjectLambdaBody,
@@ -373,6 +397,31 @@ internal static class ProfileAnalyzer
         foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
             configByDest[dp] = (lb, ign, cvt);
 
+        // Build included-member resolution lookup (first-member-wins on name conflicts).
+        // Key: dest property name (case-insensitive)
+        // Value: (lambdaBody to emit, typeFqn of the nested property for transformer matching)
+        var includedResolution = new Dictionary<string, (string lambdaBody, string typeFqn)>(
+            System.StringComparer.OrdinalIgnoreCase);
+        foreach (var memberName in includedMembers)
+        {
+            if (!sourcePropsByName.TryGetValue(memberName, out var memberPropSym)) continue;
+            if (memberPropSym.Type is not INamedTypeSymbol memberType) continue;
+
+            bool parentIsRef = memberPropSym.Type.IsReferenceType;
+            var nestedProps = SymbolHelpers.GetPublicReadableProperties(memberType);
+            foreach (var nestedProp in nestedProps)
+            {
+                if (includedResolution.ContainsKey(nestedProp.Name)) continue; // first member wins
+                var access = $"source.{memberName}.{nestedProp.Name}";
+                // Emit a null-guard ternary for reference-type nested members to avoid NRE.
+                var lambdaBody = parentIsRef
+                    ? $"source.{memberName} != null ? {access} : default!"
+                    : access;
+                var typeFqn = nestedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                includedResolution[nestedProp.Name] = (lambdaBody, typeFqn);
+            }
+        }
+
         var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
 
         foreach (var destProp in destProps)
@@ -383,7 +432,7 @@ internal static class ProfileAnalyzer
 
             if (configByDest.TryGetValue(destProp.Name, out var cfg))
             {
-                // Explicitly configured via ForMember.
+                // Priority 1: explicitly configured via ForMember.
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
@@ -392,11 +441,9 @@ internal static class ProfileAnalyzer
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
                     isInitOnly: isInitOnly));
-                continue;
             }
-
-            // Default: match by name.
-            if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
+            // Priority 2: direct name-match.
+            else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
                 var (collectionMapMethod, collectionOutputType) =
                     DetectCollectionMapping(namedProp.Type, destProp.Type);
@@ -412,6 +459,19 @@ internal static class ProfileAnalyzer
                     collectionElementMapMethod: collectionMapMethod,
                     collectionOutputType: collectionOutputType,
                     sourcePropertyTypeFqn: typeFqn));
+            }
+            // Priority 3: IncludeMembers flattening.
+            else if (includedResolution.TryGetValue(destProp.Name, out var included))
+            {
+                propertyMappings.Add(new PropertyMappingDescriptor(
+                    sourcePropertyName: destProp.Name,
+                    destPropertyName: destProp.Name,
+                    isIgnored: false,
+                    converterType: null,
+                    needsNullCheck: false,
+                    lambdaBody: included.lambdaBody,
+                    isInitOnly: isInitOnly,
+                    includedMemberTypeFqn: included.typeFqn));
             }
             // Unmatched destination properties are silently skipped in profile-based mapping.
         }

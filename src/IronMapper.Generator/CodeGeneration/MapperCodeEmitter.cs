@@ -224,12 +224,17 @@ internal static class MapperCodeEmitter
         else
             raw = $"source.{prop.SourcePropertyName}";
 
-        // Apply transformer if type matches and no explicit custom mapping.
-        if (prop.LambdaBody is null && prop.SourcePropertyTypeFqn is not null)
+        // Apply transformer if type matches.
+        // - Name-matched properties:      LambdaBody is null,  SourcePropertyTypeFqn is set.
+        // - IncludeMembers properties:    LambdaBody is set,   IncludedMemberTypeFqn is set.
+        // - ForMember lambda properties:  LambdaBody is set,   both Fqn fields are null → no transform.
+        var fqnToMatch = prop.IncludedMemberTypeFqn
+            ?? (prop.LambdaBody is null ? prop.SourcePropertyTypeFqn : null);
+        if (fqnToMatch is not null)
         {
             foreach (var t in transformers)
             {
-                if (t.FullyQualifiedTypeName == prop.SourcePropertyTypeFqn)
+                if (t.FullyQualifiedTypeName == fqnToMatch)
                     return $"{t.MethodName}({raw})";
             }
         }

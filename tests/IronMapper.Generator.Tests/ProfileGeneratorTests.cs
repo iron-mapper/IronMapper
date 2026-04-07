@@ -600,6 +600,132 @@ public class ProfileGeneratorTests
     }
 
     // ------------------------------------------------------------------
+    // IncludeMembers — nested access expression is emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void IncludeMembers_SingleMember_EmitsNestedAccessExpression()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo { public string Email { get; set; } = ""; }
+            public class UserEntity  { public int Id { get; set; } public ContactInfo Contact { get; set; } = new(); }
+            public class UserDto     { public int Id { get; set; } public string Email { get; set; } = ""; }
+
+            public class UserProfile : MappingProfile
+            {
+                public UserProfile()
+                {
+                    CreateMap<UserEntity, UserDto>()
+                        .IncludeMembers(s => s.Contact);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToUserDto", code);
+        Assert.Contains("Id = source.Id", code);
+        // Email must come from the nested member with null guard.
+        Assert.Contains("source.Contact", code);
+        Assert.Contains("Email", code);
+        Assert.Contains("source.Contact != null", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_DuplicatePropertyAcrossMembers_FirstMemberWinsInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo  { public string Phone { get; set; } = ""; }
+            public class AddressInfo  { public string Phone { get; set; } = ""; public string City { get; set; } = ""; }
+            public class CustomerEntity { public ContactInfo Contact { get; set; } = new(); public AddressInfo Address { get; set; } = new(); }
+            public class CustomerDto    { public string Phone { get; set; } = ""; public string City { get; set; } = ""; }
+
+            public class CustomerProfile : MappingProfile
+            {
+                public CustomerProfile()
+                {
+                    CreateMap<CustomerEntity, CustomerDto>()
+                        .IncludeMembers(s => s.Contact, s => s.Address);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Phone must come from Contact (first member), not Address.
+        Assert.Contains("source.Contact.Phone", code);
+        Assert.DoesNotContain("source.Address.Phone", code);
+        // City has no conflict — comes from Address.
+        Assert.Contains("source.Address.City", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_ForMemberAlsoPresent_ForMemberTakesPriorityInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo    { public string Email { get; set; } = ""; }
+            public class EmployeeEntity { public ContactInfo Contact { get; set; } = new(); }
+            public class EmployeeDto    { public string Email { get; set; } = ""; }
+
+            public class EmployeeProfile : MappingProfile
+            {
+                public EmployeeProfile()
+                {
+                    CreateMap<EmployeeEntity, EmployeeDto>()
+                        .ForMember(dest => dest.Email, opt => opt.MapFrom(src => "hardcoded@example.com"))
+                        .IncludeMembers(s => s.Contact);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("hardcoded@example.com", code);
+        Assert.DoesNotContain("source.Contact.Email", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_ReferenceTypeNestedMember_EmitsNullGuardTernary()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class AddressInfo  { public string City { get; set; } = ""; }
+            public class StoreEntity  { public AddressInfo? Location { get; set; } }
+            public class StoreDto     { public string City { get; set; } = ""; }
+
+            public class StoreProfile : MappingProfile
+            {
+                public StoreProfile()
+                {
+                    CreateMap<StoreEntity, StoreDto>()
+                        .IncludeMembers(s => s.Location);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("source.Location != null", code);
+        Assert.Contains("source.Location.City", code);
+        Assert.Contains("default!", code);
+    }
+
+    // ------------------------------------------------------------------
     // БЛОК 2 — In-place void overload is always generated
     // ------------------------------------------------------------------
 

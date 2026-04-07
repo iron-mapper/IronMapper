@@ -55,6 +55,13 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// </summary>
     public string? SourcePropertyTypeFqn { get; }
 
+    /// <summary>
+    /// When non-null, this property was resolved via <c>IncludeMembers</c> flattening.
+    /// Holds the FQN of the nested property's type so that value transformers can be
+    /// applied by the code emitter even though <see cref="LambdaBody"/> is also set.
+    /// </summary>
+    public string? IncludedMemberTypeFqn { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
@@ -66,6 +73,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="collectionElementMapMethod">Name of the generated method used to map each collection element, or <see langword="null"/>.</param>
     /// <param name="collectionOutputType">Output materialisation kind: <c>"Array"</c>, <c>"List"</c>, <c>"Enumerable"</c>, or <see langword="null"/>.</param>
     /// <param name="sourcePropertyTypeFqn">The <c>global::</c>-prefixed FQN of the source property type, or <see langword="null"/> for ForMember-configured properties.</param>
+    /// <param name="includedMemberTypeFqn">The FQN of the nested property type when this property was resolved via IncludeMembers, or <see langword="null"/> otherwise.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -76,7 +84,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         bool isInitOnly = false,
         string? collectionElementMapMethod = null,
         string? collectionOutputType = null,
-        string? sourcePropertyTypeFqn = null)
+        string? sourcePropertyTypeFqn = null,
+        string? includedMemberTypeFqn = null)
     {
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
@@ -88,6 +97,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         CollectionElementMapMethod = collectionElementMapMethod;
         CollectionOutputType = collectionOutputType;
         SourcePropertyTypeFqn = sourcePropertyTypeFqn;
+        IncludedMemberTypeFqn = includedMemberTypeFqn;
     }
 
     /// <inheritdoc/>
@@ -104,7 +114,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && IsInitOnly == other.IsInitOnly
             && CollectionElementMapMethod == other.CollectionElementMapMethod
             && CollectionOutputType == other.CollectionOutputType
-            && SourcePropertyTypeFqn == other.SourcePropertyTypeFqn;
+            && SourcePropertyTypeFqn == other.SourcePropertyTypeFqn
+            && IncludedMemberTypeFqn == other.IncludedMemberTypeFqn;
     }
 
     /// <inheritdoc/>
@@ -124,6 +135,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + (CollectionElementMapMethod?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionOutputType?.GetHashCode() ?? 0);
         hash = hash * 31 + (SourcePropertyTypeFqn?.GetHashCode() ?? 0);
+        hash = hash * 31 + (IncludedMemberTypeFqn?.GetHashCode() ?? 0);
         return hash;
     }
 }
