@@ -319,4 +319,86 @@ public class DiIntegrationTests
         Assert.Throws<ArgumentNullException>(() =>
             services.AddIronMapper((Action<IronMapperOptions>)null!));
     }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — cache hit on second call (Map<TDest>)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_Map_SecondCallWithSameTypes_ReturnsMappedResult()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+        var entity = new OrderEntity { Id = 5, Product = "B", Price = 2.0m };
+
+        // First call populates the internal cache; second call hits the cached branch.
+        var dto1 = mapper.Map<OrderDto>(entity);
+        var dto2 = mapper.Map<OrderDto>(entity);
+
+        Assert.Equal(dto1.Id, dto2.Id);
+        Assert.Equal(dto1.Product, dto2.Product);
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — cache hit on second call (Map<TSource, TDest>)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapTwoGenerics_SecondCallWithSameTypes_ReturnsMappedResult()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+        var entity = new OrderEntity { Id = 3, Product = "C", Price = 5.0m };
+
+        // Both calls must succeed; second one hits the cached branch.
+        var dto1 = mapper.Map<OrderEntity, OrderDto>(entity);
+        var dto2 = mapper.Map<OrderEntity, OrderDto>(entity);
+
+        Assert.Equal(dto1.Id, dto2.Id);
+        Assert.Equal(dto1.Product, dto2.Product);
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — cache hit on second in-place call
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapInPlace_SecondCallWithSameTypes_UpdatesDestination()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+        var entity = new OrderEntity { Id = 9, Product = "D", Price = 3.0m };
+        var dto1 = new OrderDto();
+        var dto2 = new OrderDto();
+
+        // Both calls must succeed; second one hits the in-place cache branch.
+        mapper.Map<OrderEntity, OrderDto>(entity, dto1);
+        mapper.Map<OrderEntity, OrderDto>(entity, dto2);
+
+        Assert.Equal(9, dto2.Id);
+        Assert.Equal("D", dto2.Product);
+    }
+
+    // ------------------------------------------------------------------
+    // RuntimeMapper — unregistered mapping in in-place overload
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void RuntimeMapper_MapInPlace_UnregisteredMapping_ThrowsMappingException()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        // No mapping registered from int to OrderDto.
+        Assert.Throws<MappingException>(() =>
+            mapper.Map<int, OrderDto>(42, new OrderDto()));
+    }
 }

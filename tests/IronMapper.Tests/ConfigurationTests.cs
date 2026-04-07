@@ -230,11 +230,58 @@ public class ConfigurationTests
         Assert.Same(inner, ex.InnerException);
         Assert.Null(ex.SourceType);
     }
-}
 
-// -----------------------------------------------------------------------
-// Test fixtures
-// -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // MappingProfile.AddTransformer + GetTransformers
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void MappingProfile_AddTransformer_TransformerStoredInGetTransformers()
+    {
+        // Arrange
+        var profile = new TransformerCfgProfile();
+
+        // Act
+        var transformers = profile.GetTransformers();
+
+        // Assert
+        Assert.Single(transformers);
+        Assert.Equal(typeof(string), transformers[0].ValueType);
+        Assert.NotNull(transformers[0].TransformerDelegate);
+    }
+
+    // -----------------------------------------------------------------------
+    // IncludedMemberDescriptor
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void IncludedMemberDescriptor_Constructor_StoresMemberPath()
+    {
+        // Arrange & Act
+        var descriptor = new IncludedMemberDescriptor("Contact");
+
+        // Assert
+        Assert.Equal("Contact", descriptor.MemberPath);
+    }
+
+    // -----------------------------------------------------------------------
+    // IMappingExpression.IncludeMembers — fluent chain
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void MappingExpression_IncludeMembers_ReturnsSameInstanceForChaining()
+    {
+        // Arrange
+        var profile = new CfgProfile();
+        var expr = profile.ExposeCreateMap<CfgSourceWithNested, CfgDestFlat>();
+
+        // Act
+        var result = expr.IncludeMembers(s => (object?)s.Nested);
+
+        // Assert
+        Assert.Same(expr, result);
+    }
+}
 
 file class CfgSource { public string Name { get; set; } = string.Empty; }
 file class CfgDest   { public string Name { get; set; } = string.Empty; }
@@ -252,4 +299,16 @@ file sealed class CfgProfile : MappingProfile
 {
     public IMappingExpression<TSource, TDest> ExposeCreateMap<TSource, TDest>()
         => CreateMap<TSource, TDest>();
+}
+
+file class CfgNestedInfo       { public string City { get; set; } = ""; }
+file class CfgSourceWithNested { public CfgNestedInfo? Nested { get; set; } }
+file class CfgDestFlat         { public string City { get; set; } = ""; }
+
+file sealed class TransformerCfgProfile : MappingProfile
+{
+    public TransformerCfgProfile()
+    {
+        AddTransformer<string>(v => v.Trim());
+    }
 }

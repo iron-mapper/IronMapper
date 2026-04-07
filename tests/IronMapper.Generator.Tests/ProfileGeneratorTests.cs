@@ -726,6 +726,107 @@ public class ProfileGeneratorTests
     }
 
     // ------------------------------------------------------------------
+    // AddTransformer — block-body lambda { return ...; }
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddTransformer_BlockBodyLambda_EmitsBlockMethodInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using System;
+
+            public class BlockEntity { public string Name { get; set; } = ""; }
+            public class BlockDto    { public string Name { get; set; } = ""; }
+
+            public class BlockProfile : MappingProfile
+            {
+                public BlockProfile()
+                {
+                    AddTransformer<string>(v => { return v.Trim().ToUpperInvariant(); });
+                    CreateMap<BlockEntity, BlockDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Transformer helper must be emitted as a block method containing a return statement.
+        Assert.Contains("TransformValue_String_BlockEntity_BlockDto", code);
+        Assert.Contains("return", code);
+        Assert.Contains("ToUpperInvariant", code);
+    }
+
+    // ------------------------------------------------------------------
+    // IncludeMembers — value-type (struct) nested member: no null guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void IncludeMembers_ValueTypeNestedMember_EmitsDirectAccessWithoutNullGuard()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public struct GeoPoint { public double Lat { get; set; } public double Lon { get; set; } }
+            public class LocationEntity { public GeoPoint Coords { get; set; } }
+            public class LocationDto    { public double Lat { get; set; } public double Lon { get; set; } }
+
+            public class LocationProfile : MappingProfile
+            {
+                public LocationProfile()
+                {
+                    CreateMap<LocationEntity, LocationDto>()
+                        .IncludeMembers(s => s.Coords);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Struct member: direct access, no null-guard ternary.
+        Assert.Contains("source.Coords.Lat", code);
+        Assert.Contains("source.Coords.Lon", code);
+        Assert.DoesNotContain("source.Coords != null", code);
+    }
+
+    // ------------------------------------------------------------------
+    // Nested collection with same element type — no Select emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void NestedList_SameElementType_CopiedDirectlyWithoutSelect()
+    {
+        var source = """
+            using IronMapper.Attributes;
+            using System.Collections.Generic;
+
+            [MapTo(typeof(ContainerDto))]
+            public class ContainerEntity
+            {
+                public List<string> Tags { get; set; } = new();
+            }
+
+            public class ContainerDto
+            {
+                public List<string> Tags { get; set; } = new();
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Same element type (string→string): the Tags property is directly assigned.
+        Assert.Contains("Tags = source.Tags", code);
+        // No per-element mapper should be generated for string (the element type is not a mapped type).
+        Assert.DoesNotContain("MapToString", code);
+    }
+
+    // ------------------------------------------------------------------
     // БЛОК 2 — In-place void overload is always generated
     // ------------------------------------------------------------------
 
