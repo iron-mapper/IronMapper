@@ -14,6 +14,10 @@ public sealed class ValueTransformerDescriptor
     /// <summary>The delegate for runtime fallback execution.</summary>
     public Delegate TransformerDelegate { get; }
 
+    /// <summary>Initialises a new <see cref="ValueTransformerDescriptor"/>.</summary>
+    /// <param name="valueType">The CLR type this transformer handles.</param>
+    /// <param name="transformerMethodName">Name of the generated private helper method in the mapper.</param>
+    /// <param name="transformerDelegate">The delegate for runtime fallback execution.</param>
     public ValueTransformerDescriptor(Type valueType, string transformerMethodName, Delegate transformerDelegate)
     {
         ValueType = valueType;

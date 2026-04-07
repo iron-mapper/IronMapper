@@ -43,6 +43,7 @@ public abstract class MappingProfile : IMappingProfile
     /// Registers a value transformer applied to every property of type <typeparamref name="TValue"/>
     /// across all mappings in this profile.
     /// </summary>
+    /// <typeparam name="TValue">The type of values this transformer handles.</typeparam>
     /// <param name="transformer">A function that receives the source value and returns the transformed value.</param>
     protected void AddTransformer<TValue>(Func<TValue, TValue> transformer)
     {
