@@ -6,6 +6,19 @@ IronMapper was designed to make migration from AutoMapper as low-friction as pos
 
 ---
 
+## Key differences
+
+| | AutoMapper | IronMapper |
+|---|---|---|
+| Mapping code location | Runtime, reflection-based | Compile time, generated C# |
+| Build errors on misconfiguration | No (runtime `AutoMapperConfigurationException`) | Yes (compiler errors / IM00xx warnings) |
+| NativeAOT / trimming | Requires extra annotations | Fully compatible out of the box |
+| License | MIT | MIT |
+| Package size | ~500 KB | ~30 KB |
+| Performance | ~2–5 µs per object (reflection) | ~0 µs overhead (plain property assignment) |
+
+---
+
 ## API equivalence table
 
 | AutoMapper | IronMapper | Notes |
@@ -20,10 +33,16 @@ IronMapper was designed to make migration from AutoMapper as low-friction as pos
 | `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Extension method is preferred |
 | `mapper.Map(source, destination)` | `source.MapToDest(destination)` **or** `mapper.Map<Src, Dest>(source, dest)` | In-place update |
 | `mapper.Map<IEnumerable<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` | Dedicated collection helpers |
-| `ReverseMap()` | Not yet supported | Declare both directions explicitly |
-| `BeforeMap` / `AfterMap` | Not yet supported | Use `ConvertUsing` lambda as a workaround |
-| `IncludeMembers` | Not yet supported | Map included members explicitly |
-| `ValueTransformers` | Not yet supported | Use per-property `[MapConverter]` |
+| `ReverseMap()` | `.ReverseMap()` | Same method name; generates both directions |
+| `BeforeMap((src, dest) => ...)` | `.BeforeMap((src, dest) => ...)` | Same method name |
+| `AfterMap((src, dest) => ...)` | `.AfterMap((src, dest) => ...)` | Same method name |
+| `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Flattens nested object properties into the destination by name |
+| `ValueTransformers` (global) | `AddTransformer<T>(v => ...)` in a profile | Profile-scoped; applied to every property of the matching type |
+| `ForMember(d => d.X, o => o.NullSubstitute("default"))` | `ForMember(d => d.X, o => o.MapFrom(s => s.X ?? "default"))` | Use `MapFrom` with null-coalescing as a workaround |
+| `ForMember(d => d.X, o => o.UseDestinationValue())` | **Not supported** | Set default values in the destination constructor instead |
+| `ForMember(d => d.X, o => o.Condition(s => s.Active))` | **Not supported** per-member — use `MapFrom` with a conditional expression | `.When()` applies to the entire mapping, not individual members |
+| `.Include<SrcChild, DestChild>()` | **Not supported** — declare each mapping separately | Mapping inheritance is not implemented |
+| `ProjectTo<Dest>(queryable)` | **Not supported** | Compile-time generator cannot rewrite IQueryable expression trees |
 
 ---
 
@@ -74,15 +93,81 @@ AutoMapper requires `IMapper` injection everywhere. IronMapper generates strongl
 + var dto = entity.MapToOrderDto();
 ```
 
----
+### 6. Migrate advanced features
 
-## Key differences
+#### ReverseMap
 
-| | AutoMapper | IronMapper |
-|---|---|---|
-| Mapping code location | Runtime, reflection-based | Compile time, generated C# |
-| Build errors on misconfiguration | No (runtime `AutoMapperConfigurationException`) | Yes (compiler errors / IM00xx warnings) |
-| NativeAOT / trimming | Requires extra annotations | Fully compatible out of the box |
-| License | MIT | MIT |
-| Package size | ~500 KB | ~30 KB |
-| Performance | ~2–5 µs per object (reflection) | ~0 µs overhead (plain property assignment) |
+```csharp
+// AutoMapper
+cfg.CreateMap<OrderEntity, OrderDto>().ReverseMap();
+
+// IronMapper — identical syntax
+CreateMap<OrderEntity, OrderDto>().ReverseMap();
+// Generates both MapToOrderDto() and MapToOrderEntity()
+```
+
+#### BeforeMap / AfterMap
+
+```csharp
+// AutoMapper
+cfg.CreateMap<OrderEntity, OrderDto>()
+   .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
+   .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
+
+// IronMapper — identical syntax
+CreateMap<OrderEntity, OrderDto>()
+    .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
+    .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
+```
+
+#### IncludeMembers (flatten nested objects)
+
+```csharp
+// AutoMapper
+cfg.CreateMap<CustomerOrder, CustomerOrderDto>()
+   .IncludeMembers(s => s.Contact, s => s.Shipping);
+
+// IronMapper — identical syntax
+CreateMap<CustomerOrder, CustomerOrderDto>()
+    .IncludeMembers(s => s.Contact, s => s.Shipping);
+// Properties of Contact and Shipping are matched by name to CustomerOrderDto fields.
+// Priority: direct properties > ForMember > IncludeMembers (first-member-wins on duplicates).
+```
+
+#### ValueTransformers (AddTransformer)
+
+```csharp
+// AutoMapper (global)
+cfg.ValueTransformers.Add<string>(v => v?.Trim());
+
+// IronMapper (profile-scoped)
+public class OrderProfile : MappingProfile
+{
+    public OrderProfile()
+    {
+        AddTransformer<string>(v => v.Trim());   // applied to every string property in this profile
+        AddTransformer<decimal>(v => Math.Round(v, 2));
+        CreateMap<OrderEntity, OrderDto>();
+    }
+}
+```
+
+#### NullSubstitute workaround
+
+```csharp
+// AutoMapper
+.ForMember(d => d.Name, o => o.NullSubstitute("(unknown)"))
+
+// IronMapper workaround
+.ForMember(d => d.Name, o => o.MapFrom(s => s.Name ?? "(unknown)"))
+```
+
+#### Per-member Condition workaround
+
+```csharp
+// AutoMapper — per-member condition
+.ForMember(d => d.Discount, o => o.Condition(s => s.IsVip))
+
+// IronMapper workaround — use conditional expression in MapFrom
+.ForMember(d => d.Discount, o => o.MapFrom(s => s.IsVip ? s.Discount : 0m))
+```

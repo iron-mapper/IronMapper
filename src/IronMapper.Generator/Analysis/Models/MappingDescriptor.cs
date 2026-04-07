@@ -50,6 +50,23 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// </summary>
     public string? WholeObjectLambdaBody { get; }
 
+    /// <summary>
+    /// When non-null, the generator emits a private helper called before properties are assigned.
+    /// This is the verbatim C# body of the <c>BeforeMap((source, destination) =&gt; ...)</c> lambda,
+    /// with the lambda parameters renamed to <c>source</c> and <c>destination</c>.
+    /// </summary>
+    public string? BeforeMapLambdaBody { get; }
+
+    /// <summary>
+    /// When non-null, the generator emits a private helper called after all properties are assigned.
+    /// This is the verbatim C# body of the <c>AfterMap((source, destination) =&gt; ...)</c> lambda,
+    /// with the lambda parameters renamed to <c>source</c> and <c>destination</c>.
+    /// </summary>
+    public string? AfterMapLambdaBody { get; }
+
+    /// <summary>Profile-level value transformers to apply to name-matched properties by type.</summary>
+    public ImmutableArray<ValueTransformerDescriptor> ValueTransformers { get; }
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -61,6 +78,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="whenConditionBody">Optional verbatim C# condition expression (uses "source") emitted as a guard before mapping.</param>
     /// <param name="wholeObjectConverterType">Fully-qualified name of an <c>ITypeConverter</c> that converts the entire source object, or <see langword="null"/>.</param>
     /// <param name="wholeObjectLambdaBody">Verbatim C# expression that returns the entire destination object, or <see langword="null"/>.</param>
+    /// <param name="beforeMapLambdaBody">Verbatim C# statements for the BeforeMap hook, or <see langword="null"/>.</param>
+    /// <param name="afterMapLambdaBody">Verbatim C# statements for the AfterMap hook, or <see langword="null"/>.</param>
+    /// <param name="valueTransformers">Profile-level value transformers, or default.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -71,7 +91,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         bool hasCustomConverter,
         string? whenConditionBody = null,
         string? wholeObjectConverterType = null,
-        string? wholeObjectLambdaBody = null)
+        string? wholeObjectLambdaBody = null,
+        string? beforeMapLambdaBody = null,
+        string? afterMapLambdaBody = null,
+        ImmutableArray<ValueTransformerDescriptor> valueTransformers = default)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -83,6 +106,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WhenConditionBody = whenConditionBody;
         WholeObjectConverterType = wholeObjectConverterType;
         WholeObjectLambdaBody = wholeObjectLambdaBody;
+        BeforeMapLambdaBody = beforeMapLambdaBody;
+        AfterMapLambdaBody = afterMapLambdaBody;
+        ValueTransformers = valueTransformers.IsDefault ? ImmutableArray<ValueTransformerDescriptor>.Empty : valueTransformers;
     }
 
     /// <inheritdoc/>
@@ -98,12 +124,18 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || HasCustomConverter != other.HasCustomConverter
             || WhenConditionBody != other.WhenConditionBody
             || WholeObjectConverterType != other.WholeObjectConverterType
-            || WholeObjectLambdaBody != other.WholeObjectLambdaBody)
+            || WholeObjectLambdaBody != other.WholeObjectLambdaBody
+            || BeforeMapLambdaBody != other.BeforeMapLambdaBody
+            || AfterMapLambdaBody != other.AfterMapLambdaBody)
             return false;
 
         if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
         for (var i = 0; i < PropertyMappings.Length; i++)
             if (!PropertyMappings[i].Equals(other.PropertyMappings[i])) return false;
+
+        if (ValueTransformers.Length != other.ValueTransformers.Length) return false;
+        for (var i = 0; i < ValueTransformers.Length; i++)
+            if (!ValueTransformers[i].Equals(other.ValueTransformers[i])) return false;
 
         return true;
     }
@@ -123,8 +155,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (WhenConditionBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (WholeObjectConverterType?.GetHashCode() ?? 0);
         hash = hash * 31 + (WholeObjectLambdaBody?.GetHashCode() ?? 0);
+        hash = hash * 31 + (BeforeMapLambdaBody?.GetHashCode() ?? 0);
+        hash = hash * 31 + (AfterMapLambdaBody?.GetHashCode() ?? 0);
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
+        foreach (var vt in ValueTransformers)
+            hash = hash * 31 + vt.GetHashCode();
         return hash;
     }
 }

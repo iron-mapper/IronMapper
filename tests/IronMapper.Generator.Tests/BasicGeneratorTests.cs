@@ -87,8 +87,9 @@ public class BasicGeneratorTests
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("FullName = source.Name", code);
-        // "Name" must not appear as a destination property (only as source).
-        Assert.DoesNotContain("                Name = source.", code);
+        // "Name" must not appear as a standalone destination property (only as the source side of FullName).
+        // Space before "Name" ensures we don't accidentally match the "Name" inside "FullName".
+        Assert.DoesNotContain(" Name = source.", code);
     }
 
     // ------------------------------------------------------------------

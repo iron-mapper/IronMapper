@@ -59,14 +59,24 @@ internal static class ProfileAnalyzer
             if (ctor is not ConstructorDeclarationSyntax ctorDecl) continue;
             if (ctorDecl.Body is null) continue;
 
-            // Walk all expression-statements in the constructor body looking for
-            // CreateMap<Src, Dest>().ForMember(...).When(...) chains.
+            // Pass 1: collect AddTransformer declarations.
+            var transformersByType = new Dictionary<string, ValueTransformerDescriptor>();
+            foreach (var statement in ctorDecl.Body.Statements)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (statement is not ExpressionStatementSyntax exprStmt) continue;
+                if (TryExtractTransformer(exprStmt.Expression, ctx.SemanticModel, ct, out var t) && t is not null)
+                    transformersByType[t.FullyQualifiedTypeName] = t; // last registration wins per type
+            }
+            var transformers = ImmutableArray.CreateRange(transformersByType.Values);
+
+            // Pass 2: process CreateMap chains.
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
                 if (statement is not ExpressionStatementSyntax exprStmt) continue;
 
-                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, ct);
+                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, ct);
                 builder.AddRange(descriptors);
             }
         }
@@ -102,6 +112,7 @@ internal static class ProfileAnalyzer
     private static IReadOnlyList<MappingDescriptor> AnalyseChain(
         ExpressionSyntax expr,
         SemanticModel model,
+        ImmutableArray<ValueTransformerDescriptor> transformers,
         CancellationToken ct)
     {
         // Collect all method calls in the chain from outermost to innermost.
@@ -125,9 +136,12 @@ internal static class ProfileAnalyzer
         // Walk calls from innermost (CreateMap) outward, collecting config.
         // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
         var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)>();
+        var includedMembers = new List<string>();
         string? whenConditionBody = null;
         string? wholeObjectConverterType = null;
         string? wholeObjectLambdaBody = null;
+        string? beforeMapBody = null;
+        string? afterMapBody = null;
         bool reverseMap = false;
 
         // calls[Count-1] = CreateMap, calls[0] = outermost
@@ -178,6 +192,20 @@ internal static class ProfileAnalyzer
                     }
                     break;
 
+                case "BeforeMap" when inv.ArgumentList.Arguments.Count == 1:
+                    beforeMapBody = ExtractTwoParamLambdaBody(
+                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    break;
+
+                case "AfterMap" when inv.ArgumentList.Arguments.Count == 1:
+                    afterMapBody = ExtractTwoParamLambdaBody(
+                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    break;
+
+                case "IncludeMembers":
+                    ParseIncludeMembers(inv, includedMembers);
+                    break;
+
                 case "ReverseMap":
                     reverseMap = true;
                     break;
@@ -186,21 +214,30 @@ internal static class ProfileAnalyzer
 
         var results = new List<MappingDescriptor>();
 
+        var includedMembersArray = includedMembers.Count > 0
+            ? ImmutableArray.CreateRange(includedMembers)
+            : ImmutableArray<string>.Empty;
+
         var forward = BuildDescriptorFromProfile(
-            sourceSymbol, destSymbol, forMemberConfigs, whenConditionBody,
-            wholeObjectConverterType, wholeObjectLambdaBody, model, ct);
+            sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
+            wholeObjectConverterType, wholeObjectLambdaBody,
+            beforeMapBody, afterMapBody, transformers, model, ct);
         if (forward is not null) results.Add(forward);
 
         if (reverseMap)
         {
-            // Reverse: swap source/dest, use simple name matching (no ForMember customisations).
+            // Reverse: swap source/dest, use simple name matching (no ForMember/hook customisations).
+            // IncludeMembers is intentionally not propagated to the reverse mapping.
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
                 new List<(string, string?, bool, string?)>(),
+                ImmutableArray<string>.Empty,
                 whenCondition: null,
                 wholeObjectConverterType: null,
                 wholeObjectLambdaBody: null,
-                model, ct);
+                beforeMapBody: null,
+                afterMapBody: null,
+                transformers, model, ct);
             if (reverse is not null) results.Add(reverse);
         }
 
@@ -256,6 +293,58 @@ internal static class ProfileAnalyzer
         }
     }
 
+    private static void ParseIncludeMembers(
+        InvocationExpressionSyntax inv,
+        List<string> includedMembers)
+    {
+        foreach (var arg in inv.ArgumentList.Arguments)
+        {
+            var memberName = ExtractMemberName(arg.Expression);
+            if (memberName is not null)
+                includedMembers.Add(memberName);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Transformer extraction
+    // -----------------------------------------------------------------------
+
+    private static bool TryExtractTransformer(
+        ExpressionSyntax expr,
+        SemanticModel model,
+        CancellationToken ct,
+        out ValueTransformerDescriptor? result)
+    {
+        result = null;
+        if (expr is not InvocationExpressionSyntax inv) return false;
+
+        var methodName = inv.Expression switch
+        {
+            GenericNameSyntax gn => gn.Identifier.Text,
+            MemberAccessExpressionSyntax { Name: GenericNameSyntax mgn } => mgn.Identifier.Text,
+            _ => null
+        };
+        if (methodName != "AddTransformer") return false;
+        if (inv.ArgumentList.Arguments.Count != 1) return false;
+
+        var methodSym = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
+        if (methodSym?.TypeArguments.Length != 1) return false;
+
+        var typeArg = methodSym.TypeArguments[0];
+        var fqn = typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var friendlyName = typeArg.Name; // "String", "Decimal", etc.
+
+        var lambdaBody = ExtractLambdaBody(inv.ArgumentList.Arguments[0].Expression, "value");
+        if (lambdaBody is null) return false;
+
+        result = new ValueTransformerDescriptor(
+            fullyQualifiedTypeName: fqn,
+            friendlyTypeName: friendlyName,
+            lambdaBody: lambdaBody,
+            methodName: $"TransformValue_{friendlyName}");
+        return true;
+    }
+
     // -----------------------------------------------------------------------
     // Descriptor builder
     // -----------------------------------------------------------------------
@@ -264,9 +353,13 @@ internal static class ProfileAnalyzer
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
         List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> forMemberConfigs,
+        ImmutableArray<string> includedMembers,
         string? whenCondition,
         string? wholeObjectConverterType,
         string? wholeObjectLambdaBody,
+        string? beforeMapBody,
+        string? afterMapBody,
+        ImmutableArray<ValueTransformerDescriptor> transformers,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -304,6 +397,31 @@ internal static class ProfileAnalyzer
         foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
             configByDest[dp] = (lb, ign, cvt);
 
+        // Build included-member resolution lookup (first-member-wins on name conflicts).
+        // Key: dest property name (case-insensitive)
+        // Value: (lambdaBody to emit, typeFqn of the nested property for transformer matching)
+        var includedResolution = new Dictionary<string, (string lambdaBody, string typeFqn)>(
+            System.StringComparer.OrdinalIgnoreCase);
+        foreach (var memberName in includedMembers)
+        {
+            if (!sourcePropsByName.TryGetValue(memberName, out var memberPropSym)) continue;
+            if (memberPropSym.Type is not INamedTypeSymbol memberType) continue;
+
+            bool parentIsRef = memberPropSym.Type.IsReferenceType;
+            var nestedProps = SymbolHelpers.GetPublicReadableProperties(memberType);
+            foreach (var nestedProp in nestedProps)
+            {
+                if (includedResolution.ContainsKey(nestedProp.Name)) continue; // first member wins
+                var access = $"source.{memberName}.{nestedProp.Name}";
+                // Emit a null-guard ternary for reference-type nested members to avoid NRE.
+                var lambdaBody = parentIsRef
+                    ? $"source.{memberName} != null ? {access} : default!"
+                    : access;
+                var typeFqn = nestedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                includedResolution[nestedProp.Name] = (lambdaBody, typeFqn);
+            }
+        }
+
         var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
 
         foreach (var destProp in destProps)
@@ -314,7 +432,7 @@ internal static class ProfileAnalyzer
 
             if (configByDest.TryGetValue(destProp.Name, out var cfg))
             {
-                // Explicitly configured via ForMember.
+                // Priority 1: explicitly configured via ForMember.
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
@@ -323,14 +441,13 @@ internal static class ProfileAnalyzer
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
                     isInitOnly: isInitOnly));
-                continue;
             }
-
-            // Default: match by name.
-            if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
+            // Priority 2: direct name-match.
+            else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
                 var (collectionMapMethod, collectionOutputType) =
                     DetectCollectionMapping(namedProp.Type, destProp.Type);
+                var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
@@ -340,7 +457,21 @@ internal static class ProfileAnalyzer
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     collectionElementMapMethod: collectionMapMethod,
-                    collectionOutputType: collectionOutputType));
+                    collectionOutputType: collectionOutputType,
+                    sourcePropertyTypeFqn: typeFqn));
+            }
+            // Priority 3: IncludeMembers flattening.
+            else if (includedResolution.TryGetValue(destProp.Name, out var included))
+            {
+                propertyMappings.Add(new PropertyMappingDescriptor(
+                    sourcePropertyName: destProp.Name,
+                    destPropertyName: destProp.Name,
+                    isIgnored: false,
+                    converterType: null,
+                    needsNullCheck: false,
+                    lambdaBody: included.lambdaBody,
+                    isInitOnly: isInitOnly,
+                    includedMemberTypeFqn: included.typeFqn));
             }
             // Unmatched destination properties are silently skipped in profile-based mapping.
         }
@@ -355,7 +486,10 @@ internal static class ProfileAnalyzer
             hasCustomConverter: false,
             whenConditionBody: whenCondition,
             wholeObjectConverterType: wholeObjectConverterType,
-            wholeObjectLambdaBody: wholeObjectLambdaBody);
+            wholeObjectLambdaBody: wholeObjectLambdaBody,
+            beforeMapLambdaBody: beforeMapBody,
+            afterMapLambdaBody: afterMapBody,
+            valueTransformers: transformers);
     }
 
     /// <summary>
@@ -406,6 +540,51 @@ internal static class ProfileAnalyzer
         {
             bodyText = ReplaceIdentifier(bodyText, paramName, replacementParam);
         }
+
+        return bodyText;
+    }
+
+    /// <summary>
+    /// Extracts the body from a two-parameter lambda such as
+    /// <c>(src, dest) =&gt; dest.Prop = value</c> or
+    /// <c>(src, dest) =&gt; { ... }</c>, renaming both parameters to
+    /// <paramref name="param1Replacement"/> and <paramref name="param2Replacement"/>.
+    /// For expression bodies the result is a single statement (semicolon appended).
+    /// For block bodies the inner statements are returned verbatim (without outer braces).
+    /// Returns <see langword="null"/> when the expression is not a two-parameter lambda.
+    /// </summary>
+    private static string? ExtractTwoParamLambdaBody(
+        ExpressionSyntax expr,
+        string param1Replacement,
+        string param2Replacement)
+    {
+        if (expr is not ParenthesizedLambdaExpressionSyntax lambda) return null;
+        if (lambda.ParameterList.Parameters.Count < 2) return null;
+
+        var param1 = lambda.ParameterList.Parameters[0].Identifier.Text;
+        var param2 = lambda.ParameterList.Parameters[1].Identifier.Text;
+
+        string bodyText;
+        if (lambda.Body is BlockSyntax block)
+        {
+            // Join all statements, trimming leading whitespace from each.
+            var sb = new System.Text.StringBuilder();
+            foreach (var stmt in block.Statements)
+            {
+                sb.AppendLine(stmt.ToString().TrimStart());
+            }
+            bodyText = sb.ToString().TrimEnd();
+        }
+        else
+        {
+            // Expression body — turn into a statement by appending a semicolon.
+            bodyText = lambda.Body.ToString() + ";";
+        }
+
+        if (!string.IsNullOrEmpty(param1) && param1 != param1Replacement)
+            bodyText = ReplaceIdentifier(bodyText, param1, param1Replacement);
+        if (!string.IsNullOrEmpty(param2) && param2 != param2Replacement)
+            bodyText = ReplaceIdentifier(bodyText, param2, param2Replacement);
 
         return bodyText;
     }

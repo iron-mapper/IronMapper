@@ -70,4 +70,55 @@ public interface IMappingExpression<TSource, TDest>
     /// </summary>
     /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
     IMappingExpression<TSource, TDest> ReverseMap();
+
+    /// <summary>
+    /// Registers an action to be called immediately after the destination object is created
+    /// and before any properties are assigned. The destination object is empty at this point.
+    /// The generator extracts the lambda body and emits it as a private helper method.
+    /// </summary>
+    /// <param name="action">An action receiving the source and the (empty) destination objects.</param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;UserEntity, UserDto&gt;()
+    ///     .BeforeMap((src, dest) => Console.WriteLine($"Mapping {src.Id}"));
+    /// </code>
+    /// </example>
+    IMappingExpression<TSource, TDest> BeforeMap(Action<TSource, TDest> action);
+
+    /// <summary>
+    /// Registers an action to be called after all properties have been assigned to the destination.
+    /// The generator extracts the lambda body and emits it as a private helper method.
+    /// </summary>
+    /// <param name="action">An action receiving the source and the fully-populated destination objects.</param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;UserEntity, UserDto&gt;()
+    ///     .AfterMap((src, dest) => dest.MappedAt = DateTime.UtcNow);
+    /// </code>
+    /// </example>
+    IMappingExpression<TSource, TDest> AfterMap(Action<TSource, TDest> action);
+
+    /// <summary>
+    /// Flattens one or more nested source objects into the destination type by matching
+    /// their property names against destination property names.
+    /// The first listed member wins when multiple included members share a property name.
+    /// Direct source properties and explicit <see cref="ForMember"/> configurations
+    /// always take priority over <see cref="IncludeMembers"/> matches.
+    /// The source generator analyses the lambda expressions at compile time
+    /// and emits <c>source.Member.Property</c> access expressions for each matched property.
+    /// </summary>
+    /// <param name="memberExpressions">
+    /// Lambdas of the form <c>s =&gt; s.Contact</c> identifying the nested members to flatten.
+    /// </param>
+    /// <returns>This <see cref="IMappingExpression{TSource,TDest}"/> for further chaining.</returns>
+    /// <example>
+    /// <code>
+    /// CreateMap&lt;UserEntity, UserDto&gt;()
+    ///     .IncludeMembers(s =&gt; s.Contact, s =&gt; s.Address);
+    /// </code>
+    /// </example>
+    IMappingExpression<TSource, TDest> IncludeMembers(
+        params Expression<Func<TSource, object?>>[] memberExpressions);
 }

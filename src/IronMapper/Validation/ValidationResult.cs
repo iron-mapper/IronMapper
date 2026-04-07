@@ -32,6 +32,8 @@ public sealed class ValidationResult
     public bool HasWarnings => Warnings.Count > 0;
 
     /// <summary>Initialises a new <see cref="ValidationResult"/>.</summary>
+    /// <param name="errors">Hard errors that prevent the mapping from being generated or executed.</param>
+    /// <param name="warnings">Advisory warnings indicating potential data loss or incomplete mappings.</param>
     public ValidationResult(IReadOnlyList<string> errors, IReadOnlyList<string> warnings)
     {
         Errors = errors;

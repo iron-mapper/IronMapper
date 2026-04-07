@@ -565,6 +565,268 @@ public class ProfileGeneratorTests
     }
 
     // ------------------------------------------------------------------
+    // AddTransformer — transformer calls and helper methods are emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddTransformer_StringAndDecimal_EmitsTransformerCallsAndHelperMethods()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using System;
+
+            public class PriceEntity { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+            public class PriceDto    { public string Name { get; set; } = ""; public decimal Price { get; set; } }
+
+            public class PriceProfile : MappingProfile
+            {
+                public PriceProfile()
+                {
+                    AddTransformer<string>(v => v.Trim());
+                    AddTransformer<decimal>(v => Math.Round(v, 2));
+                    CreateMap<PriceEntity, PriceDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("TransformValue_String_PriceEntity_PriceDto(source.Name)", code);
+        Assert.Contains("TransformValue_Decimal_PriceEntity_PriceDto(source.Price)", code);
+        Assert.Contains("private static string TransformValue_String_PriceEntity_PriceDto", code);
+        Assert.Contains("private static decimal TransformValue_Decimal_PriceEntity_PriceDto", code);
+    }
+
+    // ------------------------------------------------------------------
+    // IncludeMembers — nested access expression is emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void IncludeMembers_SingleMember_EmitsNestedAccessExpression()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo { public string Email { get; set; } = ""; }
+            public class UserEntity  { public int Id { get; set; } public ContactInfo Contact { get; set; } = new(); }
+            public class UserDto     { public int Id { get; set; } public string Email { get; set; } = ""; }
+
+            public class UserProfile : MappingProfile
+            {
+                public UserProfile()
+                {
+                    CreateMap<UserEntity, UserDto>()
+                        .IncludeMembers(s => s.Contact);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("MapToUserDto", code);
+        Assert.Contains("Id = source.Id", code);
+        // Email must come from the nested member with null guard.
+        Assert.Contains("source.Contact", code);
+        Assert.Contains("Email", code);
+        Assert.Contains("source.Contact != null", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_DuplicatePropertyAcrossMembers_FirstMemberWinsInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo  { public string Phone { get; set; } = ""; }
+            public class AddressInfo  { public string Phone { get; set; } = ""; public string City { get; set; } = ""; }
+            public class CustomerEntity { public ContactInfo Contact { get; set; } = new(); public AddressInfo Address { get; set; } = new(); }
+            public class CustomerDto    { public string Phone { get; set; } = ""; public string City { get; set; } = ""; }
+
+            public class CustomerProfile : MappingProfile
+            {
+                public CustomerProfile()
+                {
+                    CreateMap<CustomerEntity, CustomerDto>()
+                        .IncludeMembers(s => s.Contact, s => s.Address);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Phone must come from Contact (first member), not Address.
+        Assert.Contains("source.Contact.Phone", code);
+        Assert.DoesNotContain("source.Address.Phone", code);
+        // City has no conflict — comes from Address.
+        Assert.Contains("source.Address.City", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_ForMemberAlsoPresent_ForMemberTakesPriorityInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class ContactInfo    { public string Email { get; set; } = ""; }
+            public class EmployeeEntity { public ContactInfo Contact { get; set; } = new(); }
+            public class EmployeeDto    { public string Email { get; set; } = ""; }
+
+            public class EmployeeProfile : MappingProfile
+            {
+                public EmployeeProfile()
+                {
+                    CreateMap<EmployeeEntity, EmployeeDto>()
+                        .ForMember(dest => dest.Email, opt => opt.MapFrom(src => "hardcoded@example.com"))
+                        .IncludeMembers(s => s.Contact);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("hardcoded@example.com", code);
+        Assert.DoesNotContain("source.Contact.Email", code);
+    }
+
+    [Fact]
+    public void IncludeMembers_ReferenceTypeNestedMember_EmitsNullGuardTernary()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public class AddressInfo  { public string City { get; set; } = ""; }
+            public class StoreEntity  { public AddressInfo? Location { get; set; } }
+            public class StoreDto     { public string City { get; set; } = ""; }
+
+            public class StoreProfile : MappingProfile
+            {
+                public StoreProfile()
+                {
+                    CreateMap<StoreEntity, StoreDto>()
+                        .IncludeMembers(s => s.Location);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        Assert.Contains("source.Location != null", code);
+        Assert.Contains("source.Location.City", code);
+        Assert.Contains("default!", code);
+    }
+
+    // ------------------------------------------------------------------
+    // AddTransformer — block-body lambda { return ...; }
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AddTransformer_BlockBodyLambda_EmitsBlockMethodInGeneratedCode()
+    {
+        var source = """
+            using IronMapper.Configuration;
+            using System;
+
+            public class BlockEntity { public string Name { get; set; } = ""; }
+            public class BlockDto    { public string Name { get; set; } = ""; }
+
+            public class BlockProfile : MappingProfile
+            {
+                public BlockProfile()
+                {
+                    AddTransformer<string>(v => { return v.Trim().ToUpperInvariant(); });
+                    CreateMap<BlockEntity, BlockDto>();
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Transformer helper must be emitted as a block method containing a return statement.
+        Assert.Contains("TransformValue_String_BlockEntity_BlockDto", code);
+        Assert.Contains("return", code);
+        Assert.Contains("ToUpperInvariant", code);
+    }
+
+    // ------------------------------------------------------------------
+    // IncludeMembers — value-type (struct) nested member: no null guard
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void IncludeMembers_ValueTypeNestedMember_EmitsDirectAccessWithoutNullGuard()
+    {
+        var source = """
+            using IronMapper.Configuration;
+
+            public struct GeoPoint { public double Lat { get; set; } public double Lon { get; set; } }
+            public class LocationEntity { public GeoPoint Coords { get; set; } }
+            public class LocationDto    { public double Lat { get; set; } public double Lon { get; set; } }
+
+            public class LocationProfile : MappingProfile
+            {
+                public LocationProfile()
+                {
+                    CreateMap<LocationEntity, LocationDto>()
+                        .IncludeMembers(s => s.Coords);
+                }
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Struct member: direct access, no null-guard ternary.
+        Assert.Contains("source.Coords.Lat", code);
+        Assert.Contains("source.Coords.Lon", code);
+        Assert.DoesNotContain("source.Coords != null", code);
+    }
+
+    // ------------------------------------------------------------------
+    // Nested collection with same element type — no Select emitted
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void NestedList_SameElementType_CopiedDirectlyWithoutSelect()
+    {
+        var source = """
+            using IronMapper.Attributes;
+            using System.Collections.Generic;
+
+            [MapTo(typeof(ContainerDto))]
+            public class ContainerEntity
+            {
+                public List<string> Tags { get; set; } = new();
+            }
+
+            public class ContainerDto
+            {
+                public List<string> Tags { get; set; } = new();
+            }
+            """;
+
+        var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+        var code = string.Join("\n", generatedSources);
+        // Same element type (string→string): the Tags property is directly assigned.
+        Assert.Contains("Tags = source.Tags", code);
+        // No per-element mapper should be generated for string (the element type is not a mapped type).
+        Assert.DoesNotContain("MapToString", code);
+    }
+
+    // ------------------------------------------------------------------
     // БЛОК 2 — In-place void overload is always generated
     // ------------------------------------------------------------------
 
