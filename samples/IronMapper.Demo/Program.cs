@@ -24,6 +24,8 @@ while (running)
     Console.WriteLine("  4. Nested objects (book + author)");
     Console.WriteLine("  5. Custom converter (cleaning Bio)");
     Console.WriteLine("  6. Conditional mapping (only alive authors)");
+    Console.WriteLine("  7. BeforeMap / AfterMap hooks + ReverseMap");
+    Console.WriteLine("  8. IncludeMembers — flatten nested objects");
     Console.WriteLine("  0. Exit");
     Console.ResetColor();
     Console.Write("\nInput: ");
@@ -41,12 +43,14 @@ while (running)
             case "4": await Demo4_NestedObjects.RunAsync(api);      break;
             case "5": await Demo5_CustomConverter.RunAsync(api);    break;
             case "6": await Demo6_ConditionalMapping.RunAsync(api); break;
+            case "7": await Demo7_HooksAndReverse.RunAsync();       break;
+            case "8": await Demo8_IncludeMembers.RunAsync();        break;
             case "0":
                 running = false;
                 break;
             default:
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Invalid input. Must be digit from 0 to 6.");
+                Console.WriteLine("Invalid input. Must be digit from 0 to 8.");
                 Console.ResetColor();
                 break;
         }
