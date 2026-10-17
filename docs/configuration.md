@@ -2,6 +2,27 @@
 
 > 📖 **[Русская версия](configuration.ru.md)**
 
+## Generated method accessibility
+
+Applies to both `[MapTo]`/`[MapFrom]` and `MappingProfile` mappings.
+
+Each generated method (`MapToX`, the in-place overload, `MapToXList`, `MapToXArray`) is as accessible as the
+**less accessible** of the source and destination types. The *effective* accessibility is used: containing types of
+nested types and generic type arguments count too.
+
+| Source / destination types | Generated methods |
+|---|---|
+| both `public` (including all containing types and type arguments) | `public` |
+| at least one `internal` or `protected internal` (or nested in an `internal` type) | `internal` |
+| at least one `private`, `protected` or `private protected` nested type | not generated, error [`IM0010`](diagnostics.md#im0010--mapping-type-is-not-accessible-from-generated-code) |
+
+`BeforeMap`/`AfterMap` and `AddTransformer` helpers are always `private`.
+
+Internal mappings work through `IMapper` (`IronMapper.Extensions.DI`) as well: it also looks up non-public generated
+methods. Code in other assemblies can use an internal mapping only through `[InternalsVisibleTo]`.
+
+---
+
 ## Attributes
 
 ### `[MapTo(typeof(TDest))]`

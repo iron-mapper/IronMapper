@@ -28,8 +28,10 @@ internal static class MapperCodeEmitter
     /// </returns>
     public static (string hintName, string source) Emit(MappingDescriptor descriptor)
     {
-        var sourceFullName = GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
-        var destFullName   = GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
+        var sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
+        var destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
+        // Never more accessible than the mapped types (CS0050/CS0051 otherwise).
+        var accessibility  = descriptor.MethodAccessibility;
         var methodName     = $"MapTo{descriptor.DestTypeName}";
 
         // Scope transformer method names to this mapping to avoid CS0111 conflicts
@@ -52,7 +54,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> to a new <see cref=\"{EscapeXml(destFullName)}\"/>.</summary>");
         sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> instance to map.</param>");
         sb.AppendLine($"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
-        sb.AppendLine($"        public static {destFullName} {methodName}(this {sourceFullName} source)");
+        sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
         sb.AppendLine("        {");
         sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
 
@@ -112,7 +114,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
         sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
         sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
-        sb.AppendLine($"        public static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
+        sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
         sb.AppendLine("        {");
         sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
         sb.AppendLine("            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));");
@@ -128,7 +130,7 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         sb.AppendLine();
         sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns a <see cref=\"global::System.Collections.Generic.List{{T}}\"/>.</summary>");
-        sb.AppendLine($"        public static global::System.Collections.Generic.List<{destFullName}> {methodName}List(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
+        sb.AppendLine($"        {accessibility} static global::System.Collections.Generic.List<{destFullName}> {methodName}List(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
         sb.AppendLine($"            => source is null");
         sb.AppendLine($"                ? new global::System.Collections.Generic.List<{destFullName}>()");
         sb.AppendLine($"                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => x.{methodName}()));");
@@ -138,7 +140,7 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         sb.AppendLine();
         sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns an array.</summary>");
-        sb.AppendLine($"        public static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
+        sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
         sb.AppendLine($"            => source is null");
         sb.AppendLine($"                ? global::System.Array.Empty<{destFullName}>()");
         sb.AppendLine($"                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => x.{methodName}()));");

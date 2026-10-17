@@ -49,9 +49,52 @@ internal static class GeneratorTestHelper
         return (generatedSources, diagnostics);
     }
 
+    /// <summary>
+    /// Like <see cref="RunGenerator"/>, but also compiles the user code together with the generated
+    /// sources (with XML documentation comments parsed) and returns all compiler errors plus any
+    /// warning reported inside a generated file (e.g. CS0050/CS0051, invalid <c>cref</c>).
+    /// </summary>
+    public static (IReadOnlyList<string> generatedSources, IReadOnlyList<Diagnostic> generatorDiagnostics, IReadOnlyList<Diagnostic> compilationErrors)
+        RunGeneratorAndCompile(string source)
+    {
+        var compilation = CreateCompilation(source);
+
+        CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
+        driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(
+            compilation, out var outputCompilation, out _);
+
+        var runResult = driver.GetRunResult();
+        var generatedSources = runResult.GeneratedTrees.Select(t => t.ToString()).ToList();
+        var generatedTrees = new HashSet<SyntaxTree>(runResult.GeneratedTrees);
+        var compilationErrors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error
+                        || (d.Severity == DiagnosticSeverity.Warning
+                            && d.Location.SourceTree is not null
+                            && generatedTrees.Contains(d.Location.SourceTree)))
+            .ToList();
+
+        return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors);
+    }
+
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
+
+    private static readonly CSharpParseOptions ParseOptions =
+        CSharpParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose);
+
+    private static CSharpCompilation CreateCompilation(string source)
+    {
+        var references = GetFrameworkReferences()
+            .Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location));
+
+        return CSharpCompilation.Create(
+            assemblyName: "TestAssembly",
+            syntaxTrees: new[] { CSharpSyntaxTree.ParseText(source, ParseOptions) },
+            references: references,
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithNullableContextOptions(NullableContextOptions.Enable));
+    }
 
     private static IEnumerable<MetadataReference> GetFrameworkReferences()
     {

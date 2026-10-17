@@ -113,4 +113,17 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Records are initialized via object initializer using their init-only properties. Ensure the source type has a property matching each primary constructor parameter name, or use [Ignore] on the record property to suppress this warning.");
+
+    /// <summary>
+    /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,
+    /// so the generated <c>GeneratedMappers</c> class cannot reference it. The mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InaccessibleMappingType = new(
+        id: "IM0010",
+        title: "Mapping type is not accessible from generated code",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Generated mapping methods live in the top-level class IronMapper.Generated.GeneratedMappers. Private, protected and private protected nested types are not visible there. Other mappings in the project are still generated.");
 }

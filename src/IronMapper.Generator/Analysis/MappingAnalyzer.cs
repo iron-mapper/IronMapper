@@ -81,6 +81,15 @@ internal static class MappingAnalyzer
         INamedTypeSymbol destSymbol,
         CancellationToken ct)
     {
+        // IM0010: generated methods cannot reference private/protected nested types.
+        var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
+            sourceSymbol, destSymbol, out var inaccessibleType);
+        if (methodAccessibility is null)
+            return CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!);
+
+        var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
+        var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
+
         var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
         var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
 
@@ -100,7 +109,10 @@ internal static class MappingAnalyzer
                 destNamespace: SymbolHelpers.GetNamespace(destSymbol),
                 propertyMappings: propertyMappings.ToImmutable(),
                 diagnostics: diagnostics.ToImmutable(),
-                hasCustomConverter: false);
+                hasCustomConverter: false,
+                sourceFullName: sourceFullName,
+                destFullName: destFullName,
+                methodAccessibility: methodAccessibility);
         }
 
         // Index source props by name for fast case-insensitive lookup.
@@ -220,8 +232,33 @@ internal static class MappingAnalyzer
             destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: diagnostics.ToImmutable(),
-            hasCustomConverter: propertyMappings.Count > 0 && HasAnyConverter(propertyMappings));
+            hasCustomConverter: propertyMappings.Count > 0 && HasAnyConverter(propertyMappings),
+            sourceFullName: sourceFullName,
+            destFullName: destFullName,
+            methodAccessibility: methodAccessibility);
     }
+
+    /// <summary>
+    /// Builds a diagnostic-only descriptor (empty <see cref="MappingDescriptor.SourceTypeName"/>, so no
+    /// source is emitted) carrying IM0010 for a mapping whose types the generated class cannot access.
+    /// </summary>
+    internal static MappingDescriptor CreateInaccessibleTypeDescriptor(
+        INamedTypeSymbol sourceSymbol,
+        INamedTypeSymbol destSymbol,
+        INamedTypeSymbol inaccessibleType)
+        => new(
+            sourceTypeName: string.Empty,
+            sourceNamespace: null,
+            destTypeName: string.Empty,
+            destNamespace: null,
+            propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
+            diagnostics: ImmutableArray.Create(new DiagnosticInfo(
+                DiagnosticDescriptors.InaccessibleMappingType,
+                sourceSymbol.ToDisplayString(),
+                destSymbol.ToDisplayString(),
+                inaccessibleType.ToDisplayString(),
+                SymbolHelpers.ToKeyword(inaccessibleType.DeclaredAccessibility))),
+            hasCustomConverter: false);
 
     // -----------------------------------------------------------------------
     // Symbol helpers

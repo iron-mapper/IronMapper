@@ -2,10 +2,10 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0009`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0010`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Status as of 1.1.1:**
+**Current status** (`main`, after 1.1.1):
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|
@@ -18,6 +18,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0009`. 
 | IM0007 | Warning | Duplicate mapping definition | **Not reported yet** |
 | IM0008 | Error | Abstract or interface destination type | Yes — attributes and profiles |
 | IM0009 | Warning | Record constructor parameter not mapped | Yes — `[MapTo]`/`[MapFrom]` only |
+| IM0010 | Error | Mapping type is not accessible from generated code | Yes — attributes and profiles |
 
 All diagnostics are currently reported **without a source location**, so the IDE lists them in the
 Error List but does not point to a line in your code.
@@ -151,3 +152,21 @@ with a parameter that has no source property of the same name (case-insensitive)
 A positional record such as `record PointDto(double X, double Y)` has no parameterless constructor, so the
 generated code does not compile (`CS7036`) even when this warning is not reported. Use records with
 `init` properties as destinations.
+
+---
+
+## IM0010 — Mapping type is not accessible from generated code
+
+**Severity:** Error
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
+
+**Cause:** the source or destination type, one of the types containing it, or one of its generic type arguments is a
+`private`, `protected` or `private protected` nested type. Generated methods live in the top-level class
+`IronMapper.Generated.GeneratedMappers` and cannot reference such types.
+
+**Reported for:** `[MapTo]` / `[MapFrom]` and `MappingProfile` mappings. Only the affected mapping is skipped; all other
+mappings in the project are still generated.
+
+**Fix:** make the type (and every type that contains it) `public` or `internal`. Internal types are supported; the
+generated methods are then `internal` (see [Generated method accessibility](configuration.md#generated-method-accessibility)).
