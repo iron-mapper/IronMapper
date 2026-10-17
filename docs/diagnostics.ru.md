@@ -2,10 +2,10 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0009`. Они объявлены в
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0010`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Состояние на версию 1.1.1:**
+**Текущее состояние** (`main`, после 1.1.1):
 
 | ID | Уровень | Название | Выдаётся? |
 |---|---|---|---|
@@ -18,6 +18,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0007 | Warning | Повторное определение маппинга | **Пока не выдаётся** |
 | IM0008 | Error | Destination — абстрактный тип или интерфейс | Да — атрибуты и профили |
 | IM0009 | Warning | Параметр конструктора record не сопоставлен | Да — только `[MapTo]`/`[MapFrom]` |
+| IM0010 | Error | Тип маппинга недоступен из сгенерированного кода | Да — атрибуты и профили |
 
 Сейчас все диагностики выдаются **без указания места в исходном коде**: IDE показывает их в списке ошибок,
 но не указывает строку в вашем коде.
@@ -151,3 +152,21 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 У позиционного record вроде `record PointDto(double X, double Y)` нет конструктора без параметров, поэтому
 сгенерированный код не компилируется (`CS7036`), даже если это предупреждение не выдано. Используйте
 в качестве destination record со свойствами `init`.
+
+---
+
+## IM0010 — Тип маппинга недоступен из сгенерированного кода
+
+**Уровень:** Error
+
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
+
+**Причина:** тип source или destination, один из содержащих его типов или один из аргументов обобщённого типа —
+вложенный тип с доступом `private`, `protected` или `private protected`. Сгенерированные методы находятся в классе
+верхнего уровня `IronMapper.Generated.GeneratedMappers` и не могут ссылаться на такие типы.
+
+**Когда выдаётся:** для маппингов `[MapTo]` / `[MapFrom]` и `MappingProfile`. Пропускается только этот маппинг;
+остальные маппинги проекта генерируются.
+
+**Как исправить:** сделайте тип (и все типы, которые его содержат) `public` или `internal`. Internal-типы
+поддерживаются; сгенерированные методы тогда `internal` (см. [Доступность сгенерированных методов](configuration.ru.md#доступность-сгенерированных-методов)).

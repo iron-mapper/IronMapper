@@ -2,6 +2,27 @@
 
 > 🌐 **[English version](configuration.md)**
 
+## Доступность сгенерированных методов
+
+Относится и к маппингам `[MapTo]`/`[MapFrom]`, и к `MappingProfile`.
+
+Каждый сгенерированный метод (`MapToX`, in-place перегрузка, `MapToXList`, `MapToXArray`) доступен ровно настолько,
+насколько доступен **менее доступный** из типов source и destination. Учитывается *эффективная* доступность:
+содержащие типы для вложенных типов и аргументы обобщённых типов тоже.
+
+| Типы source / destination | Сгенерированные методы |
+|---|---|
+| оба `public` (включая все содержащие типы и аргументы типов) | `public` |
+| хотя бы один `internal` или `protected internal` (или вложен в `internal`-тип) | `internal` |
+| хотя бы один вложенный тип `private`, `protected` или `private protected` | не генерируются, ошибка [`IM0010`](diagnostics.ru.md#im0010--тип-маппинга-недоступен-из-сгенерированного-кода) |
+
+Вспомогательные методы `BeforeMap`/`AfterMap` и `AddTransformer` всегда `private`.
+
+Internal-маппинги работают и через `IMapper` (`IronMapper.Extensions.DI`): он ищет в том числе непубличные
+сгенерированные методы. Код из других сборок может использовать internal-маппинг только через `[InternalsVisibleTo]`.
+
+---
+
 ## Атрибуты
 
 ### `[MapTo(typeof(TDest))]`

@@ -18,7 +18,8 @@ namespace IronMapper.Extensions.DI;
 /// per <c>(sourceType, destType)</c> pair.  Every call then invokes the cached method via
 /// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and has not
 /// been verified with NativeAOT or trimming. Methods are matched by the destination type's simple name
-/// and the exact runtime source type; assemblies whose names start with <c>System.</c> or
+/// and the exact runtime source type (public and internal generated methods are both found);
+/// assemblies whose names start with <c>System.</c> or
 /// <c>Microsoft.</c> are not scanned.
 /// </remarks>
 public sealed class RuntimeMapper : IMapper
@@ -149,7 +150,9 @@ public sealed class RuntimeMapper : IMapper
 
             var method = generatedClass.GetMethod(
                 methodName,
-                BindingFlags.Public | BindingFlags.Static,
+                // Generated methods are internal when a mapped type is internal.
+                // Temporary until the reflection-free registry (plan item 1.3).
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
                 null,
                 paramTypes,
                 null);

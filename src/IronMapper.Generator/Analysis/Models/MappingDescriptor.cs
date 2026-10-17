@@ -67,6 +67,24 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <summary>Profile-level value transformers to apply to name-matched properties by type.</summary>
     public ImmutableArray<ValueTransformerDescriptor> ValueTransformers { get; }
 
+    /// <summary>
+    /// Fully-qualified C# name of the source type (e.g. <c>global::App.Outer.Inner</c>), or <see langword="null"/>
+    /// to derive it from <see cref="SourceNamespace"/> and <see cref="SourceTypeName"/>.
+    /// </summary>
+    public string? SourceFullName { get; }
+
+    /// <summary>
+    /// Fully-qualified C# name of the destination type, or <see langword="null"/>
+    /// to derive it from <see cref="DestNamespace"/> and <see cref="DestTypeName"/>.
+    /// </summary>
+    public string? DestFullName { get; }
+
+    /// <summary>
+    /// Accessibility modifier (<c>"public"</c> or <c>"internal"</c>) of the generated non-private methods:
+    /// the minimum effective accessibility of the source and destination types.
+    /// </summary>
+    public string MethodAccessibility { get; }
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -81,6 +99,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="beforeMapLambdaBody">Verbatim C# statements for the BeforeMap hook, or <see langword="null"/>.</param>
     /// <param name="afterMapLambdaBody">Verbatim C# statements for the AfterMap hook, or <see langword="null"/>.</param>
     /// <param name="valueTransformers">Profile-level value transformers, or default.</param>
+    /// <param name="sourceFullName">Fully-qualified source type name, or <see langword="null"/> to derive it.</param>
+    /// <param name="destFullName">Fully-qualified destination type name, or <see langword="null"/> to derive it.</param>
+    /// <param name="methodAccessibility">Accessibility modifier of the generated methods (<c>"public"</c> or <c>"internal"</c>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -94,7 +115,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string? wholeObjectLambdaBody = null,
         string? beforeMapLambdaBody = null,
         string? afterMapLambdaBody = null,
-        ImmutableArray<ValueTransformerDescriptor> valueTransformers = default)
+        ImmutableArray<ValueTransformerDescriptor> valueTransformers = default,
+        string? sourceFullName = null,
+        string? destFullName = null,
+        string methodAccessibility = "public")
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -109,6 +133,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
         ValueTransformers = valueTransformers.IsDefault ? ImmutableArray<ValueTransformerDescriptor>.Empty : valueTransformers;
+        SourceFullName = sourceFullName;
+        DestFullName = destFullName;
+        MethodAccessibility = methodAccessibility;
     }
 
     /// <inheritdoc/>
@@ -126,7 +153,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || WholeObjectConverterType != other.WholeObjectConverterType
             || WholeObjectLambdaBody != other.WholeObjectLambdaBody
             || BeforeMapLambdaBody != other.BeforeMapLambdaBody
-            || AfterMapLambdaBody != other.AfterMapLambdaBody)
+            || AfterMapLambdaBody != other.AfterMapLambdaBody
+            || SourceFullName != other.SourceFullName
+            || DestFullName != other.DestFullName
+            || MethodAccessibility != other.MethodAccessibility)
             return false;
 
         if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
@@ -157,6 +187,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (WholeObjectLambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (BeforeMapLambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (AfterMapLambdaBody?.GetHashCode() ?? 0);
+        hash = hash * 31 + (SourceFullName?.GetHashCode() ?? 0);
+        hash = hash * 31 + (DestFullName?.GetHashCode() ?? 0);
+        hash = hash * 31 + MethodAccessibility.GetHashCode();
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
         foreach (var vt in ValueTransformers)

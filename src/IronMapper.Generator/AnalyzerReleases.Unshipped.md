@@ -11,3 +11,4 @@ IM0006 | IronMapper | Error | MapPropertyDestinationNotFound
 IM0007 | IronMapper | Warning | DuplicateMappingDefinition
 IM0008 | IronMapper | Error | AbstractDestinationType
 IM0009 | IronMapper | Warning | RecordParameterNotMapped
+IM0010 | IronMapper | Error | InaccessibleMappingType

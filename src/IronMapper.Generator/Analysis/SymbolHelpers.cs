@@ -71,6 +71,90 @@ internal static class SymbolHelpers
         return ns is null || ns.IsGlobalNamespace ? null : ns.ToDisplayString();
     }
 
+    /// <summary>
+    /// Returns the fully-qualified C# name of <paramref name="type"/> (e.g.
+    /// <c>global::App.Outer.Inner</c>, <c>global::App.Box&lt;global::App.Payload&gt;</c>).
+    /// </summary>
+    public static string GetFullyQualifiedName(ITypeSymbol type)
+        => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    /// <summary>
+    /// Determines the accessibility modifier for generated methods whose signatures use
+    /// <paramref name="sourceType"/> and <paramref name="destType"/>: the minimum effective
+    /// accessibility of both types, taking containing types and type arguments into account.
+    /// </summary>
+    /// <param name="sourceType">The mapping source type.</param>
+    /// <param name="destType">The mapping destination type.</param>
+    /// <param name="inaccessibleType">
+    /// The first type (the mapped type itself, a containing type or a type argument) that the
+    /// generated <c>GeneratedMappers</c> class cannot access; <see langword="null"/> when both types are accessible.
+    /// </param>
+    /// <returns><c>"public"</c> or <c>"internal"</c>; <see langword="null"/> when a type is inaccessible.</returns>
+    public static string? GetGeneratedMethodAccessibility(
+        ITypeSymbol sourceType,
+        ITypeSymbol destType,
+        out INamedTypeSymbol? inaccessibleType)
+    {
+        var isInternal = false;
+        inaccessibleType = FindInaccessibleType(sourceType, ref isInternal)
+                           ?? FindInaccessibleType(destType, ref isInternal);
+        if (inaccessibleType is not null) return null;
+        return isInternal ? "internal" : "public";
+    }
+
+    /// <summary>Returns the C# keyword(s) for <paramref name="accessibility"/>.</summary>
+    public static string ToKeyword(Accessibility accessibility) => accessibility switch
+    {
+        Accessibility.Public => "public",
+        Accessibility.Internal => "internal",
+        Accessibility.Protected => "protected",
+        Accessibility.ProtectedOrInternal => "protected internal",
+        Accessibility.ProtectedAndInternal => "private protected",
+        Accessibility.Private => "private",
+        _ => "not accessible",
+    };
+
+    private static INamedTypeSymbol? FindInaccessibleType(ITypeSymbol type, ref bool isInternal)
+    {
+        switch (type)
+        {
+            case IArrayTypeSymbol array:
+                return FindInaccessibleType(array.ElementType, ref isInternal);
+
+            // Unresolved types are reported by the compiler itself; do not add a second error.
+            case INamedTypeSymbol { TypeKind: TypeKind.Error }:
+                return null;
+
+            case INamedTypeSymbol named:
+                for (var current = named; current is not null; current = current.ContainingType)
+                {
+                    switch (current.DeclaredAccessibility)
+                    {
+                        case Accessibility.Public:
+                            break;
+                        // GeneratedMappers lives in the same assembly, so internal and
+                        // protected internal types are reachable from internal members.
+                        case Accessibility.Internal:
+                        case Accessibility.ProtectedOrInternal:
+                            isInternal = true;
+                            break;
+                        default:
+                            return current;
+                    }
+                }
+
+                foreach (var typeArgument in named.TypeArguments)
+                {
+                    var inaccessible = FindInaccessibleType(typeArgument, ref isInternal);
+                    if (inaccessible is not null) return inaccessible;
+                }
+                return null;
+
+            default:
+                return null;
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Collection type helpers
     // -----------------------------------------------------------------------

@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **Mappings of `internal` types no longer fail with CS0050/CS0051.** Generated methods (`MapToX`, the in-place
+  overload, `MapToXList`, `MapToXArray`) were always `public`. They now get the lower effective accessibility of the
+  source and destination types (containing types and generic type arguments included): `public` or `internal`.
+  Applies to `[MapTo]`/`[MapFrom]` and `MappingProfile` mappings.
+- Generated code uses fully qualified type names, so public types nested in other types and generic types
+  (e.g. `Box<Payload>`) as source/destination now compile (previously CS0234/CS0305).
+- `IMapper` (`IronMapper.Extensions.DI`) also finds `internal` generated methods.
+
+### Added
+
+- Diagnostic `IM0010` (error): a mapping whose source or destination is (or is nested in, or has a type argument that is)
+  a `private`/`protected`/`private protected` type is not generated, and the error names the inaccessible type.
+  Other mappings are still generated.
+
 ## 1.1.1
 
 ### Fixed

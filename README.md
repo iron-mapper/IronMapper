@@ -190,6 +190,7 @@ dotnet run --project samples/IronMapper.Demo
 Current gaps, confirmed by reading the code. Each one is either planned or tracked in an issue.
 
 - **Nested single objects are not mapped automatically.** For `Customer.Address → CustomerDto.Address` with different types the generator emits `Address = source.Address`, and the build fails with `CS0029` in the generated file. Workaround: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Nested *collections* are handled (see above).
+- **Private and protected nested types cannot be mapped.** Generated methods live in the top-level class `IronMapper.Generated.GeneratedMappers`, which cannot see `private`, `protected` or `private protected` nested types. Such a mapping is reported as `IM0010` and skipped; the other mappings are still generated. Internal types are supported: the generated methods are then `internal` (see [Generated method accessibility](docs/configuration.md#generated-method-accessibility)).
 - **Positional records as destinations do not compile** (`CS7036`): the generator always uses an object initializer. Records and classes with `init` properties work.
 - **Incompatible property types are not diagnosed.** `IM0002`, `IM0003`, `IM0004` and `IM0007` are declared but never reported; the build fails later with a C# error in the generated file. See [diagnostics](docs/diagnostics.md).
 - **Defining the same pair twice** (e.g. `[MapTo]` and `CreateMap` for the same types) makes the generator fail with `CS8785`, and then no mapping code is generated for the project at all.

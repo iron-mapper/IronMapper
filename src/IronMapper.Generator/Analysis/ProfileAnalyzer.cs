@@ -363,6 +363,15 @@ internal static class ProfileAnalyzer
         SemanticModel model,
         CancellationToken ct)
     {
+        // IM0010: generated methods cannot reference private/protected nested types.
+        var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
+            sourceSymbol, destSymbol, out var inaccessibleType);
+        if (methodAccessibility is null)
+            return MappingAnalyzer.CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!);
+
+        var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
+        var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
+
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
 
         // IM0008: destination type is abstract or an interface.
@@ -379,7 +388,10 @@ internal static class ProfileAnalyzer
                 propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
                 diagnostics: diagnostics.ToImmutable(),
                 hasCustomConverter: false,
-                whenConditionBody: null);
+                whenConditionBody: null,
+                sourceFullName: sourceFullName,
+                destFullName: destFullName,
+                methodAccessibility: methodAccessibility);
         }
 
         var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
@@ -489,7 +501,10 @@ internal static class ProfileAnalyzer
             wholeObjectLambdaBody: wholeObjectLambdaBody,
             beforeMapLambdaBody: beforeMapBody,
             afterMapLambdaBody: afterMapBody,
-            valueTransformers: transformers);
+            valueTransformers: transformers,
+            sourceFullName: sourceFullName,
+            destFullName: destFullName,
+            methodAccessibility: methodAccessibility);
     }
 
     /// <summary>
