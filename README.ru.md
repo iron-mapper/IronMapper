@@ -6,23 +6,25 @@
 
 > 🌐 **[English documentation](README.md)**
 
-**Zero-reflection, compile-time object mapper для .NET.**
+**Compile-time object mapper для .NET.**
 
-IronMapper генерирует весь код маппинга во время сборки с помощью Roslyn Source Generator — никакой reflection во время выполнения, никакого IL emit, никаких динамических прокси. Только чистый, читаемый и отлаживаемый C#, который компилятор может оптимизировать как любой другой код.
+IronMapper с помощью Roslyn source generator генерирует код маппинга во время сборки. Сгенерированные extension-методы `MapTo*` — это обычные присваивания свойств на C#: без reflection, без IL emit, без динамических прокси, их можно пройти отладчиком.
+
+Необязательный пакет `IronMapper.Extensions.DI` добавляет сервис `IMapper`. Он **не** свободен от reflection: находит сгенерированные методы через reflection и вызывает их через `MethodInfo.Invoke` (см. [Известные ограничения](#известные-ограничения)).
 
 ---
 
 ## IronMapper vs AutoMapper
 
-| Возможность | AutoMapper | IronMapper |
+| | AutoMapper | IronMapper |
 |---|---|---|
-| Стратегия маппинга | Reflection во время выполнения | Source-generated C# во время сборки |
-| Ошибки конфигурации обнаруживаются | При запуске приложения | При `dotnet build` |
-| NativeAOT / IL trimming | Требует аннотаций | Полностью совместим |
-| Производительность | ~2–5 мкс / объект | ~0 нс накладных расходов |
-| Лицензия | MIT | MIT |
-| Стиль API | Profile-based fluent API | Атрибуты **или** Profile-based fluent API |
-| Размер пакета | ~500 КБ | ~30 КБ |
+| Стратегия маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
+| Ошибки конфигурации | Сообщаются при вызове `AssertConfigurationIsValid()`, обычно в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке (диагностики IM00xx или ошибки C# в сгенерированном коде); см. [Известные ограничения](#известные-ограничения) |
+| Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, есть бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
+| Стиль API | Fluent API на профилях, атрибут `[AutoMap]` | Атрибуты **или** fluent API на профилях |
+| `ProjectTo` для `IQueryable` | Есть | Пока не поддерживается (запланировано, [#9](https://github.com/iron-mapper/IronMapper/issues/9)) |
+
+Цифры производительности и размера пакета пока не публикуются. Бенчмарки есть в `tests/IronMapper.Benchmarks` (ручной маппинг против IronMapper); результаты появятся в документации, когда будут измерены и закоммичены.
 
 ---
 
@@ -62,20 +64,20 @@ var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com
 UserDto dto = entity.MapToUserDto();  // сгенерированный extension method
 ```
 
-Всё. Никакого `IMapper`, никакой регистрации сервисов, никаких накладных расходов при запуске.
+Всё. Ни `IMapper`, ни регистрация сервисов не нужны.
 
 ---
 
 ## Demo Application
 
-Мы собрали демонстрационное консольное приложение, которое показывает все возможности IronMapper,
+Демонстрационное консольное приложение показывает основные возможности IronMapper,
 используя реальное Open Library API (API-ключ не нужен).
 
 **Что демонстрирует пример:**
 - Простой attribute-based mapping (`[MapTo]`)
 - Fluent API с `MappingProfile`
 - Collection mapping (`List<BookDoc>` → `List<BookSummary>`)
-- Вложенный object mapping (Book + Author)
+- Вложенные объекты (книга и автор маппятся отдельно, затем объединяются в коде)
 - Кастомные type converters (очистка HTML из биографии)
 - Условный mapping (только живые авторы)
 
@@ -163,13 +165,15 @@ public class BlogEntity
 {
     public List<CommentEntity> Comments { get; set; } = new();
 }
-// генератор выдаёт: Comments = Enumerable.ToList(Enumerable.Select(source.Comments, x => x.MapToCommentDto()))
+// генератор выдаёт: Comments = source.Comments is null ? null! : Enumerable.ToList(Enumerable.Select(source.Comments, x => x.MapToCommentDto()))
 ```
+
+Нужен маппинг `CommentEntity → CommentDto`. Тестами покрыт только случай `List<T> → List<TDto>`. Вложенные *одиночные* объекты автоматически не маппятся, см. [Известные ограничения](#известные-ограничения).
 
 ### Интеграция с ASP.NET Core
 
 ```csharp
-// Program.cs
+// Program.cs — регистрирует IMapper и типы MappingProfile из сборки
 builder.Services.AddIronMapper(typeof(Program).Assembly);
 
 // В контроллере / сервисе
@@ -181,13 +185,34 @@ public class OrdersController(IMapper mapper) : ControllerBase
 
 ---
 
+## Известные ограничения
+
+Текущие пробелы, подтверждённые чтением кода. Каждый из них запланирован или отслеживается в issue.
+
+- **Вложенные одиночные объекты не маппятся автоматически.** Для `Customer.Address → CustomerDto.Address` с разными типами генератор выдаёт `Address = source.Address`, и сборка падает с `CS0029` в сгенерированном файле. Обходной путь: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Вложенные *коллекции* поддерживаются (см. выше).
+- **Позиционные record как destination не компилируются** (`CS7036`): генератор всегда использует object initializer. Record и классы со свойствами `init` работают.
+- **Несовместимые типы свойств не диагностируются.** `IM0002`, `IM0003`, `IM0004` и `IM0007` объявлены, но нигде не выдаются; сборка падает позже с ошибкой C# в сгенерированном файле. См. [диагностики](docs/diagnostics.ru.md).
+- **Повторное определение одной пары** (например, `[MapTo]` и `CreateMap` для одних и тех же типов) приводит к сбою генератора с `CS8785`, после чего код маппинга для проекта не генерируется вообще.
+- **Для профилей диагностик меньше.** `IM0001` и `IM0009` выдаются только для `[MapTo]`/`[MapFrom]`; несопоставленные свойства destination в профилях молча пропускаются. Все диагностики выдаются без указания места в исходном коде.
+- **In-place перегрузка** `source.MapToX(existing)` игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` и пропускает свойства `init`.
+- **`ReverseMap()`** сопоставляет только по именам свойств; `ForMember`, `When`, хуки и `IncludeMembers` в обратную сторону не переносятся.
+- **Лямбды из профилей копируются в сгенерированный код как текст.** В них можно использовать параметр лямбды и доступные типы/члены, но не локальные переменные или поля профиля.
+- **Конвертеры** создаются через `new TConverter()` (нужен публичный конструктор без параметров). `IronMapperOptions.AddConverter<T>()` только регистрирует тип в DI; сгенерированный код его не использует.
+- **`IMapper` (IronMapper.Extensions.DI) использует reflection**: сканирует загруженные сборки, ищет метод по имени destination-типа и точному runtime-типу source и вызывает его через `MethodInfo.Invoke`. `Map<List<TDto>>(list)` бросает `MappingException` ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); передачи контекста в вызов нет ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
+- **`ProjectTo` / проекция `IQueryable`** пока не поддерживается (запланировано, [#9](https://github.com/iron-mapper/IronMapper/issues/9)).
+- **Совместимость с NativeAOT / trimming не проверялась.** Сгенерированные extension-методы не используют reflection; `IMapper` использует reflection, его следует считать несовместимым.
+- **Платформы.** Пакеты собираются под `netstandard2.0` + `net10.0` (IronMapper) и `netstandard2.1` + `net10.0` (IronMapper.Extensions.DI). Тесты запускаются только на .NET 10 (Ubuntu и Windows в CI); другие среды выполнения не тестируются. Генератор собран против Microsoft.CodeAnalysis 4.11.
+- **Code fix для IM0001/IM0006 не покрыты тестами.**
+
+---
+
 ## Документация
 
-- [Getting Started](docs/getting-started.md)
-- [Configuration Reference](docs/configuration.md)
-- [Advanced Topics](docs/advanced.md)
-- [Migrating from AutoMapper](docs/migration-from-automapper.md)
-- [Compiler Diagnostics](docs/diagnostics.md)
+- [Getting Started](docs/getting-started.ru.md)
+- [Configuration Reference](docs/configuration.ru.md)
+- [Advanced Topics](docs/advanced.ru.md)
+- [Migrating from AutoMapper](docs/migration-from-automapper.ru.md)
+- [Compiler Diagnostics](docs/diagnostics.ru.md)
 
 ---
 
@@ -206,4 +231,4 @@ public class OrdersController(IMapper mapper) : ControllerBase
 
 ## Лицензия
 
-[MIT](LICENSE) © Iron Programmer School
+[MIT](LICENSE) © 2026 Aleksey Mironov

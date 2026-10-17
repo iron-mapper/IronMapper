@@ -36,7 +36,7 @@ public class ProductDto { ... }
 
 ### `[MapProperty("DestPropertyName")]`
 
-Применяется к **свойству source-типа**. Перенаправляет значение в свойство destination-типа с другим именем.
+Применяется к **свойству source-типа**. Перенаправляет значение в свойство destination-типа с другим именем. Имя сравнивается без учёта регистра. Работает только для маппингов через атрибуты.
 
 ```csharp
 [MapTo(typeof(PersonDto))]
@@ -56,7 +56,9 @@ public class PersonDto
 
 ### `[Ignore]`
 
-Применяется к **свойству source-типа**. Свойство исключается из обоих вариантов mapping — создающего и in-place.
+Применяется к **свойству source-типа** или **свойству destination-типа**. Свойство исключается из обоих вариантов mapping — создающего и in-place; на свойстве destination оно также подавляет `IM0001`.
+
+`[Ignore]` учитывается только в маппингах `[MapTo]`/`[MapFrom]`. В профилях используйте `ForMember(d => d.X, o => o.Ignore())`.
 
 ```csharp
 [MapTo(typeof(OrderDto))]
@@ -73,7 +75,7 @@ public class Order
 
 ### `[MapConverter(typeof(TConverter))]`
 
-Применяется к **свойству source-типа**, когда типы source и destination отличаются и нужна кастомная конвертация.
+Применяется к **свойству source-типа**, когда типы source и destination отличаются и нужна кастомная конвертация. Сгенерированный код создаёт converter через `new TConverter()`, поэтому нужен публичный конструктор без параметров.
 
 ```csharp
 public class PriceConverter : ITypeConverter<decimal, string>
@@ -116,7 +118,7 @@ public class OrderProfile : MappingProfile
 
 ### `ForMember(dest => dest.Prop, opt => opt.MapFrom(...))`
 
-Настраивает, как заполняется конкретное свойство destination.
+Настраивает, как заполняется конкретное свойство destination. Тело лямбды копируется в сгенерированный код как текст (параметр переименовывается в `source`), поэтому в нём можно использовать параметр лямбды и доступные типы и члены, но не локальные переменные или поля профиля.
 
 ```csharp
 CreateMap<Employee, EmployeeDto>()
@@ -138,7 +140,7 @@ CreateMap<User, UserDto>()
 
 ### `ForMember(dest => dest.Prop, opt => opt.UseConverter<TConverter>())`
 
-Применяет type converter к одному свойству.
+Применяет type converter к одному свойству (создаётся через `new TConverter()`). Покрыто тестом генератора, который проверяет только сгенерированный код; runtime-теста пока нет.
 
 ```csharp
 CreateMap<Product, ProductDto>()
@@ -149,7 +151,7 @@ CreateMap<Product, ProductDto>()
 
 ### `ConvertUsing<TConverter>()`
 
-Заменяет весь object initializer единственным вызовом converter.
+Заменяет весь object initializer единственным вызовом converter. Не применяется в in-place перегрузке `source.MapToX(existing)`. Покрыто только тестом сгенерированного кода.
 
 ```csharp
 public class FullOrderConverter : ITypeConverter<OrderEntity, OrderDto>
@@ -165,7 +167,7 @@ CreateMap<OrderEntity, OrderDto>()
 
 ### `ConvertUsing(src => ...)`
 
-Lambda-based конвертация всего объекта. Тело выражения генератор вставляет дословно.
+Lambda-based конвертация всего объекта. Тело выражения генератор вставляет дословно. Не применяется в in-place перегрузке. Покрыто только тестом сгенерированного кода.
 
 ```csharp
 CreateMap<Point, PointDto>()
@@ -176,7 +178,7 @@ CreateMap<Point, PointDto>()
 
 ### `When(src => condition)`
 
-Добавляет guard: mapping выполняется только когда предикат истинен; иначе возвращается `default`.
+Добавляет guard: mapping выполняется только когда предикат истинен; иначе возвращается `default` (`null` для классов). Не применяется в in-place перегрузке.
 
 ```csharp
 CreateMap<UserEntity, UserDto>()
@@ -196,7 +198,9 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 }
 ```
 
-Зарегистрируй через DI, чтобы converters были доступны как сервисы:
+`IronMapperOptions.AddConverter<T>()` регистрирует тип converter в DI-контейнере как transient-сервис.
+На маппинг это **не** влияет: сгенерированный код не получает converters из DI и всегда создаёт их через
+`new TConverter()`.
 
 ```csharp
 services.AddIronMapper(opt =>

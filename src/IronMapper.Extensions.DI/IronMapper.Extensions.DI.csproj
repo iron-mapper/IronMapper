@@ -5,7 +5,7 @@
     <PackageId>IronMapper.Extensions.DI</PackageId>
     <RootNamespace>IronMapper.Extensions.DI</RootNamespace>
     <AssemblyName>IronMapper.Extensions.DI</AssemblyName>
-    <PackageDescription>ASP.NET Core / Microsoft DI integration for IronMapper — zero-reflection compile-time object mapper.</PackageDescription>
+    <PackageDescription>Microsoft.Extensions.DependencyInjection integration for IronMapper: registers an IMapper that dispatches to the generated mapping methods. Note: IMapper locates and invokes those methods via reflection.</PackageDescription>
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;dependency-injection;aspnetcore</PackageTags>
   </PropertyGroup>
 

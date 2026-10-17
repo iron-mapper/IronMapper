@@ -2,118 +2,152 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-IronMapper генерирует диагностики компилятора (ошибки и предупреждения), когда обнаруживает проблемы конфигурации маппинга во время сборки.
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0009`. Они объявлены в
+[`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
+
+**Состояние на версию 1.1.1:**
+
+| ID | Уровень | Название | Выдаётся? |
+|---|---|---|---|
+| IM0001 | Warning | Несопоставленное свойство destination | Да — только `[MapTo]`/`[MapFrom]` |
+| IM0002 | Error | Несовместимые типы свойств | **Пока не выдаётся** |
+| IM0003 | Error | Не удаётся разрешить целевой тип | **Пока не выдаётся** |
+| IM0004 | Error | Обнаружен циклический маппинг | **Пока не выдаётся** |
+| IM0005 | Warning | Пустой MappingProfile | Да |
+| IM0006 | Error | Свойство из `[MapProperty]` не найдено в destination | Да |
+| IM0007 | Warning | Повторное определение маппинга | **Пока не выдаётся** |
+| IM0008 | Error | Destination — абстрактный тип или интерфейс | Да — атрибуты и профили |
+| IM0009 | Warning | Параметр конструктора record не сопоставлен | Да — только `[MapTo]`/`[MapFrom]` |
+
+Сейчас все диагностики выдаются **без указания места в исходном коде**: IDE показывает их в списке ошибок,
+но не указывает строку в вашем коде.
+
+Если для проблемы нет работающей диагностики (например, несовпадение типов свойств), сборка падает
+с обычной ошибкой C# (`CS0029`, `CS7036`, …) внутри сгенерированного файла `*.g.cs`.
 
 ---
 
 ## IM0001 — Несопоставленное свойство destination
 
-**Серьёзность:** Предупреждение
+**Уровень:** Warning
 
-**Сообщение:** `Property '{PropertyName}' on '{DestType}' has no matching source property and will not be mapped.`
+**Сообщение:** `Property '{0}' on destination type '{1}' has no corresponding source property in '{2}' and will be left at its default value`
 
-**Причина:** Destination-тип содержит свойство, которое не удаётся сопоставить ни с одним свойством source (по имени, через `[MapProperty]` или `ForMember`).
+**Причина:** у публичного свойства destination с сеттером нет source-свойства с тем же именем
+(без учёта регистра) и нет `[MapProperty]`, указывающего на него.
 
-**Решение:**
-- Добавь соответствующее свойство в source-тип.
-- Используй `[MapProperty("DestPropertyName")]` на source-свойстве для переименования.
-- Используй `ForMember(d => d.Prop, o => o.MapFrom(...))` в profile.
-- Используй `ForMember(d => d.Prop, o => o.Ignore())`, если свойство должно быть намеренно пропущено.
+**Когда выдаётся:** только для маппингов `[MapTo]` / `[MapFrom]`. В маппингах `MappingProfile`
+несопоставленные свойства destination молча пропускаются.
 
----
-
-## IM0002 — Source-тип недоступен
-
-**Серьёзность:** Ошибка
-
-**Сообщение:** `Source type '{TypeName}' is not accessible (must be public or internal).`
-
-**Причина:** Source-тип с атрибутом `[MapTo]` является private или вложен так, что генератор не может получить к нему доступ.
-
-**Решение:** Сделай source-тип `public` или `internal`.
+**Как исправить:**
+- Добавьте соответствующее свойство в source-тип.
+- Используйте `[MapProperty("DestPropertyName")]` на source-свойстве.
+- Поставьте `[Ignore]` на свойство destination, чтобы подавить предупреждение.
+- В `IronMapper.CodeFixes` есть code fix («Add [Ignore] to '...'»); тестами он не покрыт.
 
 ---
 
-## IM0003 — Destination-тип недоступен
+## IM0002 — Несовместимые типы свойств
 
-**Серьёзность:** Ошибка
+**Уровень:** Error · **Пока не выдаётся**
 
-**Сообщение:** `Destination type '{TypeName}' is not accessible (must be public or internal).`
+**Сообщение (объявлено):** `Property '{0}': source type '{1}' cannot be assigned to destination type '{2}'. Add [MapConverter] or implement ITypeConverter<{1}, {2}>.`
 
-**Причина:** Destination-тип, указанный в `[MapTo]` или `[MapFrom]`, является private или недоступен по другой причине.
+**Текущее поведение:** генератор не проверяет типы свойств. Несовпадение (в том числе вложенный объект
+другого типа, например `Address` → `AddressDto`) приводит к ошибке компиляции C#, например `CS0029`,
+в сгенерированном файле.
 
-**Решение:** Сделай destination-тип `public` или `internal`.
-
----
-
-## IM0004 — Свойство destination из [MapProperty] не найдено
-
-**Серьёзность:** Ошибка
-*(см. также IM0006)*
-
-**Причина:** `[MapProperty("X")]` применён к source-свойству, но `X` не существует в destination-типе.
-
-**Решение:** Исправь имя свойства в аргументе атрибута или добавь свойство в destination-тип.
+**Как исправить:** используйте `[MapConverter]`, `opt.UseConverter<T>()` или `opt.MapFrom(...)` для этого свойства.
 
 ---
 
-## IM0005 — Пустой mapping profile
+## IM0003 — Не удаётся разрешить целевой тип
 
-**Серьёзность:** Предупреждение
+**Уровень:** Error · **Пока не выдаётся**
 
-**Сообщение:** `MappingProfile '{ProfileName}' contains no mappings.`
+**Сообщение (объявлено):** `The type '{0}' referenced in [{1}] could not be resolved in the current compilation`
 
-**Причина:** Обнаружен подкласс `MappingProfile`, но в его конструкторе нет ни одного вызова `CreateMap` или `ForMember`.
-
-**Решение:** Добавь хотя бы один вызов `CreateMap<TSource, TDest>()` или удали пустой класс profile.
-
----
-
-## IM0006 — Destination из [MapProperty] не найден
-
-**Серьёзность:** Ошибка
-
-**Сообщение:** `[MapProperty] destination property '{Name}' not found on '{DestType}'.`
-
-**Причина:** Имя, переданное в `[MapProperty]`, не совпадает ни с одним записываемым свойством destination-типа.
-
-**Решение:** Проверь написание и регистр; совпадение регистрозависимо.
+**Текущее поведение:** если тип, переданный в `[MapTo]`/`[MapFrom]`, не разрешается, компилятор C#
+сообщает `CS0246` в выражении `typeof(...)`, а генератор всё равно создаёт файл маппинга со ссылкой
+на отсутствующий тип, что добавляет ошибки `CS0400` в сгенерированном коде.
 
 ---
 
-## IM0007 — Тип converter не реализует ITypeConverter
+## IM0004 — Обнаружен циклический маппинг
 
-**Серьёзность:** Ошибка
+**Уровень:** Error · **Пока не выдаётся**
 
-**Сообщение:** `Type '{ConverterType}' used in [MapConverter] does not implement ITypeConverter<TSource, TDest>.`
+**Сообщение (объявлено):** `Cyclic mapping detected: '{0}' maps to '{1}' which directly or indirectly maps back to '{0}'`
 
-**Причина:** Тип, переданный в `[MapConverter(typeof(X))]`, не реализует требуемый обобщённый интерфейс.
-
-**Решение:** Реализуй `ITypeConverter<TSourceProp, TDestProp>` в классе converter.
+**Текущее поведение:** обнаружение циклов не реализовано.
 
 ---
 
-## IM0008 — Destination-тип абстрактный или интерфейс
+## IM0005 — Пустой MappingProfile
 
-**Серьёзность:** Ошибка
+**Уровень:** Warning
 
-**Сообщение:** `Destination type '{TypeName}' cannot be instantiated (abstract class or interface).`
+**Сообщение:** `MappingProfile '{0}' has no mappings defined`
 
-**Причина:** `[MapTo]` / `[MapFrom]` / `CreateMap` указывает на тип, который нельзя создать через `new`.
+**Причина:** в конструкторе (конструкторах) класса-наследника `MappingProfile` нет ни одной цепочки
+`CreateMap<TSource, TDest>()`.
 
-**Решение:** Используй конкретный destination-тип или предоставь фабрику через `ConvertUsing`, которая выполнит создание объекта.
+**Как исправить:** добавьте хотя бы один вызов `CreateMap<TSource, TDest>()` или удалите пустой профиль.
 
 ---
 
-## IM0009 — Несопоставленные параметры конструктора record destination
+## IM0006 — Свойство из `[MapProperty]` не найдено в destination
 
-**Серьёзность:** Предупреждение
+**Уровень:** Error
 
-**Сообщение:** `Record destination '{TypeName}' has constructor parameter '{ParameterName}' with no matching source property.`
+**Сообщение:** `[MapProperty] destination '{0}' does not exist in type '{1}'`
 
-**Причина:** Параметр primary constructor record destination не удаётся сопоставить ни с одним source-свойством.
+**Причина:** имя, переданное в `[MapProperty]`, не совпадает ни с одним публичным свойством destination
+с сеттером. Сравнение **без учёта регистра**.
 
-**Решение:**
-- Добавь соответствующее свойство в source-тип.
-- Используй `ForMember` для указания значения этого параметра конструктора.
-- Если это намеренно, подавь предупреждение через `#pragma warning disable IM0009`.
+**Как исправить:** исправьте имя или добавьте свойство в destination-тип. В `IronMapper.CodeFixes` есть
+code fix («Did you mean '...'?», расстояние Левенштейна ≤ 2); тестами он не покрыт.
+
+---
+
+## IM0007 — Повторное определение маппинга
+
+**Уровень:** Warning · **Пока не выдаётся**
+
+**Сообщение (объявлено):** `Both an attribute and a MappingProfile define a mapping from '{0}' to '{1}'. The profile-based mapping takes precedence.`
+
+**Текущее поведение:** обнаружение дубликатов не реализовано, правило «профиль имеет приоритет» тоже.
+Если одна и та же пара source/destination определена дважды (например, через `[MapTo]` и через `CreateMap`
+в профиле), генератор падает с предупреждением `CS8785` («HintName ... must be unique») и **не генерирует
+никакого кода маппинга** для проекта. Определяйте каждую пару только один раз.
+
+---
+
+## IM0008 — Destination — абстрактный тип или интерфейс
+
+**Уровень:** Error
+
+**Сообщение:** `Type '{0}' is abstract or an interface and cannot be instantiated as a mapping destination`
+
+**Причина:** destination-тип в `[MapTo]`, `[MapFrom]` или `CreateMap` абстрактный или является интерфейсом.
+
+**Как исправить:** используйте конкретный тип. Для профилей `ConvertUsing` не помогает обойти ошибку:
+генератор выдаёт IM0008 до разбора остальной конфигурации маппинга.
+
+---
+
+## IM0009 — Параметр конструктора record не сопоставлен
+
+**Уровень:** Warning
+
+**Сообщение:** `Constructor parameter '{0}' in record '{1}' has no matching source property`
+
+**Причина:** у record-типа destination есть явно объявленный конструктор (включая primary constructor),
+параметру которого не соответствует source-свойство с тем же именем (без учёта регистра).
+
+**Когда выдаётся:** только для маппингов `[MapTo]` / `[MapFrom]`.
+
+**Важно:** генератор создаёт destination через object initializer, а не через вызов конструктора.
+У позиционного record вроде `record PointDto(double X, double Y)` нет конструктора без параметров, поэтому
+сгенерированный код не компилируется (`CS7036`), даже если это предупреждение не выдано. Используйте
+в качестве destination record со свойствами `init`.

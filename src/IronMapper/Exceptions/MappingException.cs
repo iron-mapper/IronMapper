@@ -4,8 +4,8 @@ namespace IronMapper.Exceptions;
 
 /// <summary>
 /// Base exception for all IronMapper runtime errors.
-/// Under normal usage with the Source Generator this exception should never be thrown,
-/// as mapping errors are surfaced as compile-time diagnostics.
+/// Thrown, for example, by the <c>IMapper</c> implementation in <c>IronMapper.Extensions.DI</c>
+/// when no generated mapping exists for the requested type pair, and by <c>MappingValidator.ValidateAndThrow</c>.
 /// </summary>
 public class MappingException : Exception
 {
