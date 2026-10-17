@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <PackageId>IronMapper.CodeFixes</PackageId>
+    <!-- Shipped inside the IronMapper package (analyzers/dotnet/cs), not as a separate package. -->
+    <IsPackable>false</IsPackable>
     <RootNamespace>IronMapper.CodeFixes</RootNamespace>
     <AssemblyName>IronMapper.CodeFixes</AssemblyName>
     <!-- Code fix providers require workspace-level APIs; do not enforce generator-only rules here. -->

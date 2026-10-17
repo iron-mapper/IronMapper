@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Smoke test for the packed IronMapper.nupkg. Restored from a local feed by eng/verify-package.ps1;
+    intentionally NOT part of IronMapper.slnx. If the source generator is missing from the package,
+    the generated MapTo* methods do not exist and this project fails to compile.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronMapper" Version="[$(IronMapperVersion)]" />
+  </ItemGroup>
+
+</Project>

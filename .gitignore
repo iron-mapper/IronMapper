@@ -37,6 +37,8 @@ TestResults/
 *.coverage
 *.coveragexml
 coverage-report/
+coverage/
+coverage-output/
 
 # BenchmarkDotNet results
 BenchmarkDotNet.Artifacts/

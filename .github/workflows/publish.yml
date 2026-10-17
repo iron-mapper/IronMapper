@@ -33,19 +33,19 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      - name: Pack
-        run: >
-          dotnet pack src/IronMapper/IronMapper.csproj
-          --no-build -c Release
-          -o ./nupkgs
-          /p:PackageVersion=${{ steps.version.outputs.VERSION }}
+      - name: Check tag matches project version
+        run: |
+          PROJECT_VERSION=$(dotnet msbuild src/IronMapper/IronMapper.csproj -getProperty:Version)
+          if [ "$PROJECT_VERSION" != "${{ steps.version.outputs.VERSION }}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match <Version>$PROJECT_VERSION</Version> in Directory.Build.props"
+            exit 1
+          fi
 
-      - name: Pack DI extension
-        run: >
-          dotnet pack src/IronMapper.Extensions.DI/IronMapper.Extensions.DI.csproj
-          --no-build -c Release
-          -o ./nupkgs
-          /p:PackageVersion=${{ steps.version.outputs.VERSION }}
+      # Packs IronMapper + IronMapper.Extensions.DI into ./nupkgs and verifies them
+      # (package layout + consumer project built from the local feed) before anything is pushed.
+      - name: Pack & verify
+        shell: pwsh
+        run: ./eng/verify-package.ps1 -Version ${{ steps.version.outputs.VERSION }} -PackageDir ./nupkgs
 
       - name: Push to NuGet.org
         run: >

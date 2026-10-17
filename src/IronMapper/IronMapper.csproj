@@ -7,10 +7,39 @@
     <AssemblyName>IronMapper</AssemblyName>
     <PackageDescription>Zero-reflection, compile-time object mapper for .NET. Free alternative to AutoMapper. By Iron Programmer School.</PackageDescription>
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
+    <!-- Ship the source generator and code fixes inside this package (analyzers/dotnet/cs). -->
+    <BeforePack>$(BeforePack);IncludeAnalyzersInPackage</BeforePack>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <!--
+    Build-order-only references: the analyzer assemblies are not referenced by IronMapper.dll
+    and must not become package dependencies (PrivateAssets="all").
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper.Generator\IronMapper.Generator.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="..\IronMapper.CodeFixes\IronMapper.CodeFixes.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="IncludeAnalyzersInPackage">
+    <MSBuild Projects="..\IronMapper.Generator\IronMapper.Generator.csproj;..\IronMapper.CodeFixes\IronMapper.CodeFixes.csproj"
+             Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" ItemName="_IronMapperAnalyzerAssembly" />
+    </MSBuild>
+
+    <Error Condition="!Exists('%(_IronMapperAnalyzerAssembly.Identity)')"
+           Text="Analyzer assembly '%(_IronMapperAnalyzerAssembly.Identity)' was not found. Build the solution before packing." />
+
+    <ItemGroup>
+      <None Include="@(_IronMapperAnalyzerAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
 
 </Project>

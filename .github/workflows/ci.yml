@@ -63,6 +63,39 @@ jobs:
           name: coverage-report-${{ matrix.os }}
           path: coverage-report/
 
+  package:
+    name: Pack & verify NuGet package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+
+      # Packs IronMapper + IronMapper.Extensions.DI, checks the .nupkg layout
+      # (lib/ + analyzers/dotnet/cs, no Microsoft.CodeAnalysis dependency) and builds
+      # tests/IronMapper.PackageConsumer from the local feed. Fails if the generator does not run.
+      - name: Pack & verify
+        shell: pwsh
+        run: ./eng/verify-package.ps1 -PackageDir ./artifacts/packages
+
+      - name: Upload packages
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/packages/
+
   benchmarks:
     name: Benchmarks (ubuntu-latest)
     runs-on: ubuntu-latest

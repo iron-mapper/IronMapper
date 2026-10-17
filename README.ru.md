@@ -1,7 +1,7 @@
 # IronMapper
 
 [![NuGet](https://img.shields.io/nuget/v/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
-[![Build](https://github.com/algmironov/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/algmironov/IronMapper/actions/workflows/ci.yml)
+[![Build](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > 🌐 **[English documentation](README.md)**
