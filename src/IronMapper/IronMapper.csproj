@@ -7,8 +7,6 @@
     <AssemblyName>IronMapper</AssemblyName>
     <PackageDescription>Zero-reflection, compile-time object mapper for .NET. Free alternative to AutoMapper. By Iron Programmer School.</PackageDescription>
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
-    <!-- Ship the source generator and code fixes inside this package (analyzers/dotnet/cs). -->
-    <BeforePack>$(BeforePack);IncludeAnalyzersInPackage</BeforePack>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,14 +26,23 @@
                       PrivateAssets="all" />
   </ItemGroup>
 
-  <Target Name="IncludeAnalyzersInPackage">
+  <!--
+    Ship the source generator and code fixes inside this package (analyzers/dotnet/cs).
+    _GetPackageFiles runs once in the outer (cross-targeting) build, so each DLL is added once,
+    not per TFM. The analyzer projects are built here, because pack may run on a clean tree before
+    any ProjectReference has been built; with NoBuild=true only their existing output paths are resolved.
+  -->
+  <Target Name="IncludeAnalyzersInPackage" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_IronMapperAnalyzerTargets>Build</_IronMapperAnalyzerTargets>
+      <_IronMapperAnalyzerTargets Condition="'$(NoBuild)' == 'true'">GetTargetPath</_IronMapperAnalyzerTargets>
+    </PropertyGroup>
+
     <MSBuild Projects="..\IronMapper.Generator\IronMapper.Generator.csproj;..\IronMapper.CodeFixes\IronMapper.CodeFixes.csproj"
-             Targets="GetTargetPath">
+             Targets="$(_IronMapperAnalyzerTargets)"
+             Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="_IronMapperAnalyzerAssembly" />
     </MSBuild>
-
-    <Error Condition="!Exists('%(_IronMapperAnalyzerAssembly.Identity)')"
-           Text="Analyzer assembly '%(_IronMapperAnalyzerAssembly.Identity)' was not found. Build the solution before packing." />
 
     <ItemGroup>
       <None Include="@(_IronMapperAnalyzerAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
