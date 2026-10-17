@@ -3,8 +3,10 @@ using System.Collections.Generic;
 namespace IronMapper.Interfaces;
 
 /// <summary>
-/// Core mapper interface. Implementations are generated at compile-time by the IronMapper Source Generator.
-/// The generated mapper contains zero reflection — all mappings are explicit property assignments.
+/// Core mapper interface for mapping through an injected service instead of calling the generated
+/// <c>MapTo*</c> extension methods directly. The Source Generator does not implement this interface.
+/// The implementation shipped in <c>IronMapper.Extensions.DI</c> (<c>RuntimeMapper</c>) finds and invokes
+/// the generated methods via reflection. For reflection-free mapping call the generated extension methods.
 /// </summary>
 public interface IMapper
 {

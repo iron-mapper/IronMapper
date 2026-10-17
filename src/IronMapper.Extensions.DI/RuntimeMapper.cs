@@ -15,7 +15,11 @@ namespace IronMapper.Extensions.DI;
 /// <remarks>
 /// On the first mapping call the mapper scans every loaded assembly for the generated
 /// <c>IronMapper.Generated.GeneratedMappers</c> static class and caches a <see cref="MethodInfo"/>
-/// per <c>(sourceType, destType)</c> pair.  Subsequent calls pay only a dictionary lookup.
+/// per <c>(sourceType, destType)</c> pair.  Every call then invokes the cached method via
+/// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and has not
+/// been verified with NativeAOT or trimming. Methods are matched by the destination type's simple name
+/// and the exact runtime source type; assemblies whose names start with <c>System.</c> or
+/// <c>Microsoft.</c> are not scanned.
 /// </remarks>
 public sealed class RuntimeMapper : IMapper
 {

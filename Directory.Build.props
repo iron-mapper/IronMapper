@@ -8,8 +8,9 @@
     <LangVersion>latest</LangVersion>
 
     <Version>1.1.1</Version>
-    <Authors>Iron Programmer School</Authors>
-    <Company>Iron Programmer School</Company>
+    <Authors>Aleksey Mironov</Authors>
+    <Company>Aleksey Mironov</Company>
+    <Copyright>Copyright (c) 2026 Aleksey Mironov</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/iron-mapper/IronMapper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iron-mapper/IronMapper</RepositoryUrl>

@@ -36,7 +36,7 @@ public class ProductDto { ... }
 
 ### `[MapProperty("DestPropertyName")]`
 
-Applied to a **source property**. Remaps the value to a destination property with a different name.
+Applied to a **source property**. Remaps the value to a destination property with a different name (matched case-insensitively). Attribute-based mappings only.
 
 ```csharp
 [MapTo(typeof(PersonDto))]
@@ -56,7 +56,9 @@ public class PersonDto
 
 ### `[Ignore]`
 
-Applied to a **source property**. The property is excluded from both the creating and in-place mapping methods.
+Applied to a **source property** or a **destination property**. The property is excluded from both the creating and in-place mapping methods; on a destination property it also suppresses `IM0001`.
+
+`[Ignore]` is read only for `[MapTo]`/`[MapFrom]` mappings. In profiles use `ForMember(d => d.X, o => o.Ignore())`.
 
 ```csharp
 [MapTo(typeof(OrderDto))]
@@ -73,7 +75,7 @@ public class Order
 
 ### `[MapConverter(typeof(TConverter))]`
 
-Applied to a **source property** when the source and destination property types differ and a custom conversion is needed.
+Applied to a **source property** when the source and destination property types differ and a custom conversion is needed. The generated code creates the converter with `new TConverter()`, so it needs a public parameterless constructor.
 
 ```csharp
 public class PriceConverter : ITypeConverter<decimal, string>
@@ -116,7 +118,7 @@ public class OrderProfile : MappingProfile
 
 ### `ForMember(dest => dest.Prop, opt => opt.MapFrom(...))`
 
-Customises how a specific destination property is populated.
+Customises how a specific destination property is populated. The lambda body is copied into the generated code as text (with the parameter renamed to `source`), so it may use the lambda parameter and accessible types and members, but not local variables or fields of the profile.
 
 ```csharp
 CreateMap<Employee, EmployeeDto>()
@@ -138,7 +140,7 @@ CreateMap<User, UserDto>()
 
 ### `ForMember(dest => dest.Prop, opt => opt.UseConverter<TConverter>())`
 
-Applies a type converter to a single property.
+Applies a type converter to a single property (created with `new TConverter()`). Covered by a generator test that checks the emitted code only; there is no runtime test yet.
 
 ```csharp
 CreateMap<Product, ProductDto>()
@@ -149,7 +151,7 @@ CreateMap<Product, ProductDto>()
 
 ### `ConvertUsing<TConverter>()`
 
-Replaces the entire object initializer with a single converter call.
+Replaces the entire object initializer with a single converter call. Not applied by the in-place overload `source.MapToX(existing)`. Covered by a generator test of the emitted code only.
 
 ```csharp
 public class FullOrderConverter : ITypeConverter<OrderEntity, OrderDto>
@@ -165,7 +167,7 @@ CreateMap<OrderEntity, OrderDto>()
 
 ### `ConvertUsing(src => ...)`
 
-Lambda-based whole-object conversion. The expression body is emitted verbatim by the generator.
+Lambda-based whole-object conversion. The expression body is emitted verbatim by the generator. Not applied by the in-place overload. Covered by a generator test of the emitted code only.
 
 ```csharp
 CreateMap<Point, PointDto>()
@@ -176,7 +178,7 @@ CreateMap<Point, PointDto>()
 
 ### `When(src => condition)`
 
-Adds a guard: the mapping only executes when the predicate is true; otherwise `default` is returned.
+Adds a guard: the mapping only executes when the predicate is true; otherwise `default` (`null` for classes) is returned. Not applied by the in-place overload.
 
 ```csharp
 CreateMap<UserEntity, UserDto>()
@@ -196,7 +198,9 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 }
 ```
 
-Register with DI so converters are resolvable as services:
+`IronMapperOptions.AddConverter<T>()` registers the converter type in the DI container as a transient service.
+This does **not** affect mapping: the generated code does not resolve converters from DI and always creates them with
+`new TConverter()`.
 
 ```csharp
 services.AddIronMapper(opt =>

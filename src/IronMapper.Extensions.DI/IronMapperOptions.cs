@@ -30,7 +30,9 @@ public sealed class IronMapperOptions
 
     /// <summary>
     /// Scans <paramref name="assembly"/> for all concrete <see cref="MappingProfile"/> subclasses
-    /// and registers their assemblies so the mapper is aware of any mappings they declare.
+    /// and registers each of them in the DI container as a singleton.
+    /// Mappings themselves come from the code generated at compile time; registering a profile
+    /// does not add or change mappings at runtime.
     /// </summary>
     /// <param name="assembly">The assembly to scan for <see cref="MappingProfile"/> subclasses.</param>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
@@ -41,8 +43,9 @@ public sealed class IronMapperOptions
     }
 
     /// <summary>
-    /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service
-    /// so it can be resolved alongside the generated mapping code.
+    /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service.
+    /// The generated mapping code does not resolve converters from DI: it creates them with
+    /// <c>new TConverter()</c>, so converters still need a public parameterless constructor.
     /// </summary>
     /// <typeparam name="TConverter">A concrete type implementing <see cref="ITypeConverter"/>.</typeparam>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>

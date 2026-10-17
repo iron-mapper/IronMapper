@@ -9,7 +9,8 @@ namespace IronMapper.Validation;
 /// Runtime utility that inspects a source / destination type pair and reports
 /// potential mapping problems before a mapping is executed.
 ///
-/// Under normal usage the Source Generator catches all of these issues at compile time.
+/// The Source Generator reports some of these issues at compile time (see the IM00xx diagnostics),
+/// but not all of them; for example, incompatible property types are not reported by the generator.
 /// <see cref="MappingValidator"/> is intended for:
 /// <list type="bullet">
 ///   <item>Early validation in test or diagnostic utilities.</item>

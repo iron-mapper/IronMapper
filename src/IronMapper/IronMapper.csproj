@@ -5,7 +5,7 @@
     <PackageId>IronMapper</PackageId>
     <RootNamespace>IronMapper</RootNamespace>
     <AssemblyName>IronMapper</AssemblyName>
-    <PackageDescription>Zero-reflection, compile-time object mapper for .NET. Free alternative to AutoMapper. By Iron Programmer School.</PackageDescription>
+    <PackageDescription>Compile-time object mapper for .NET. A Roslyn source generator emits plain C# mapping extension methods (no reflection in the generated code). MIT-licensed alternative to AutoMapper.</PackageDescription>
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
   </PropertyGroup>
 

@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](migration-from-automapper.ru.md)**
 
-IronMapper was designed to make migration from AutoMapper as low-friction as possible. The fluent API is intentionally similar.
+IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not a drop-in replacement. This guide lists what maps one-to-one, what only partly matches, and what is missing.
 
 ---
 
@@ -10,39 +10,47 @@ IronMapper was designed to make migration from AutoMapper as low-friction as pos
 
 | | AutoMapper | IronMapper |
 |---|---|---|
-| Mapping code location | Runtime, reflection-based | Compile time, generated C# |
-| Build errors on misconfiguration | No (runtime `AutoMapperConfigurationException`) | Yes (compiler errors / IM00xx warnings) |
-| NativeAOT / trimming | Requires extra annotations | Fully compatible out of the box |
-| License | MIT | MIT |
-| Package size | ~500 KB | ~30 KB |
-| Performance | ~2–5 µs per object (reflection) | ~0 µs overhead (plain property assignment) |
+| Where mapping code comes from | Mapping plans built at runtime and compiled from expression trees ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C# generated at compile time |
+| Configuration errors | Reported by `AssertConfigurationIsValid()`, typically called in a unit test ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Some at build time: IM00xx diagnostics, or C# errors in the generated code. Several declared diagnostics are not reported yet, see [diagnostics](diagnostics.md) |
+| `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods via reflection |
+| NativeAOT / trimming | — | Not verified. Generated extension methods use no reflection; `IMapper` does |
+| License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
+
+No performance or package-size comparison is published yet.
 
 ---
 
 ## API equivalence table
 
-| AutoMapper | IronMapper | Notes |
-|---|---|---|
-| `[assembly: AutoMapper.AutoMapAttribute]` | `[MapTo(typeof(TDest))]` on source | Attribute on the source type |
-| `CreateMap<Src, Dest>()` in a `Profile` | `CreateMap<Src, Dest>()` in a `MappingProfile` | Same method name |
-| `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | Identical syntax |
-| `ForMember(d => d.X, o => o.Ignore())` | `ForMember(d => d.X, o => o.Ignore())` | Identical syntax |
-| `o.MapFrom<TConverter>()` | `opt.UseConverter<TConverter>()` | Slight name difference |
-| `ConvertUsing<TConverter>()` | `ConvertUsing<TConverter>()` | Same method name |
-| `cfg.CreateMapper()` | `services.AddIronMapper(assembly)` | One-line DI registration |
-| `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Extension method is preferred |
-| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **or** `mapper.Map<Src, Dest>(source, dest)` | In-place update |
-| `mapper.Map<IEnumerable<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` | Dedicated collection helpers |
-| `ReverseMap()` | `.ReverseMap()` | Same method name; generates both directions |
-| `BeforeMap((src, dest) => ...)` | `.BeforeMap((src, dest) => ...)` | Same method name |
-| `AfterMap((src, dest) => ...)` | `.AfterMap((src, dest) => ...)` | Same method name |
-| `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Flattens nested object properties into the destination by name |
-| `ValueTransformers` (global) | `AddTransformer<T>(v => ...)` in a profile | Profile-scoped; applied to every property of the matching type |
-| `ForMember(d => d.X, o => o.NullSubstitute("default"))` | `ForMember(d => d.X, o => o.MapFrom(s => s.X ?? "default"))` | Use `MapFrom` with null-coalescing as a workaround |
-| `ForMember(d => d.X, o => o.UseDestinationValue())` | **Not supported** | Set default values in the destination constructor instead |
-| `ForMember(d => d.X, o => o.Condition(s => s.Active))` | **Not supported** per-member — use `MapFrom` with a conditional expression | `.When()` applies to the entire mapping, not individual members |
-| `.Include<SrcChild, DestChild>()` | **Not supported** — declare each mapping separately | Mapping inheritance is not implemented |
-| `ProjectTo<Dest>(queryable)` | **Not supported** | Compile-time generator cannot rewrite IQueryable expression trees |
+**Status** legend: **Supported** — covered by a test that runs the generated mapping; **Partial** — works with
+limitations, or only the emitted code text is tested; **Not supported**.
+
+| AutoMapper | IronMapper | Status | Tests / notes |
+|---|---|---|---|
+| `CreateMap<Src, Dest>()` in a `Profile` | `CreateMap<Src, Dest>()` in a `MappingProfile` | Supported | `ProfileTests.SimpleProfileMapping_MatchingProperties_AreCopiedByName` |
+| `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | same | Supported | `ProfileTests.FluentMapping_ForMemberMapFrom_ConcatenatesSourceProperties`, `ProfileTests.LambdaExpression_MapFromLambda_IsEvaluatedCorrectly`. The lambda is copied into generated code as text: no captured locals or profile fields |
+| `ForMember(d => d.X, o => o.Ignore())` | same | Supported | `ProfileTests.ForMemberIgnore_IgnoredProperty_RemainsDefault`, `ProfileGeneratorTests.ForMemberIgnore_IgnoredProperty_NotEmittedInGeneratedCode` |
+| `[AutoMap(typeof(Src))]` on the destination ([docs](https://docs.automapper.io/en/latest/Attribute-mapping.html)) | `[MapTo(typeof(Dest))]` on the source | Supported | `SimpleTypesTests.PrimitivesMapping_*`, `EdgeCaseTests.DogEntity_OwnAndInheritedProperties_AllMapped` |
+| `[AutoMap(typeof(Src))]` on the destination | `[MapFrom(typeof(Src))]` on the destination | Partial | Only the emitted code is tested: `BasicGeneratorTests.MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod` |
+| `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Supported | `DiIntegrationTests.AddIronMapper_RegistersIMapper`. Registers `IMapper` and the profile types; it does not build any mapping configuration |
+| `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Supported | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`. `IMapper` matches the exact runtime source type |
+| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **or** `mapper.Map<Src, Dest>(source, dest)` | Partial | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Ignores `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; skips `init` properties |
+| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Partial | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`. `mapper.Map<List<Dest>>(list)` compiles but throws `MappingException` ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) |
+| `ReverseMap()` | `.ReverseMap()` | Partial | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. The reverse direction uses name matching only; `ForMember`, `When`, hooks and `IncludeMembers` are not reversed |
+| `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Supported | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` and other `HookTests`. Not called by the in-place overload |
+| `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Supported | `IncludeMembersTests` (e.g. `IncludeMembers_ForMemberWins_OverIncludedMember`, `IncludeMembers_FirstMemberWins_OnDuplicatePropertyName`) |
+| `cfg.ValueTransformers.Add<T>(...)` (global) | `AddTransformer<T>(v => ...)` in a profile | Supported | `TransformerTests.AddTransformer_StringProperty_ValueIsTrimmed`, `TransformerTests.AddTransformer_DoesNotAffectForMemberProperties`. Profile-scoped; not applied to `ForMember` properties |
+| `opt.ConvertUsing<TValueConverter, TSrcMember>()` ([value converters](https://docs.automapper.io/en/latest/Value-converters.html)) | `opt.UseConverter<TConverter>()` with `ITypeConverter<TSrcMember, TDestMember>` | Partial | Only the emitted code is tested: `ProfileGeneratorTests.UseConverter_SingleProperty_EmitsConverterCallForThatProperty`. Converter is created with `new` |
+| `ConvertUsing<TTypeConverter>()` ([type converters](https://docs.automapper.io/en/latest/Custom-type-converters.html)) | `ConvertUsing<TConverter>()` with `ITypeConverter<TSource, TDest>` (`Convert(source)` only) | Partial | Only the emitted code is tested: `ProfileGeneratorTests.ConvertUsing_WholeObjectConverter_EmitsConverterCallInsteadOfInitializer`. Not applied by the in-place overload |
+| — (IronMapper-specific: per-property converter attribute) | `[MapConverter(typeof(TConverter))]` | Supported | `DiIntegrationTests.Mapper_WithCustomConverter_ViaServiceProvider` (the converter is still created with `new`, not resolved from DI) |
+| `opt.NullSubstitute("x")` | `opt.MapFrom(s => s.X ?? "x")` | Workaround | Uses `MapFrom` |
+| `opt.Condition(s => ...)` | **Not supported** per member; `MapFrom(s => cond ? s.X : default)` or `.When(...)` for the whole mapping | Workaround | `.When`: `ProfileTests.WhenCondition_ConditionFalse_ReturnsDefault` |
+| `opt.MapFrom<TValueResolver>()` ([resolvers](https://docs.automapper.io/en/latest/Custom-value-resolvers.html)) | **Not supported** | — | Use a `MapFrom` lambda |
+| `opt.UseDestinationValue()` | **Not supported** | — | |
+| `Include<,>()` / `IncludeBase<,>()` | **Not supported** | — | Declare each mapping separately |
+| `ResolutionContext.Items` / `opts.Items[...]` | **Not supported** | — | [#7](https://github.com/iron-mapper/IronMapper/issues/7) |
+| `ProjectTo<Dest>(queryable)` | **Not supported yet** | Planned | [#9](https://github.com/iron-mapper/IronMapper/issues/9) |
+| `AssertConfigurationIsValid()` | No direct equivalent | — | Part of the checks happen at build time, see [diagnostics](diagnostics.md) |
 
 ---
 
@@ -52,6 +60,7 @@ IronMapper was designed to make migration from AutoMapper as low-friction as pos
 
 ```bash
 dotnet remove package AutoMapper
+# only for AutoMapper < 13; since 13.0 AddAutoMapper is part of the core package
 dotnet remove package AutoMapper.Extensions.Microsoft.DependencyInjection
 
 dotnet add package IronMapper
@@ -82,7 +91,7 @@ dotnet add package IronMapper.Extensions.DI
 + using IronMapper.Interfaces;
 ```
 
-The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)` — all commonly-used AutoMapper overloads.
+The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)`. There is no collection overload of `Map` (`Map<List<Dest>>(list)` throws, [#8](https://github.com/iron-mapper/IronMapper/issues/8)) and no per-call options/context ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 
 ### 5. Optionally switch to extension methods
 
@@ -103,7 +112,8 @@ cfg.CreateMap<OrderEntity, OrderDto>().ReverseMap();
 
 // IronMapper — identical syntax
 CreateMap<OrderEntity, OrderDto>().ReverseMap();
-// Generates both MapToOrderDto() and MapToOrderEntity()
+// Generates both MapToOrderDto() and MapToOrderEntity().
+// The reverse direction matches properties by name only.
 ```
 
 #### BeforeMap / AfterMap
@@ -114,7 +124,7 @@ cfg.CreateMap<OrderEntity, OrderDto>()
    .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
    .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
 
-// IronMapper — identical syntax
+// IronMapper — identical syntax (not called by the in-place overload)
 CreateMap<OrderEntity, OrderDto>()
     .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
     .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
@@ -131,7 +141,7 @@ cfg.CreateMap<CustomerOrder, CustomerOrderDto>()
 CreateMap<CustomerOrder, CustomerOrderDto>()
     .IncludeMembers(s => s.Contact, s => s.Shipping);
 // Properties of Contact and Shipping are matched by name to CustomerOrderDto fields.
-// Priority: direct properties > ForMember > IncludeMembers (first-member-wins on duplicates).
+// Priority: ForMember > direct source properties > IncludeMembers (first listed member wins on duplicates).
 ```
 
 #### ValueTransformers (AddTransformer)
@@ -145,7 +155,7 @@ public class OrderProfile : MappingProfile
 {
     public OrderProfile()
     {
-        AddTransformer<string>(v => v.Trim());   // applied to every string property in this profile
+        AddTransformer<string>(v => v.Trim());   // applied to name-matched string properties of this profile's mappings (not to ForMember)
         AddTransformer<decimal>(v => Math.Round(v, 2));
         CreateMap<OrderEntity, OrderDto>();
     }

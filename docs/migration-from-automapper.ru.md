@@ -2,7 +2,7 @@
 
 > 🌐 **[English version](migration-from-automapper.md)**
 
-IronMapper спроектирован так, чтобы миграция с AutoMapper была максимально безболезненной. Fluent API намеренно схож.
+Fluent API IronMapper намеренно похож на AutoMapper, но это не прямая замена. В этом руководстве перечислено, что переносится один к одному, что совпадает лишь частично и чего нет.
 
 ---
 
@@ -10,39 +10,47 @@ IronMapper спроектирован так, чтобы миграция с Aut
 
 | | AutoMapper | IronMapper |
 |---|---|---|
-| Расположение кода маппинга | Runtime, на основе reflection | Compile time, сгенерированный C# |
-| Ошибки конфигурации | Нет (runtime `AutoMapperConfigurationException`) | Да (ошибки компилятора / предупреждения IM00xx) |
-| NativeAOT / trimming | Требует дополнительных аннотаций | Полностью совместим из коробки |
-| Лицензия | MIT | MIT |
-| Размер пакета | ~500 КБ | ~30 КБ |
-| Производительность | ~2–5 мкс / объект (reflection) | ~0 нс накладных расходов (обычное присваивание свойств) |
+| Откуда берётся код маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
+| Ошибки конфигурации | Сообщает `AssertConfigurationIsValid()`, обычно вызываемый в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке: диагностики IM00xx или ошибки C# в сгенерированном коде. Несколько объявленных диагностик пока не выдаются, см. [диагностики](diagnostics.ru.md) |
+| Сервис `IMapper` | Основной API | Необязательный (`IronMapper.Extensions.DI`); вызывает сгенерированные методы через reflection |
+| NativeAOT / trimming | — | Не проверялось. Сгенерированные extension-методы не используют reflection; `IMapper` использует |
+| Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
+
+Сравнение производительности и размера пакета пока не публикуется.
 
 ---
 
 ## Таблица соответствия API
 
-| AutoMapper | IronMapper | Примечание |
-|---|---|---|
-| `[assembly: AutoMapper.AutoMapAttribute]` | `[MapTo(typeof(TDest))]` на source | Атрибут на source-типе |
-| `CreateMap<Src, Dest>()` в `Profile` | `CreateMap<Src, Dest>()` в `MappingProfile` | Одинаковое имя метода |
-| `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | Идентичный синтаксис |
-| `ForMember(d => d.X, o => o.Ignore())` | `ForMember(d => d.X, o => o.Ignore())` | Идентичный синтаксис |
-| `o.MapFrom<TConverter>()` | `opt.UseConverter<TConverter>()` | Небольшое отличие в имени |
-| `ConvertUsing<TConverter>()` | `ConvertUsing<TConverter>()` | Одинаковое имя метода |
-| `cfg.CreateMapper()` | `services.AddIronMapper(assembly)` | Однострочная DI-регистрация |
-| `mapper.Map<Dest>(source)` | `source.MapToDest()` **или** `mapper.Map<Dest>(source)` | Extension method предпочтителен |
-| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **или** `mapper.Map<Src, Dest>(source, dest)` | Обновление существующего объекта |
-| `mapper.Map<IEnumerable<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` | Специализированные collection helpers |
-| `ReverseMap()` | `.ReverseMap()` | Одинаковое имя метода; генерирует оба направления |
-| `BeforeMap((src, dest) => ...)` | `.BeforeMap((src, dest) => ...)` | Одинаковое имя метода |
-| `AfterMap((src, dest) => ...)` | `.AfterMap((src, dest) => ...)` | Одинаковое имя метода |
-| `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Разворачивает свойства вложенного объекта в destination по имени |
-| `ValueTransformers` (глобальные) | `AddTransformer<T>(v => ...)` в профиле | Область действия — профиль; применяется ко всем свойствам совпадающего типа |
-| `ForMember(d => d.X, o => o.NullSubstitute("default"))` | `ForMember(d => d.X, o => o.MapFrom(s => s.X ?? "default"))` | Используй `MapFrom` с null-coalescing в качестве обходного решения |
-| `ForMember(d => d.X, o => o.UseDestinationValue())` | **Не поддерживается** | Задавай значения по умолчанию в конструкторе destination-типа |
-| `ForMember(d => d.X, o => o.Condition(s => s.Active))` | **Не поддерживается** на уровне члена — используй `MapFrom` с условным выражением | `.When()` применяется ко всему маппингу, не к отдельным членам |
-| `.Include<SrcChild, DestChild>()` | **Не поддерживается** — объявляй каждый маппинг отдельно | Наследование маппингов не реализовано |
-| `ProjectTo<Dest>(queryable)` | **Не поддерживается** | Генератор компил-тайм не может переписывать expression tree IQueryable |
+Обозначения в колонке **Статус**: **Поддерживается** — есть тест, который выполняет сгенерированный маппинг;
+**Частично** — работает с ограничениями или тестируется только текст сгенерированного кода; **Не поддерживается**.
+
+| AutoMapper | IronMapper | Статус | Тесты / примечания |
+|---|---|---|---|
+| `CreateMap<Src, Dest>()` в `Profile` | `CreateMap<Src, Dest>()` в `MappingProfile` | Поддерживается | `ProfileTests.SimpleProfileMapping_MatchingProperties_AreCopiedByName` |
+| `ForMember(d => d.X, o => o.MapFrom(s => s.Y))` | то же | Поддерживается | `ProfileTests.FluentMapping_ForMemberMapFrom_ConcatenatesSourceProperties`, `ProfileTests.LambdaExpression_MapFromLambda_IsEvaluatedCorrectly`. Лямбда копируется в сгенерированный код как текст: без захвата локальных переменных и полей профиля |
+| `ForMember(d => d.X, o => o.Ignore())` | то же | Поддерживается | `ProfileTests.ForMemberIgnore_IgnoredProperty_RemainsDefault`, `ProfileGeneratorTests.ForMemberIgnore_IgnoredProperty_NotEmittedInGeneratedCode` |
+| `[AutoMap(typeof(Src))]` на destination ([docs](https://docs.automapper.io/en/latest/Attribute-mapping.html)) | `[MapTo(typeof(Dest))]` на source | Поддерживается | `SimpleTypesTests.PrimitivesMapping_*`, `EdgeCaseTests.DogEntity_OwnAndInheritedProperties_AllMapped` |
+| `[AutoMap(typeof(Src))]` на destination | `[MapFrom(typeof(Src))]` на destination | Частично | Тестируется только сгенерированный код: `BasicGeneratorTests.MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod` |
+| `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Поддерживается | `DiIntegrationTests.AddIronMapper_RegistersIMapper`. Регистрирует `IMapper` и типы профилей; никакой конфигурации маппинга не строит |
+| `mapper.Map<Dest>(source)` | `source.MapToDest()` **или** `mapper.Map<Dest>(source)` | Поддерживается | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`. `IMapper` сопоставляет точный runtime-тип source |
+| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **или** `mapper.Map<Src, Dest>(source, dest)` | Частично | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; пропускает свойства `init` |
+| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Частично | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`. `mapper.Map<List<Dest>>(list)` компилируется, но бросает `MappingException` ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) |
+| `ReverseMap()` | `.ReverseMap()` | Частично | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. Обратное направление сопоставляет только по именам; `ForMember`, `When`, хуки и `IncludeMembers` не переносятся |
+| `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Поддерживается | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` и другие `HookTests`. Не вызываются in-place перегрузкой |
+| `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Поддерживается | `IncludeMembersTests` (например, `IncludeMembers_ForMemberWins_OverIncludedMember`, `IncludeMembers_FirstMemberWins_OnDuplicatePropertyName`) |
+| `cfg.ValueTransformers.Add<T>(...)` (глобально) | `AddTransformer<T>(v => ...)` в профиле | Поддерживается | `TransformerTests.AddTransformer_StringProperty_ValueIsTrimmed`, `TransformerTests.AddTransformer_DoesNotAffectForMemberProperties`. Действует в пределах профиля; к свойствам из `ForMember` не применяется |
+| `opt.ConvertUsing<TValueConverter, TSrcMember>()` ([value converters](https://docs.automapper.io/en/latest/Value-converters.html)) | `opt.UseConverter<TConverter>()` с `ITypeConverter<TSrcMember, TDestMember>` | Частично | Тестируется только сгенерированный код: `ProfileGeneratorTests.UseConverter_SingleProperty_EmitsConverterCallForThatProperty`. Converter создаётся через `new` |
+| `ConvertUsing<TTypeConverter>()` ([type converters](https://docs.automapper.io/en/latest/Custom-type-converters.html)) | `ConvertUsing<TConverter>()` с `ITypeConverter<TSource, TDest>` (только `Convert(source)`) | Частично | Тестируется только сгенерированный код: `ProfileGeneratorTests.ConvertUsing_WholeObjectConverter_EmitsConverterCallInsteadOfInitializer`. Не применяется in-place перегрузкой |
+| — (только в IronMapper: атрибут конвертера для свойства) | `[MapConverter(typeof(TConverter))]` | Поддерживается | `DiIntegrationTests.Mapper_WithCustomConverter_ViaServiceProvider` (converter всё равно создаётся через `new`, а не берётся из DI) |
+| `opt.NullSubstitute("x")` | `opt.MapFrom(s => s.X ?? "x")` | Обходной путь | Через `MapFrom` |
+| `opt.Condition(s => ...)` | **Не поддерживается** на уровне члена; `MapFrom(s => cond ? s.X : default)` или `.When(...)` для всего маппинга | Обходной путь | `.When`: `ProfileTests.WhenCondition_ConditionFalse_ReturnsDefault` |
+| `opt.MapFrom<TValueResolver>()` ([resolvers](https://docs.automapper.io/en/latest/Custom-value-resolvers.html)) | **Не поддерживается** | — | Используйте лямбду в `MapFrom` |
+| `opt.UseDestinationValue()` | **Не поддерживается** | — | |
+| `Include<,>()` / `IncludeBase<,>()` | **Не поддерживается** | — | Объявляйте каждый маппинг отдельно |
+| `ResolutionContext.Items` / `opts.Items[...]` | **Не поддерживается** | — | [#7](https://github.com/iron-mapper/IronMapper/issues/7) |
+| `ProjectTo<Dest>(queryable)` | **Пока не поддерживается** | Запланировано | [#9](https://github.com/iron-mapper/IronMapper/issues/9) |
+| `AssertConfigurationIsValid()` | Прямого аналога нет | — | Часть проверок выполняется при сборке, см. [диагностики](diagnostics.ru.md) |
 
 ---
 
@@ -52,6 +60,7 @@ IronMapper спроектирован так, чтобы миграция с Aut
 
 ```bash
 dotnet remove package AutoMapper
+# только для AutoMapper < 13; начиная с 13.0 AddAutoMapper входит в основной пакет
 dotnet remove package AutoMapper.Extensions.Microsoft.DependencyInjection
 
 dotnet add package IronMapper
@@ -82,7 +91,7 @@ dotnet add package IronMapper.Extensions.DI
 + using IronMapper.Interfaces;
 ```
 
-Интерфейс `IMapper` в IronMapper предоставляет `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)` и `MapCollection<TSource, TDest>(source)` — все часто используемые перегрузки AutoMapper.
+Интерфейс `IMapper` в IronMapper предоставляет `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)` и `MapCollection<TSource, TDest>(source)`. Перегрузки `Map` для коллекций нет (`Map<List<Dest>>(list)` бросает исключение, [#8](https://github.com/iron-mapper/IronMapper/issues/8)), передачи опций/контекста в вызов тоже нет ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 
 ### 5. Опционально — переходи на extension methods
 
@@ -103,7 +112,8 @@ cfg.CreateMap<OrderEntity, OrderDto>().ReverseMap();
 
 // IronMapper — идентичный синтаксис
 CreateMap<OrderEntity, OrderDto>().ReverseMap();
-// Генерирует и MapToOrderDto(), и MapToOrderEntity()
+// Генерирует и MapToOrderDto(), и MapToOrderEntity().
+// Обратное направление сопоставляет свойства только по именам.
 ```
 
 #### BeforeMap / AfterMap
@@ -114,7 +124,7 @@ cfg.CreateMap<OrderEntity, OrderDto>()
    .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
    .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
 
-// IronMapper — идентичный синтаксис
+// IronMapper — идентичный синтаксис (in-place перегрузка хуки не вызывает)
 CreateMap<OrderEntity, OrderDto>()
     .BeforeMap((src, dest) => dest.MappedAt = DateTime.UtcNow)
     .AfterMap((src,  dest) => dest.IsHighValue = dest.Total > 1000m);
@@ -131,7 +141,7 @@ cfg.CreateMap<CustomerOrder, CustomerOrderDto>()
 CreateMap<CustomerOrder, CustomerOrderDto>()
     .IncludeMembers(s => s.Contact, s => s.Shipping);
 // Свойства Contact и Shipping сопоставляются по имени с полями CustomerOrderDto.
-// Приоритет: прямые свойства > ForMember > IncludeMembers (первый член выигрывает при конфликте).
+// Приоритет: ForMember > прямые свойства source > IncludeMembers (при конфликте выигрывает первый указанный член).
 ```
 
 #### ValueTransformers (AddTransformer)
@@ -145,7 +155,7 @@ public class OrderProfile : MappingProfile
 {
     public OrderProfile()
     {
-        AddTransformer<string>(v => v.Trim());   // применяется ко всем string-свойствам в этом профиле
+        AddTransformer<string>(v => v.Trim());   // применяется к string-свойствам, сопоставленным по имени, в маппингах этого профиля (не к ForMember)
         AddTransformer<decimal>(v => Math.Round(v, 2));
         CreateMap<OrderEntity, OrderDto>();
     }
