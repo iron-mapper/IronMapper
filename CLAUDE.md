@@ -23,7 +23,9 @@ IronMapper/
 ├── tests/
 │   ├── IronMapper.Tests/              # Unit tests for runtime API (xUnit)
 │   ├── IronMapper.Generator.Tests/    # Source Generator tests (xUnit + Roslyn testing APIs)
-│   └── IronMapper.Benchmarks/         # BenchmarkDotNet perf comparisons
+│   ├── IronMapper.Benchmarks/         # BenchmarkDotNet perf comparisons
+│   └── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
+├── eng/verify-package.ps1            # dotnet pack + .nupkg layout check + consumer build
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings)
 ├── .editorconfig                      # C# code style
 └── .github/workflows/ci.yml          # GitHub Actions CI
@@ -88,8 +90,24 @@ dotnet test
 # Run tests with coverage
 dotnet test --collect:"XPlat Code Coverage"
 
+# Pack and verify the NuGet packages (layout + consumer project)
+pwsh ./eng/verify-package.ps1
+
 # Run benchmarks (Release only)
 dotnet run --project tests/IronMapper.Benchmarks -c Release
+```
+
+### Rule: verify packaging and CI changes on a clean tree
+
+Anything that touches packaging (`dotnet pack`, `.nupkg` layout, `eng/verify-package.ps1`) or CI
+(`.github/workflows/*`, MSBuild targets, build order) must be verified only after
+`git clean -xdf -e .claude/`. CI always starts from a fresh clone; leftover `bin/`/`obj/` from earlier
+local builds hide missing build steps (e.g. a pack that only works because the generator DLL was
+already built).
+
+```bash
+git clean -xdf -e .claude/
+pwsh ./eng/verify-package.ps1 -PackageDir ./artifacts/packages
 ```
 
 ---

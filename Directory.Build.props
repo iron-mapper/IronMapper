@@ -7,13 +7,14 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <LangVersion>latest</LangVersion>
 
-    <Version>1.0.0</Version>
+    <Version>1.1.1</Version>
     <Authors>Iron Programmer School</Authors>
     <Company>Iron Programmer School</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/algmironov/IronMapper</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/algmironov/IronMapper</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/iron-mapper/IronMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iron-mapper/IronMapper</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>

@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <PackageId>IronMapper.Generator</PackageId>
+    <!-- Shipped inside the IronMapper package (analyzers/dotnet/cs), not as a separate package. -->
+    <IsPackable>false</IsPackable>
     <RootNamespace>IronMapper.Generator</RootNamespace>
     <AssemblyName>IronMapper.Generator</AssemblyName>
 

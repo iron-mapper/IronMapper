@@ -13,4 +13,40 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!--
+    Build-order-only references: the analyzer assemblies are not referenced by IronMapper.dll
+    and must not become package dependencies (PrivateAssets="all").
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper.Generator\IronMapper.Generator.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="..\IronMapper.CodeFixes\IronMapper.CodeFixes.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    Ship the source generator and code fixes inside this package (analyzers/dotnet/cs).
+    _GetPackageFiles runs once in the outer (cross-targeting) build, so each DLL is added once,
+    not per TFM. The analyzer projects are built here, because pack may run on a clean tree before
+    any ProjectReference has been built; with NoBuild=true only their existing output paths are resolved.
+  -->
+  <Target Name="IncludeAnalyzersInPackage" BeforeTargets="_GetPackageFiles">
+    <PropertyGroup>
+      <_IronMapperAnalyzerTargets>Build</_IronMapperAnalyzerTargets>
+      <_IronMapperAnalyzerTargets Condition="'$(NoBuild)' == 'true'">GetTargetPath</_IronMapperAnalyzerTargets>
+    </PropertyGroup>
+
+    <MSBuild Projects="..\IronMapper.Generator\IronMapper.Generator.csproj;..\IronMapper.CodeFixes\IronMapper.CodeFixes.csproj"
+             Targets="$(_IronMapperAnalyzerTargets)"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_IronMapperAnalyzerAssembly" />
+    </MSBuild>
+
+    <ItemGroup>
+      <None Include="@(_IronMapperAnalyzerAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>

@@ -19,7 +19,7 @@ public class OpenLibraryService
         _http = new HttpClient();
         _http.DefaultRequestHeaders.Add(
             "User-Agent",
-            "IronMapper-Demo/1.0 (github.com/algmironov/IronMapper)");
+            "IronMapper-Demo/1.0 (github.com/iron-mapper/IronMapper)");
         _http.Timeout = TimeSpan.FromSeconds(60);
     }
 
