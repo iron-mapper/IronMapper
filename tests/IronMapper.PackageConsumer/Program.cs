@@ -19,6 +19,17 @@ InternalEntryDto entryDto = entry.MapToInternalEntryDto();
 var session = new Session { Title = "intro", Grace = TimeSpan.FromMinutes(2) };
 SessionDto sessionDto = session.MapToSessionDto();
 
+// Referenced libraries that also use IronMapper: InternalLib has only internal maps (its GeneratedMappers is
+// internal and invisible here), PublicLib has public maps called from this assembly.
+var internalLib = InternalLib.InternalLibApi.Describe("s", 3);
+var productDto = new PublicLib.Product { Name = "p" }.MapToProductDto();
+var priceDtos = new[] { new PublicLib.Price { Amount = 2.5m } }.MapToPriceDtoArray();
+var productTarget = new PublicLib.ProductDto();
+new PublicLib.Product { Name = "q" }.MapToProductDto(productTarget);
+var publicLibInternal = PublicLib.PublicLibApi.Reveal("r");
+var internalLibClass = typeof(InternalLib.InternalLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
+var publicLibClass = typeof(PublicLib.PublicLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
+
 var failures = new List<string>();
 if (dto.Id != 42) failures.Add($"Id: expected 42, got {dto.Id}");
 if (dto.FullName != "Alice") failures.Add($"FullName: expected 'Alice', got '{dto.FullName}'");
@@ -29,6 +40,13 @@ if (ledgerDto.Code != "L-7") failures.Add($"Internal [MapTo]: expected 'L-7', go
 if (entryDto.Amount != 3.5m) failures.Add($"Internal profile map: expected 3.5, got {entryDto.Amount}");
 if (sessionDto.GraceSeconds != 120) failures.Add($"Profile static helper: expected 120, got {sessionDto.GraceSeconds}");
 if (sessionDto.Title != "INTRO!") failures.Add($"Extension method from profile usings: expected 'INTRO!', got '{sessionDto.Title}'");
+if (internalLib != "s:3") failures.Add($"InternalLib: expected 's:3', got '{internalLib}'");
+if (productDto.Name != "p") failures.Add($"PublicLib [MapTo] from consumer: expected 'p', got '{productDto.Name}'");
+if (priceDtos.Length != 1 || priceDtos[0].Amount != 2.5m) failures.Add("PublicLib profile array map from consumer: expected [2.5]");
+if (productTarget.Name != "q") failures.Add($"PublicLib in-place map from consumer: expected 'q', got '{productTarget.Name}'");
+if (publicLibInternal != "r") failures.Add($"PublicLib internal map: expected 'r', got '{publicLibInternal}'");
+if (internalLibClass is null || internalLibClass.IsPublic) failures.Add("InternalLib: GeneratedMappers must exist and be internal (only internal maps)");
+if (publicLibClass is null || !publicLibClass.IsPublic) failures.Add("PublicLib: GeneratedMappers must exist and be public");
 
 if (failures.Count > 0)
 {
@@ -133,6 +151,16 @@ internal class SessionProfile : MappingProfile
     }
 
     internal static int ToSeconds(TimeSpan value) => (int)value.TotalSeconds;
+}
+
+// The same pair is mapped in PublicLib ([MapTo]). The generated MapToTagDtoList/Array of this assembly must call
+// this assembly's method; calling tag.MapToTagDto() here would be ambiguous (CS0121), so it is not called.
+public class DuplicateTagProfile : MappingProfile
+{
+    public DuplicateTagProfile()
+    {
+        CreateMap<PublicLib.Tag, PublicLib.TagDto>();
+    }
 }
 
 namespace ConsumerText

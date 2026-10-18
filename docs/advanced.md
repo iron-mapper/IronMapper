@@ -128,7 +128,7 @@ The in-place overload only assigns the mapped properties. It:
 - The generated extension methods (`source.MapToDto()`) are plain compiled C# with no reflection.
 - `IMapper` from `IronMapper.Extensions.DI` (`RuntimeMapper`) uses reflection. On the first call for a
   `(TSource, TDest)` pair it scans the loaded assemblies (skipping names that start with `System.` or
-  `Microsoft.`) for `IronMapper.Generated.GeneratedMappers` and looks up `MapTo{TDest.Name}` with the exact
+  `Microsoft.`) for `IronMapper.Generated.GeneratedMappers` (public or internal) and looks up `MapTo{TDest.Name}` with the exact
   source type; the `MethodInfo` is cached. **Every call** is then made through `MethodInfo.Invoke`.
 - `IMapper.Map<TDest>(object)` uses the runtime type of the source; a derived source type does not match a
   mapping declared for its base type.
