@@ -153,7 +153,7 @@ Invoke-Step 'Runtime' {
     $filters = $runtimeClasses | ForEach-Object { "*.${_}Benchmark.*" }
     $job = $Quick ? @('--job', 'short') : @('--launchCount', '3')
     $stepStart = Get-Date
-    Invoke-Dotnet 'bdn-runtime.log' (@('run', '-c', 'Release', '--project', $project, '--no-build', '--', '--filter') + $filters + $job)
+    Invoke-Dotnet 'bdn-runtime.log' (@('run', '-c', 'Release', '-f', 'net10.0', '--project', $project, '--no-build', '--', '--filter') + $filters + $job)
     $bdnResults = Join-Path (Get-ResultsRawDir) 'bdn' 'results'
     foreach ($class in $runtimeClasses) {
         $json = Join-Path $bdnResults "Comparison.Benchmarks.${class}Benchmark-report-full.json"

@@ -82,12 +82,13 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.1        | Генератор в пакете, проверка упаковки в CI                                                                                      |
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
-| 1.2.0        | В работе. В `main` пока только набор бенчмарков (#18), `[Unreleased]` в CHANGELOG пуст                                          |
+| 1.2.0        | В работе. В `main` — набор бенчмарков (#18). Шаг 0 (базовая линия, net8.0, smoke-проверка в CI) — в `chore/benchmarks-baseline` |
 
 **Ветки (сверено 18.10.2026):**
 
 - `feature/benchmarks` — **слита** в `main` squash-коммитом `f6e55f0` (#18); содержимое ветки и `main` совпадает. Ветку можно удалить.
 - `chore/test-infrastructure` — **не слита**: один коммит `d05f6fe` (snapshot-тесты, тесты кэширования, `TrackingNames`, README про SDK, CHANGELOG, `.gitattributes`, CLAUDE.md), отстаёт от `main` на #18; сливается без конфликтов (#18 трогал только `benchmarks/`). PR ещё не открыт или не слит.
+- `chore/benchmarks-baseline` — шаг 0 релиза 1.2.0, от `main` `d6fce68`; не слита. Трогает `CLAUDE.md`, `CHANGELOG.md`, `README*.md` — при слиянии второй из веток с `chore/test-infrastructure` разрешить конфликт: в новом CLAUDE.md убрать `tests/IronMapper.Benchmarks` (проект удалён) и описать smoke-проверку CI.
 - `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map` — уже в `main` (#13, #16, #17, #6). Удалить.
 
 ---
@@ -130,7 +131,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### Порядок PR
 
-0. **Бенчмарки в `main`.** Набор уже в `main` (#18). Осталось: копия `RESULTS.md` как `benchmarks/results/baseline-1.1.3/`; прогон на `net8.0`; в CI — быстрая проверка, что набор собирается и все сценарии отрабатывают одну итерацию (не полный прогон), вместо нынешней задачи `benchmarks`, которая запускает старый `tests/IronMapper.Benchmarks`.
+0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано в `chore/benchmarks-baseline` (не слита): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 7.
 1. **EquatableArray** (п.2.9). Сначала слить `chore/test-infrastructure` (не слит): обновить от `main`, в его CLAUDE.md убрать «on the `feature/benchmarks` branch until merged».
 2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет».
 3. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
@@ -193,8 +194,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 - [x] Ссылки на `github.com/iron-mapper/IronMapper`; `coverage/` вне git; `<Version>` = тег; `CHANGELOG.md`; `LICENSE`; `.gitattributes`.
 - [x] Заголовки CHANGELOG исправлены — в `chore/test-infrastructure`, **не в `main`** (в `main` заголовок `## [Unreleased] → ## [1.1.3] - 2026-10-18`).
-- [ ] CLAUDE.md по фактическому состоянию. Сейчас в `main` неверно: «Emits strongly-typed `Mapper` partial classes» и строка соглашений `{Type}Mapper` / `UserMapper` (генерируются extension-методы в `IronMapper.Generated.GeneratedMappers`); бенчмарки — «IronMapper vs AutoMapper vs manual» в `tests/IronMapper.Benchmarks` (сравнительный набор теперь в `benchmarks/`); в структуре нет `IronMapper.CodeFixes`, `IronMapper.Extensions.DI`, `IronMapper.Integration.Tests`, `benchmarks/`. Решить судьбу старого `tests/IronMapper.Benchmarks`.
-- [ ] Убрать `dotnet-quality: 'preview'` из `ci.yml` (3 места) и `publish.yml`.
+- [ ] CLAUDE.md по фактическому состоянию. Сейчас в `main` неверно: «Emits strongly-typed `Mapper` partial classes» и строка соглашений `{Type}Mapper` / `UserMapper` (генерируются extension-методы в `IronMapper.Generated.GeneratedMappers`); бенчмарки — «IronMapper vs AutoMapper vs manual» в `tests/IronMapper.Benchmarks` (сравнительный набор теперь в `benchmarks/`); в структуре нет `IronMapper.CodeFixes`, `IronMapper.Extensions.DI`, `IronMapper.Integration.Tests`, `benchmarks/`. Полная версия — в `chore/test-infrastructure`. Старый `tests/IronMapper.Benchmarks` удалён (`chore/benchmarks-baseline`), строки о нём в CLAUDE.md `main` заменены на `benchmarks/`.
+- [x] Убрать `dotnet-quality: 'preview'` из `ci.yml` (3 места) и `publish.yml` — `chore/benchmarks-baseline`.
 - [ ] Unlist 1.0.0 и 1.1.0 на nuget.org (на 18.10 обе `listed`).
 
 ---
@@ -362,11 +363,12 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 - [x] Набор `benchmarks/` (Flat, Nested, Collection, CustomConfig, InPlace, DiOverhead, холодный старт, AOT, размеры, время сборки), матрица возможностей и граничных случаев; результаты 1.1.3.
 - [x] В `main` (#18, `f6e55f0`).
-- [ ] Базовая линия `results/baseline-1.1.3/`.
-- [ ] Прогон на `net8.0` и `net10.0`.
-- [ ] Версии конкурентов закреплены точно; в результатах — железо, ОС, версии, хеш коммита.
-- [ ] В CI — только проверка сборки и одной итерации.
-- [ ] Mapster.Tool: измерить или явно оговорить.
+- [x] Базовая линия `results/baseline-1.1.3/` (копия отчётов без перезапуска; в `RESULTS.md` поправлена относительная ссылка на `README.md`) — `chore/benchmarks-baseline`.
+- [x] Набор собирается и проходит одну итерацию на `net8.0` и `net10.0` (мультитаргетинг `src/`, `tests/`; `-f net8.0`, вывод в `results/raw/bdn-net8.0/`). Пробы старта, AOT, размера и время сборки — только `net10.0`.
+- [ ] Полный прогон на `net8.0`: цифры (нужны для 1.5 — кэш конвертеров) и раздел .NET 8 в `RESULTS.md`.
+- [x] Версии конкурентов закреплены точно (`benchmarks/Directory.Packages.props`); в `RESULTS.md` — железо, ОС, SDK и runtime, версии пакетов, хеш коммита.
+- [x] В CI — только проверка сборки, тестов эквивалентности и одной итерации (`--job Dry`), без публикации цифр — `chore/benchmarks-baseline`.
+- [ ] Mapster.Tool: не измеряется, оговорено в `benchmarks/README.md` (Caveats) и `aot.md`; измерить — по желанию.
 
 ### 5.3. Платформы — issue **#10**
 

@@ -24,7 +24,7 @@ IronMapper с помощью Roslyn source generator генерирует код
 | Стиль API | Fluent API на профилях, атрибут `[AutoMap]` | Атрибуты **или** fluent API на профилях |
 | `ProjectTo` для `IQueryable` | Есть | Пока не поддерживается (запланировано, [#9](https://github.com/iron-mapper/IronMapper/issues/9)) |
 
-Цифры производительности и размера пакета пока не публикуются. Бенчмарки есть в `tests/IronMapper.Benchmarks` (ручной маппинг против IronMapper); результаты появятся в документации, когда будут измерены и закоммичены.
+Сравнительные бенчмарки с ручным кодом, Mapperly, Mapster и AutoMapper — в [`benchmarks/`](benchmarks/README.md); результаты версии 1.1.3 (.NET 10, один компьютер) — в [`benchmarks/results/RESULTS.md`](benchmarks/results/RESULTS.md).
 
 ---
 

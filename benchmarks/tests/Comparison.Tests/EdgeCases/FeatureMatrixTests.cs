@@ -135,7 +135,10 @@ public class FeatureMatrixTests
         foreach (var note in Notes)
             sb.AppendLine($"- {note}");
 
-        var path = Path.Combine(FindBenchmarksDirectory(), "results", FileName);
+        // The committed matrix comes from the reference runtime (.NET 10); other runtimes write theirs to raw/.
+        var path = Environment.Version.Major == 10
+            ? Path.Combine(FindBenchmarksDirectory(), "results", FileName)
+            : Path.Combine(FindBenchmarksDirectory(), "results", "raw", $"feature-matrix.net{Environment.Version.Major}.0.md");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // LF only and no BOM, like the script-generated reports (benchmarks/.gitattributes: results/** eol=lf).
         File.WriteAllText(path, sb.ToString().Replace("\r\n", "\n").Replace("\r", ""), new UTF8Encoding(false));

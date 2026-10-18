@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
 
       - name: Restore
         run: dotnet restore
@@ -80,7 +79,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
 
       # Packs IronMapper + IronMapper.Extensions.DI, checks the .nupkg layout
       # (lib/ + analyzers/dotnet/cs, no Microsoft.CodeAnalysis dependency) and builds
@@ -97,10 +95,12 @@ jobs:
           path: artifacts/packages/
 
   benchmarks:
-    name: Benchmarks (ubuntu-latest)
+    # Smoke check of the comparison suite in benchmarks/ against the local sources: it builds, the equivalence
+    # tests pass, and every runtime scenario runs one iteration (BenchmarkDotNet Dry job) on .NET 10 and .NET 8.
+    # No numbers are published: results come only from a full run (benchmarks/scripts/run-all.ps1).
+    # StartupBenchmark (20 cold-start processes) is left to run-startup.ps1.
+    name: Benchmarks smoke (ubuntu-latest)
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: build-and-test
 
     steps:
       - name: Checkout
@@ -109,20 +109,27 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
-          dotnet-quality: 'preview'
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
-      - name: Restore
-        run: dotnet restore
+      - name: Build
+        working-directory: benchmarks
+        run: dotnet build IronMapper.Comparison.slnx -c Release -p:UseLocalIronMapper=true
 
-      - name: Run Benchmarks
-        run: >
-          dotnet run --project tests/IronMapper.Benchmarks/IronMapper.Benchmarks.csproj
-          -c Release
-          -- --filter '*' --exporters json --artifacts BenchmarkDotNet.Artifacts
+      - name: Equivalence tests (net10.0, net8.0)
+        working-directory: benchmarks
+        run: dotnet test IronMapper.Comparison.slnx -c Release --no-build -p:UseLocalIronMapper=true
 
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-results
-          path: BenchmarkDotNet.Artifacts/
+      - name: One iteration of every scenario
+        working-directory: benchmarks
+        shell: bash
+        run: |
+          for tf in net10.0 net8.0; do
+            echo "::group::$tf"
+            dotnet run -c Release -f "$tf" --project src/Comparison.Benchmarks --no-build -p:UseLocalIronMapper=true -- \
+              --filter '*.FlatBenchmark.*' '*.NestedBenchmark.*' '*.CollectionBenchmark.*' \
+                       '*.CustomConfigBenchmark.*' '*.InPlaceBenchmark.*' '*.DiOverheadBenchmark.*' \
+              --job Dry --join --artifacts "$RUNNER_TEMP/bdn-smoke-$tf"
+            echo "::endgroup::"
+          done

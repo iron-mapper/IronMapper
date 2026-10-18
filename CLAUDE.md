@@ -23,10 +23,10 @@ IronMapper/
 ├── tests/
 │   ├── IronMapper.Tests/              # Unit tests for runtime API (xUnit)
 │   ├── IronMapper.Generator.Tests/    # Source Generator tests (xUnit + Roslyn testing APIs)
-│   ├── IronMapper.Benchmarks/         # BenchmarkDotNet perf comparisons
 │   ├── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
 │   ├── IronMapper.PackageConsumer.InternalLib/  # Library for the consumer: internal maps only (not in the .slnx)
 │   └── IronMapper.PackageConsumer.PublicLib/    # Library for the consumer: public maps (not in the .slnx)
+├── benchmarks/                        # Comparison suite vs Mapperly, Mapster, AutoMapper (own .slnx)
 ├── eng/verify-package.ps1            # dotnet pack + .nupkg layout check + consumer build
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings)
 ├── .editorconfig                      # C# code style
@@ -60,9 +60,12 @@ Unit tests for the **runtime API**. References:
 Tests for the **generator itself** using `Microsoft.CodeAnalysis.CSharp` testing utilities.
 Pattern: create an in-memory compilation, run the generator, assert on emitted source / diagnostics.
 
-### `tests/IronMapper.Benchmarks` (net10.0, Exe)
-BenchmarkDotNet benchmarks comparing IronMapper vs AutoMapper vs manual mapping.
-Run only on `main` branch in CI (Release configuration).
+### `benchmarks/` (net10.0 + net8.0)
+Comparison suite: IronMapper (extension methods and `IMapper`) vs Mapperly, Mapster, AutoMapper and hand-written code.
+Own solution `benchmarks/IronMapper.Comparison.slnx`, not part of `IronMapper.slnx`. Uses the published IronMapper
+package unless `-p:UseLocalIronMapper=true`. Results: `benchmarks/results/RESULTS.md` (1.1.3 baseline frozen in
+`benchmarks/results/baseline-1.1.3/`). CI runs only a smoke check (build, equivalence tests, one iteration per
+scenario on net10.0 and net8.0); see `benchmarks/README.md`.
 
 ---
 
@@ -95,8 +98,8 @@ dotnet test --collect:"XPlat Code Coverage"
 # Pack and verify the NuGet packages (layout + consumer project)
 pwsh ./eng/verify-package.ps1
 
-# Run benchmarks (Release only)
-dotnet run --project tests/IronMapper.Benchmarks -c Release
+# Comparison benchmarks (local sources); full run: pwsh benchmarks/scripts/run-all.ps1
+dotnet run -c Release -f net10.0 --project benchmarks/src/Comparison.Benchmarks -p:UseLocalIronMapper=true -- --filter '*.FlatBenchmark.*'
 ```
 
 ### Rule: verify packaging and CI changes on a clean tree
