@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\StartupProbe.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Riok.Mapperly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MappersDir)Shared\SalaryFormat.cs" Link="Linked\SalaryFormat.cs" />
+    <Compile Include="$(MappersDir)Mapperly\ComparisonMapperlyMapper.cs" Link="Linked\ComparisonMapperlyMapper.cs" />
+  </ItemGroup>
+
+</Project>

@@ -32,7 +32,7 @@ public class InPlaceBenchmark
     {
         _source = new TestDataGenerator().CreateUser();
         _destination = new UserDto();
-        _ironMapper = IronMapperDiComparisonMapper.CreateMapper();
+        _ironMapper = IronMapperDiSetup.CreateMapper();
         _mapsterConfig = MapsterSetup.CreateConfig();
         _autoMapper = AutoMapperSetup.CreateMapper();
     }

@@ -33,7 +33,7 @@ public class CustomConfigBenchmark
     public void Setup()
     {
         _source = new TestDataGenerator().CreateEmployee();
-        _ironMapper = IronMapperDiComparisonMapper.CreateMapper();
+        _ironMapper = IronMapperDiSetup.CreateMapper();
         _mapsterConfig = MapsterSetup.CreateConfig();
         _autoMapper = AutoMapperSetup.CreateMapper();
     }

@@ -14,7 +14,11 @@ using IIronMapper = IronMapper.Interfaces.IMapper;
 
 namespace Comparison.Benchmarks;
 
-/// <summary><c>List&lt;OrderEntity&gt;</c> → <c>List&lt;OrderDto&gt;</c>; every order as in <see cref="NestedBenchmark"/>.</summary>
+/// <summary>
+/// <c>List&lt;OrderEntity&gt;</c> → <c>List&lt;OrderDto&gt;</c>; every order as in <see cref="NestedBenchmark"/>.
+/// The <c>ns/item</c> and <c>B/item</c> columns (per order) make the sizes comparable.
+/// </summary>
+[Config(typeof(PerItemConfig))]
 [MemoryDiagnoser]
 [CategoriesColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -27,13 +31,13 @@ public class CollectionBenchmark
     private IMapper _autoMapper = null!;
 
     [Params(10, 1_000, 100_000)]
-    public int Count { get; set; }
+    public int Count { get; set; } // name used by PerItemColumn.CountParameter
 
     [GlobalSetup]
     public void Setup()
     {
         _source = new TestDataGenerator().CreateOrders(Count);
-        _ironMapper = IronMapperDiComparisonMapper.CreateMapper();
+        _ironMapper = IronMapperDiSetup.CreateMapper();
         _mapsterConfig = MapsterSetup.CreateConfig();
         _autoMapper = AutoMapperSetup.CreateMapper();
     }

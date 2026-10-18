@@ -30,7 +30,7 @@ public class FlatBenchmark
     public void Setup()
     {
         _source = new TestDataGenerator().CreateUser();
-        _ironMapper = IronMapperDiComparisonMapper.CreateMapper();
+        _ironMapper = IronMapperDiSetup.CreateMapper();
         _mapsterConfig = MapsterSetup.CreateConfig();
         _autoMapper = AutoMapperSetup.CreateMapper();
     }

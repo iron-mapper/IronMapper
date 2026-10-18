@@ -36,7 +36,7 @@ public class DiOverheadBenchmark
         var data = new TestDataGenerator();
         _user = data.CreateUser();
         _order = data.CreateOrder();
-        _ironMapper = IronMapperDiComparisonMapper.CreateMapper();
+        _ironMapper = IronMapperDiSetup.CreateMapper();
         _autoMapper = AutoMapperSetup.CreateMapperFromServices();
         _mapster = MapsterSetup.CreateMapperFromServices();
     }

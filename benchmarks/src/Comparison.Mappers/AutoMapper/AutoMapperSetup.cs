@@ -1,11 +1,9 @@
 using AutoMapper;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Comparison.Mappers.AutoMapper;
 
-public static class AutoMapperSetup
+public static partial class AutoMapperSetup
 {
     public const string LicenseKeyVariable = "AUTOMAPPER_LICENSE_KEY";
 
@@ -38,17 +36,4 @@ public static class AutoMapperSetup
         }, NullLoggerFactory.Instance);
 
     public static IMapper CreateMapper() => CreateConfiguration().CreateMapper();
-
-    /// <summary>The DI path: <c>AddAutoMapper</c> + <see cref="IMapper"/> resolved from a scope (DiOverheadBenchmark).</summary>
-    public static IMapper CreateMapperFromServices()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
-        services.AddAutoMapper(cfg =>
-        {
-            cfg.LicenseKey = ResolveLicenseKey();
-            cfg.AddProfile<ComparisonAutoMapperProfile>();
-        });
-        return services.BuildServiceProvider().CreateScope().ServiceProvider.GetRequiredService<IMapper>();
-    }
 }
