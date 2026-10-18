@@ -246,18 +246,25 @@ internal static class MappingAnalyzer
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
         INamedTypeSymbol inaccessibleType)
+        => CreateDiagnosticOnlyDescriptor(ImmutableArray.Create(new DiagnosticInfo(
+            DiagnosticDescriptors.InaccessibleMappingType,
+            sourceSymbol.ToDisplayString(),
+            destSymbol.ToDisplayString(),
+            inaccessibleType.ToDisplayString(),
+            SymbolHelpers.ToKeyword(inaccessibleType.DeclaredAccessibility))));
+
+    /// <summary>
+    /// Builds a descriptor that only reports <paramref name="diagnostics"/> and emits no source
+    /// (empty <see cref="MappingDescriptor.SourceTypeName"/>).
+    /// </summary>
+    internal static MappingDescriptor CreateDiagnosticOnlyDescriptor(ImmutableArray<DiagnosticInfo> diagnostics)
         => new(
             sourceTypeName: string.Empty,
             sourceNamespace: null,
             destTypeName: string.Empty,
             destNamespace: null,
             propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
-            diagnostics: ImmutableArray.Create(new DiagnosticInfo(
-                DiagnosticDescriptors.InaccessibleMappingType,
-                sourceSymbol.ToDisplayString(),
-                destSymbol.ToDisplayString(),
-                inaccessibleType.ToDisplayString(),
-                SymbolHelpers.ToKeyword(inaccessibleType.DeclaredAccessibility))),
+            diagnostics: diagnostics,
             hasCustomConverter: false);
 
     // -----------------------------------------------------------------------

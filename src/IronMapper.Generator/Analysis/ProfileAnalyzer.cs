@@ -18,6 +18,11 @@ internal static class ProfileAnalyzer
 {
     private const string MappingProfileFqn = "IronMapper.Configuration.MappingProfile";
 
+    // Canonical parameter names used by the emitted code (see MapperCodeEmitter).
+    private static readonly string[] SourceParameter = { "source" };
+    private static readonly string[] HookParameters = { "source", "destination" };
+    private static readonly string[] TransformerParameter = { "value" };
+
     /// <summary>
     /// Returns true when the syntax node is a class declaration
     /// that might extend MappingProfile (quick filter before semantic check).
@@ -50,6 +55,7 @@ internal static class ProfileAnalyzer
         if (!InheritsFrom(classSymbol, MappingProfileFqn)) return ImmutableArray<MappingDescriptor>.Empty;
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
+        var profileName = classSymbol.ToDisplayString();
 
         // Look for the primary (or any) constructor body.
         foreach (var ctor in classDecl.Members)
@@ -61,14 +67,20 @@ internal static class ProfileAnalyzer
 
             // Pass 1: collect AddTransformer declarations.
             var transformersByType = new Dictionary<string, ValueTransformerDescriptor>();
+            var transformerDiagnostics = new List<DiagnosticInfo>();
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
                 if (statement is not ExpressionStatementSyntax exprStmt) continue;
-                if (TryExtractTransformer(exprStmt.Expression, ctx.SemanticModel, ct, out var t) && t is not null)
+                if (TryExtractTransformer(exprStmt.Expression, ctx.SemanticModel, profileName, transformerDiagnostics, ct, out var t)
+                    && t is not null)
                     transformersByType[t.FullyQualifiedTypeName] = t; // last registration wins per type
             }
             var transformers = ImmutableArray.CreateRange(transformersByType.Values);
+
+            // A transformer that cannot be emitted is an error (IM0011/IM0012); the mappings are still generated.
+            if (transformerDiagnostics.Count > 0)
+                builder.Add(MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(transformerDiagnostics)));
 
             // Pass 2: process CreateMap chains.
             foreach (var statement in ctorDecl.Body.Statements)
@@ -76,7 +88,7 @@ internal static class ProfileAnalyzer
                 ct.ThrowIfCancellationRequested();
                 if (statement is not ExpressionStatementSyntax exprStmt) continue;
 
-                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, ct);
+                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, profileName, ct);
                 builder.AddRange(descriptors);
             }
         }
@@ -113,8 +125,12 @@ internal static class ProfileAnalyzer
         ExpressionSyntax expr,
         SemanticModel model,
         ImmutableArray<ValueTransformerDescriptor> transformers,
+        string profileName,
         CancellationToken ct)
     {
+        // Problems found while rewriting lambdas (IM0011/IM0012); any problem skips the whole chain.
+        var lambdaDiagnostics = new List<DiagnosticInfo>();
+
         // Collect all method calls in the chain from outermost to innermost.
         var calls = new List<InvocationExpressionSyntax>();
         var current = expr;
@@ -155,7 +171,7 @@ internal static class ProfileAnalyzer
             switch (methodName)
             {
                 case "ForMember":
-                    ParseForMember(inv, forMemberConfigs, model, ct);
+                    ParseForMember(inv, forMemberConfigs, model, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "Ignore" when inv.ArgumentList.Arguments.Count == 1:
@@ -166,8 +182,8 @@ internal static class ProfileAnalyzer
                     break;
 
                 case "When" when inv.ArgumentList.Arguments.Count == 1:
-                    whenConditionBody = ExtractLambdaBody(
-                        inv.ArgumentList.Arguments[0].Expression, "source");
+                    whenConditionBody = LambdaBodyRewriter.RewriteBody(
+                        inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "ConvertUsing":
@@ -187,19 +203,19 @@ internal static class ProfileAnalyzer
                     else if (inv.ArgumentList.Arguments.Count == 1)
                     {
                         // ConvertUsing(src => ...) — extract lambda body.
-                        wholeObjectLambdaBody = ExtractLambdaBody(
-                            inv.ArgumentList.Arguments[0].Expression, "source");
+                        wholeObjectLambdaBody = LambdaBodyRewriter.RewriteBody(
+                            inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
                     }
                     break;
 
                 case "BeforeMap" when inv.ArgumentList.Arguments.Count == 1:
-                    beforeMapBody = ExtractTwoParamLambdaBody(
-                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    beforeMapBody = LambdaBodyRewriter.RewriteAsStatements(
+                        inv.ArgumentList.Arguments[0].Expression, model, HookParameters, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "AfterMap" when inv.ArgumentList.Arguments.Count == 1:
-                    afterMapBody = ExtractTwoParamLambdaBody(
-                        inv.ArgumentList.Arguments[0].Expression, "source", "destination");
+                    afterMapBody = LambdaBodyRewriter.RewriteAsStatements(
+                        inv.ArgumentList.Arguments[0].Expression, model, HookParameters, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "IncludeMembers":
@@ -211,6 +227,9 @@ internal static class ProfileAnalyzer
                     break;
             }
         }
+
+        if (lambdaDiagnostics.Count > 0)
+            return new[] { MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(lambdaDiagnostics)) };
 
         var results = new List<MappingDescriptor>();
 
@@ -248,6 +267,8 @@ internal static class ProfileAnalyzer
         InvocationExpressionSyntax inv,
         List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> configs,
         SemanticModel model,
+        string profileName,
+        List<DiagnosticInfo> lambdaDiagnostics,
         CancellationToken ct)
     {
         var args = inv.ArgumentList.Arguments;
@@ -288,7 +309,7 @@ internal static class ProfileAnalyzer
         if (optMethod == "MapFrom" && optBody.ArgumentList.Arguments.Count == 1)
         {
             var mapFromArg = optBody.ArgumentList.Arguments[0].Expression;
-            var body = ExtractLambdaBody(mapFromArg, "source");
+            var body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
             configs.Add((destPropName, body, false, null));
         }
     }
@@ -312,6 +333,8 @@ internal static class ProfileAnalyzer
     private static bool TryExtractTransformer(
         ExpressionSyntax expr,
         SemanticModel model,
+        string profileName,
+        List<DiagnosticInfo> diagnostics,
         CancellationToken ct,
         out ValueTransformerDescriptor? result)
     {
@@ -334,7 +357,8 @@ internal static class ProfileAnalyzer
         var fqn = typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var friendlyName = typeArg.Name; // "String", "Decimal", etc.
 
-        var lambdaBody = ExtractLambdaBody(inv.ArgumentList.Arguments[0].Expression, "value");
+        var lambdaBody = LambdaBodyRewriter.RewriteBody(
+            inv.ArgumentList.Arguments[0].Expression, model, TransformerParameter, profileName, diagnostics, ct);
         if (lambdaBody is null) return false;
 
         result = new ValueTransformerDescriptor(
@@ -526,83 +550,8 @@ internal static class ProfileAnalyzer
     }
 
     // -----------------------------------------------------------------------
-    // Lambda body extraction
+    // Member name extraction
     // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Extracts the body text from a lambda expression and replaces the parameter
-    /// name with <paramref name="replacementParam"/> so the generated code uses
-    /// the canonical variable name (e.g. "source").
-    /// </summary>
-    private static string? ExtractLambdaBody(ExpressionSyntax expr, string replacementParam)
-    {
-        LambdaExpressionSyntax? lambda = expr as SimpleLambdaExpressionSyntax
-                                      ?? (LambdaExpressionSyntax?)(expr as ParenthesizedLambdaExpressionSyntax);
-        if (lambda is null) return null;
-
-        string paramName = lambda switch
-        {
-            SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier.Text,
-            ParenthesizedLambdaExpressionSyntax paren when paren.ParameterList.Parameters.Count > 0
-                => paren.ParameterList.Parameters[0].Identifier.Text,
-            _ => string.Empty
-        };
-
-        var bodyText = lambda.Body.ToString();
-
-        // Replace "paramName." with "replacementParam." and bare "paramName" → rarely needed.
-        if (!string.IsNullOrEmpty(paramName) && paramName != replacementParam)
-        {
-            bodyText = ReplaceIdentifier(bodyText, paramName, replacementParam);
-        }
-
-        return bodyText;
-    }
-
-    /// <summary>
-    /// Extracts the body from a two-parameter lambda such as
-    /// <c>(src, dest) =&gt; dest.Prop = value</c> or
-    /// <c>(src, dest) =&gt; { ... }</c>, renaming both parameters to
-    /// <paramref name="param1Replacement"/> and <paramref name="param2Replacement"/>.
-    /// For expression bodies the result is a single statement (semicolon appended).
-    /// For block bodies the inner statements are returned verbatim (without outer braces).
-    /// Returns <see langword="null"/> when the expression is not a two-parameter lambda.
-    /// </summary>
-    private static string? ExtractTwoParamLambdaBody(
-        ExpressionSyntax expr,
-        string param1Replacement,
-        string param2Replacement)
-    {
-        if (expr is not ParenthesizedLambdaExpressionSyntax lambda) return null;
-        if (lambda.ParameterList.Parameters.Count < 2) return null;
-
-        var param1 = lambda.ParameterList.Parameters[0].Identifier.Text;
-        var param2 = lambda.ParameterList.Parameters[1].Identifier.Text;
-
-        string bodyText;
-        if (lambda.Body is BlockSyntax block)
-        {
-            // Join all statements, trimming leading whitespace from each.
-            var sb = new System.Text.StringBuilder();
-            foreach (var stmt in block.Statements)
-            {
-                sb.AppendLine(stmt.ToString().TrimStart());
-            }
-            bodyText = sb.ToString().TrimEnd();
-        }
-        else
-        {
-            // Expression body — turn into a statement by appending a semicolon.
-            bodyText = lambda.Body.ToString() + ";";
-        }
-
-        if (!string.IsNullOrEmpty(param1) && param1 != param1Replacement)
-            bodyText = ReplaceIdentifier(bodyText, param1, param1Replacement);
-        if (!string.IsNullOrEmpty(param2) && param2 != param2Replacement)
-            bodyText = ReplaceIdentifier(bodyText, param2, param2Replacement);
-
-        return bodyText;
-    }
 
     /// <summary>
     /// Extracts the member name from a lambda like <c>d =&gt; d.FullName</c>.
@@ -657,37 +606,4 @@ internal static class ProfileAnalyzer
         }
         return false;
     }
-
-    /// <summary>
-    /// Simple word-boundary replacement: replaces <paramref name="oldId"/> with
-    /// <paramref name="newId"/> only when it appears as a complete identifier
-    /// (not as part of a longer identifier), e.g. replaces "src" but not "srcProp".
-    /// </summary>
-    private static string ReplaceIdentifier(string text, string oldId, string newId)
-    {
-        var sb = new System.Text.StringBuilder(text.Length);
-        int i = 0;
-        while (i < text.Length)
-        {
-            // Check if we're at the start of an occurrence of oldId.
-            if (i + oldId.Length <= text.Length
-                && text.Substring(i, oldId.Length) == oldId)
-            {
-                bool prefixOk = i == 0 || !IsIdentChar(text[i - 1]);
-                bool suffixOk = i + oldId.Length == text.Length || !IsIdentChar(text[i + oldId.Length]);
-
-                if (prefixOk && suffixOk)
-                {
-                    sb.Append(newId);
-                    i += oldId.Length;
-                    continue;
-                }
-            }
-            sb.Append(text[i++]);
-        }
-        return sb.ToString();
-    }
-
-    private static bool IsIdentChar(char c)
-        => char.IsLetterOrDigit(c) || c == '_';
 }

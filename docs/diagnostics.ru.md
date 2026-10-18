@@ -2,7 +2,7 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0010`. Они объявлены в
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0012`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Текущее состояние** (`main`, после 1.1.1):
@@ -19,6 +19,8 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0008 | Error | Destination — абстрактный тип или интерфейс | Да — атрибуты и профили |
 | IM0009 | Warning | Параметр конструктора record не сопоставлен | Да — только `[MapTo]`/`[MapFrom]` |
 | IM0010 | Error | Тип маппинга недоступен из сгенерированного кода | Да — атрибуты и профили |
+| IM0011 | Error | Лямбда профиля использует член, недоступный сгенерированному коду | Да — профили |
+| IM0012 | Error | Лямбда профиля захватывает состояние | Да — профили |
 
 Сейчас все диагностики выдаются **без указания места в исходном коде**: IDE показывает их в списке ошибок,
 но не указывает строку в вашем коде.
@@ -170,3 +172,36 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Как исправить:** сделайте тип (и все типы, которые его содержат) `public` или `internal`. Internal-типы
 поддерживаются; сгенерированные методы тогда `internal` (см. [Доступность сгенерированных методов](configuration.ru.md#доступность-сгенерированных-методов)).
+
+---
+
+## IM0011 — Лямбда профиля использует член, недоступный сгенерированному коду
+
+**Уровень:** Error
+
+**Сообщение:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
+
+**Причина:** лямбда в `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` или `AddTransformer` ссылается на
+член или тип с доступом `private`, `protected` или `private protected` (или на член такого типа) — обычно это
+`private static` метод или константа профиля. Лямбды переписываются в сгенерированный класс, а не вызываются у профиля,
+поэтому такие члены там не видны.
+
+**Как исправить:** сделайте член (или содержащий его тип) `internal`. См. [Лямбды в профилях](configuration.ru.md#лямбды-в-профилях).
+
+Этот маппинг не генерируется (для `AddTransformer` отключается преобразователь); остальные генерируются.
+
+---
+
+## IM0012 — Лямбда профиля захватывает состояние
+
+**Уровень:** Error
+
+**Сообщение:** `A lambda in MappingProfile '{0}' uses {1} '{2}'. Profile lambdas are copied into generated code that runs without a profile instance, so they can only use their own parameters, static members and constants. Make it static or const, or compute the value from the source object. The mapping was not generated.`
+
+**Причина:** лямбда использует поле, свойство или метод экземпляра профиля, `this`/`base`, либо локальную переменную,
+параметр или локальную функцию конструктора. Ничего из этого нет, когда выполняется сгенерированный код.
+
+**Как исправить:** сделайте член `static` (или `const`) либо вычисляйте значение из source.
+См. [Лямбды в профилях](configuration.ru.md#лямбды-в-профилях).
+
+Этот маппинг не генерируется (для `AddTransformer` отключается преобразователь); остальные генерируются.

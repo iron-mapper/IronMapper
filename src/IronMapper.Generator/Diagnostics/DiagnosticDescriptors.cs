@@ -126,4 +126,28 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Generated mapping methods live in the top-level class IronMapper.Generated.GeneratedMappers. Private, protected and private protected nested types are not visible there. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0011 — A profile lambda references a member or type that the generated class cannot access.
+    /// </summary>
+    public static readonly DiagnosticDescriptor LambdaMemberNotAccessible = new(
+        id: "IM0011",
+        title: "Profile lambda uses a member that generated code cannot access",
+        messageFormat: "A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "MapFrom, When, ConvertUsing, BeforeMap/AfterMap and AddTransformer lambdas are emitted into the generated class, not invoked on the profile. Private and protected members of the profile (or of any other type) are not visible there; internal members are.");
+
+    /// <summary>
+    /// IM0012 — A profile lambda captures profile instance state, a local variable or a constructor parameter.
+    /// </summary>
+    public static readonly DiagnosticDescriptor LambdaCapturesState = new(
+        id: "IM0012",
+        title: "Profile lambda captures state",
+        messageFormat: "A lambda in MappingProfile '{0}' uses {1} '{2}'. Profile lambdas are copied into generated code that runs without a profile instance, so they can only use their own parameters, static members and constants. Make it static or const, or compute the value from the source object. The mapping was not generated.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Instance fields, properties and methods of the profile, 'this', local variables and parameters of the constructor do not exist in the generated code.");
 }

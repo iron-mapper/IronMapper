@@ -15,8 +15,8 @@ Address = source.Address,   // error CS0029: cannot convert Address to AddressDt
 The build then fails inside the generated file (no IronMapper diagnostic is reported, see
 [IM0002](diagnostics.md#im0002--incompatible-property-types)).
 
-**Workaround (profile):** map the nested property explicitly with `MapFrom`. The lambda body is copied into
-the generated code, where the other generated `MapTo*` methods are in scope:
+**Workaround (profile):** map the nested property explicitly with `MapFrom`. The lambda is emitted into the
+generated class, where the other generated `MapTo*` methods are in scope:
 
 ```csharp
 public class CustomerProfile : MappingProfile

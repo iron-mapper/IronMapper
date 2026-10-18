@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0010`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0012`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, after 1.1.1):
@@ -19,6 +19,8 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0010`. 
 | IM0008 | Error | Abstract or interface destination type | Yes — attributes and profiles |
 | IM0009 | Warning | Record constructor parameter not mapped | Yes — `[MapTo]`/`[MapFrom]` only |
 | IM0010 | Error | Mapping type is not accessible from generated code | Yes — attributes and profiles |
+| IM0011 | Error | Profile lambda uses a member that generated code cannot access | Yes — profiles |
+| IM0012 | Error | Profile lambda captures state | Yes — profiles |
 
 All diagnostics are currently reported **without a source location**, so the IDE lists them in the
 Error List but does not point to a line in your code.
@@ -170,3 +172,36 @@ mappings in the project are still generated.
 
 **Fix:** make the type (and every type that contains it) `public` or `internal`. Internal types are supported; the
 generated methods are then `internal` (see [Generated method accessibility](configuration.md#generated-method-accessibility)).
+
+---
+
+## IM0011 — Profile lambda uses a member that generated code cannot access
+
+**Severity:** Error
+
+**Message:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
+
+**Cause:** a lambda in `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` or `AddTransformer` references a
+`private`, `protected` or `private protected` member or type (or a member of such a type) — typically a
+`private static` helper method or constant of the profile. Lambdas are rewritten into the generated class, not called
+on the profile, so such members are not visible there.
+
+**Fix:** make the member (or the type that contains it) `internal`. See [Profile lambdas](configuration.md#profile-lambdas).
+
+The affected mapping is not generated (for `AddTransformer`, the transformer is dropped); other mappings are.
+
+---
+
+## IM0012 — Profile lambda captures state
+
+**Severity:** Error
+
+**Message:** `A lambda in MappingProfile '{0}' uses {1} '{2}'. Profile lambdas are copied into generated code that runs without a profile instance, so they can only use their own parameters, static members and constants. Make it static or const, or compute the value from the source object. The mapping was not generated.`
+
+**Cause:** the lambda uses an instance field, property or method of the profile, `this`/`base`, or a local variable,
+parameter or local function of the constructor. None of these exist when the generated code runs.
+
+**Fix:** make the member `static` (or `const`), or compute the value from the source object.
+See [Profile lambdas](configuration.md#profile-lambdas).
+
+The affected mapping is not generated (for `AddTransformer`, the transformer is dropped); other mappings are.

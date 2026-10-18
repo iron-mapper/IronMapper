@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-18
+
 ### Fixed
 
 - **Mappings of `internal` types no longer fail with CS0050/CS0051.** Generated methods (`MapToX`, the in-place
@@ -11,12 +13,26 @@
 - Generated code uses fully qualified type names, so public types nested in other types and generic types
   (e.g. `Box<Payload>`) as source/destination now compile (previously CS0234/CS0305).
 - `IMapper` (`IronMapper.Extensions.DI`) also finds `internal` generated methods.
+- **Profile lambdas no longer fail with CS0103/CS1061 in the generated file.** Lambdas in `MapFrom`, `When`,
+  `ConvertUsing`, `BeforeMap`/`AfterMap` and `AddTransformer` were copied as text, so static helpers of the profile,
+  types and extension methods from the profile's `using` directives and unqualified static members (`Math.Round`)
+  were not found. They are now rewritten through the semantic model: fully qualified names, extension methods as
+  static calls, and parameters renamed by symbol (previously `s => s.s + "s"` also renamed the member and the
+  string literal).
 
 ### Added
 
 - Diagnostic `IM0010` (error): a mapping whose source or destination is (or is nested in, or has a type argument that is)
   a `private`/`protected`/`private protected` type is not generated, and the error names the inaccessible type.
   Other mappings are still generated.
+- Diagnostic `IM0011` (error): a profile lambda uses a `private`/`protected` member or type; make it `internal`.
+- Diagnostic `IM0012` (error): a profile lambda uses profile instance state, `this`, or a local variable/parameter
+  of the constructor. In both cases only the affected mapping is skipped.
+
+### Build
+
+- `eng/verify-package.ps1` resolves a relative `-PackageDir` against the PowerShell location instead of the .NET
+  process directory (previously, a console started in `C:\WINDOWS\system32` tried to write packages there).
 
 ## 1.1.1
 

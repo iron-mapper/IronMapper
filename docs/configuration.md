@@ -139,7 +139,7 @@ public class OrderProfile : MappingProfile
 
 ### `ForMember(dest => dest.Prop, opt => opt.MapFrom(...))`
 
-Customises how a specific destination property is populated. The lambda body is copied into the generated code as text (with the parameter renamed to `source`), so it may use the lambda parameter and accessible types and members, but not local variables or fields of the profile.
+Customises how a specific destination property is populated. The lambda is rewritten into the generated code with fully qualified names; see [Profile lambdas](#profile-lambdas) for what it may contain.
 
 ```csharp
 CreateMap<Employee, EmployeeDto>()
@@ -205,6 +205,47 @@ Adds a guard: the mapping only executes when the predicate is true; otherwise `d
 CreateMap<UserEntity, UserDto>()
     .When(src => src.IsActive);
 ```
+
+---
+
+## Profile lambdas
+
+Applies to every lambda in a `MappingProfile` constructor: `MapFrom`, `When`, `ConvertUsing(src => ...)`,
+`BeforeMap`/`AfterMap` and `AddTransformer`.
+
+The generator does not call these lambdas at runtime. It rewrites their code into the generated class
+`IronMapper.Generated.GeneratedMappers` using the semantic model:
+
+- lambda parameters are renamed to `source` / `destination` / `value` by symbol, so string literals and member names
+  that happen to match the parameter name are left alone (`s => s.s + "s"` becomes `source.s + "s"`);
+- namespaces, types, static members, constants and enum values get fully qualified names (`global::...`), so the
+  `using` directives of the profile file are not needed in the generated file;
+- extension method calls become static calls on their declaring class
+  (`s.Title.ToSlug()` → `global::App.Text.SlugExtensions.ToSlug(source.Title)`).
+
+**Can be used:** the lambda's own parameters; static methods, properties, fields and constants of any type the
+generated code can access, including `public` and `internal` static members of the profile itself; enum values;
+extension methods; locals and nested lambdas declared inside the lambda; `nameof(...)`.
+
+**Cannot be used:**
+
+| Reference | Diagnostic | Why / fix |
+|---|---|---|
+| `private` or `protected` members or types, e.g. a `private static` helper of the profile | [`IM0011`](diagnostics.md#im0011--profile-lambda-uses-a-member-that-generated-code-cannot-access) | The code runs in `GeneratedMappers`, a different class, where private and protected members are not visible. Make the member `internal`: internal members are visible to all code in the same assembly, including the generated class. |
+| Instance members of the profile, `this`, `base` | [`IM0012`](diagnostics.md#im0012--profile-lambda-captures-state) | There is no profile instance when the mapping runs. Make the member `static` (or `const`). |
+| Local variables, parameters and local functions of the constructor | [`IM0012`](diagnostics.md#im0012--profile-lambda-captures-state) | They do not exist in the generated code. Use a constant or a static member, or compute the value from the source. |
+
+If a lambda has such a problem, that mapping (and its `ReverseMap`) is not generated and the error names the member
+and the profile; the other mappings are still generated. A problem in an `AddTransformer` lambda drops that
+transformer and reports the error.
+
+Notes:
+- `MapFrom` takes an expression tree (`Expression<Func<...>>`), so C# itself does not allow `?.`, block bodies and some
+  other constructs there.
+- Extension methods called after `?.` (possible in `When`, hooks and transformers) are emitted as written. They compile
+  only if their namespace is imported for the whole project, for example with `global using`.
+- The lambdas are not invoked as delegates on purpose: that would require creating the profile at runtime via
+  reflection, and a delegate call cannot be translated to SQL, which would rule out a future `ProjectTo`.
 
 ---
 
