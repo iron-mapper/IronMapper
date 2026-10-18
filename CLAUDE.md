@@ -59,6 +59,11 @@ Unit tests for the **runtime API**. References:
 ### `tests/IronMapper.Generator.Tests` (net10.0)
 Tests for the **generator itself** using `Microsoft.CodeAnalysis.CSharp` testing utilities.
 Pattern: create an in-memory compilation, run the generator, assert on emitted source / diagnostics.
+Prefer tests that compile and run the generated code (`GeneratorTestHelper.RunGeneratorCompileAndRun`, `CompileProject`)
+over assertions on the generated text. Also contains:
+- `GeneratedCodeSnapshotTests` — snapshots of the generated code (Verify.SourceGenerators) in `Snapshots/` (see below);
+- `GeneratorCachingTests` — incremental caching (`trackIncrementalGeneratorSteps`; step names in
+  `src/IronMapper.Generator/TrackingNames.cs`).
 
 ### `tests/IronMapper.Benchmarks` (net10.0, Exe)
 BenchmarkDotNet benchmarks comparing IronMapper vs AutoMapper vs manual mapping.
@@ -118,6 +123,29 @@ dotnet build IronMapper.slnx -c Release
 dotnet test IronMapper.slnx
 pwsh ./eng/verify-package.ps1 -PackageDir ./artifacts/packages
 ```
+
+### Snapshot tests of the generated code
+
+`tests/IronMapper.Generator.Tests/GeneratedCodeSnapshotTests.cs` verifies the generated files and diagnostics of
+typical scenarios against `tests/IronMapper.Generator.Tests/Snapshots/*.verified.*` (committed, LF line endings via
+`.gitattributes`). `*.received.*` is the output of a failed run and is in `.gitignore`.
+
+After an **intended** change of the generated code:
+
+```bash
+dotnet test tests/IronMapper.Generator.Tests --filter "FullyQualifiedName~GeneratedCodeSnapshotTests"
+# review every Snapshots/*.received.* (diff against the .verified.* file), then accept them:
+cd tests/IronMapper.Generator.Tests/Snapshots
+for f in *.received.*; do mv "$f" "${f/.received./.verified.}"; done
+```
+
+(`DiffEngine_Disabled=true` stops Verify from opening a diff tool.) A new scenario creates `*.received.*` on the first
+run and fails until accepted. Never accept snapshots without reading the diff.
+
+**A changed `*.verified.cs` in a PR is a reason to check performance:** run the comparison benchmarks
+(`benchmarks/`, `dotnet run -c Release -p:UseLocalIronMapper=true`; on the `feature/benchmarks` branch until merged) and put before/after numbers in the PR
+description. The generated code must stay no worse than a hand-written mapping (no LINQ or delegates in hot paths,
+no extra allocations).
 
 ---
 

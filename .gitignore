@@ -78,3 +78,6 @@ appsettings.Development.json
 
 # files
 IRONMAPPER_PLAN.md
+
+# Verify snapshot test output (accepted snapshots are *.verified.*)
+*.received.*

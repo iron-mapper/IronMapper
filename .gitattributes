@@ -1,4 +1,10 @@
 * text=auto
 *.cs text eol=crlf
 *.ps1 text eol=crlf
+*.csproj text eol=crlf
+*.props text eol=crlf
+*.md text eol=crlf
 *.sh text eol=lf
+# Verify snapshots: written with LF by Verify, compared as written.
+*.verified.cs text eol=lf
+*.verified.txt text eol=lf

@@ -2,7 +2,20 @@
 
 ## [Unreleased]
 
-## [Unreleased] → ## [1.1.3] - 2026-10-18
+### Documentation
+
+- README: minimum .NET SDK for the source generator (8.0.400+, Roslyn 4.11) and what happens on an older SDK
+  (`CS9057`, the generator does not run); Known limitations list the property type conversions that currently fail or
+  warn inside the generated file. `IMapper` is described as matching methods by signature (true since 1.1.3).
+
+### Build
+
+- Snapshot tests of the generated code (Verify.SourceGenerators, `tests/IronMapper.Generator.Tests/Snapshots`) and
+  incremental caching tests of the generator (`trackIncrementalGeneratorSteps`). Generator pipeline steps have
+  tracking names (no behavior change).
+- `.gitattributes`: CRLF for `*.cs`, `*.ps1`, `*.csproj`, `*.props`, `*.md`; LF for `*.sh` and Verify snapshots.
+
+## [1.1.3] - 2026-10-18
 
 ### Fixed
 

@@ -172,14 +172,17 @@ internal static class GeneratorTestHelper
     private static readonly CSharpParseOptions ParseOptions =
         CSharpParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose);
 
-    private static CSharpCompilation CreateCompilation(string source)
+    private static CSharpCompilation CreateCompilation(string source) => CreateCompilation(new[] { source });
+
+    /// <summary>Creates the test compilation (one syntax tree per source, generator not run).</summary>
+    public static CSharpCompilation CreateCompilation(IEnumerable<string> sources)
     {
         var references = GetFrameworkReferences()
             .Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location));
 
         return CSharpCompilation.Create(
             assemblyName: "TestAssembly",
-            syntaxTrees: new[] { CSharpSyntaxTree.ParseText(source, ParseOptions) },
+            syntaxTrees: sources.Select(s => CSharpSyntaxTree.ParseText(s, ParseOptions)),
             references: references,
             options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                 .WithNullableContextOptions(NullableContextOptions.Enable));
