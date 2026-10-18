@@ -59,6 +59,42 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(fromProfiles, static (spc, descriptor) =>
             EmitDescriptor(spc, descriptor));
+
+        // Accessibility of GeneratedMappers over all mappings of the assembly: public if any generated method is
+        // public, internal otherwise (an internal class is invisible to referencing assemblies). The final Select
+        // yields a string, so the declaration is re-emitted only when the accessibility actually changes.
+        var classAccessibility = fromMapTo.Select(static (d, _) => GetEmittedAccessibility(d)).Collect()
+            .Combine(fromMapFrom.Select(static (d, _) => GetEmittedAccessibility(d)).Collect())
+            .Combine(fromProfiles.Select(static (d, _) => GetEmittedAccessibility(d)).Collect())
+            .Select(static (all, _) => GetClassAccessibility(all.Left.Left, all.Left.Right, all.Right));
+
+        context.RegisterSourceOutput(classAccessibility, static (spc, accessibility) =>
+        {
+            // No generated mappings: there is no class to declare.
+            if (accessibility is null) return;
+
+            var (hintName, source) = MapperCodeEmitter.EmitClassDeclaration(accessibility);
+            spc.AddSource(hintName, source);
+        });
+    }
+
+    /// <summary>Accessibility of the methods emitted for <paramref name="descriptor"/>; null for diagnostic-only sentinels.</summary>
+    private static string? GetEmittedAccessibility(MappingDescriptor descriptor)
+        => descriptor.SourceTypeName.Length == 0 ? null : descriptor.MethodAccessibility;
+
+    private static string? GetClassAccessibility(params ImmutableArray<string?>[] groups)
+    {
+        string? result = null;
+        foreach (var group in groups)
+        {
+            foreach (var accessibility in group)
+            {
+                if (accessibility == "public") return "public";
+                if (accessibility is not null) result = "internal";
+            }
+        }
+
+        return result;
     }
 
     /// <summary>

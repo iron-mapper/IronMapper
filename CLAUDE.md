@@ -24,7 +24,9 @@ IronMapper/
 │   ├── IronMapper.Tests/              # Unit tests for runtime API (xUnit)
 │   ├── IronMapper.Generator.Tests/    # Source Generator tests (xUnit + Roslyn testing APIs)
 │   ├── IronMapper.Benchmarks/         # BenchmarkDotNet perf comparisons
-│   └── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
+│   ├── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
+│   ├── IronMapper.PackageConsumer.InternalLib/  # Library for the consumer: internal maps only (not in the .slnx)
+│   └── IronMapper.PackageConsumer.PublicLib/    # Library for the consumer: public maps (not in the .slnx)
 ├── eng/verify-package.ps1            # dotnet pack + .nupkg layout check + consumer build
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings)
 ├── .editorconfig                      # C# code style

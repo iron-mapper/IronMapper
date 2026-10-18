@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`IronMapper.Generated.GeneratedMappers` is `internal` when all mappings of the project are internal.** It was
+  always `public`, so a project with only internal mappings still exposed the class to every project that referenced
+  it, and naming `GeneratedMappers` there reported `CS0436`. The accessibility is now computed over all mappings of
+  the assembly and declared once, in `GeneratedMappers.g.cs`; it is `public` if at least one generated method is.
+- A project that maps a type pair already exposed by a referenced project no longer fails with `CS0121` inside its
+  own generated `MapToXList`/`MapToXArray` methods: they call the method of their own class.
+- The class name stays `IronMapper.Generated.GeneratedMappers` in every assembly, so code that compiles on 1.1.2
+  (`using IronMapper.Generated;` + `source.MapToX()`, and `GeneratedMappers.MapToX(source)` within one project) keeps
+  working. See [Multi-project solutions](docs/configuration.md#multi-project-solutions) for the remaining limitations.
+
+### Build
+
+- `tests/IronMapper.PackageConsumer` references two libraries that also use the packed package
+  (`IronMapper.PackageConsumer.InternalLib`, only internal mappings; `IronMapper.PackageConsumer.PublicLib`, public
+  mappings) and builds with `TreatWarningsAsErrors`.
+
 ## [1.1.2] - 2026-10-18
 
 ### Fixed

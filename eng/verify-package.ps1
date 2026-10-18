@@ -8,7 +8,9 @@
        the source generator, and Roslyn (Microsoft.CodeAnalysis.*) is not a package dependency.
     3. Restores tests/IronMapper.PackageConsumer from the local feed only (isolated package cache),
        builds it and runs it. The consumer calls generated MapTo* methods, so the build fails
-       if the source generator is not loaded from the package.
+       if the source generator is not loaded from the package. It references two libraries that also
+       use the package (tests/IronMapper.PackageConsumer.InternalLib, .PublicLib), which are restored
+       and built with it.
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
