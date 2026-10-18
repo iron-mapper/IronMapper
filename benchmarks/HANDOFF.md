@@ -56,6 +56,10 @@
   Manual не менялся. Расхождение «Mapperly на 20 % быстрее Manual» в CustomConfig: один неудачный процесс
   (82 нс против ~55 нс) + ~6 % от Dynamic PGO (с `DOTNET_TieredPGO=0` разница исчезает). Отсюда решение
   `launchCount = 3` для итоговых замеров (записано в §7 спецификации и в README).
+- **Уточнение после полного прогона (2026-10-18):** в Nested Mapperly был стабильно быстрее Manual (166 против
+  189 нс, ×0,88). По `DisassemblyDiagnoser`: JIT не инлайнил `Manual.MapLine` (вызов на каждую строку) и конструктор
+  `AddressDto` из-за вложенных инициализаторов (`src.Product.X`, `src.Address.X`). Manual переписан «по методу на тип»
+  (`MapAddress`, `MapProduct`), эквивалентность сохранена (128 тестов), Nested/Collection/DiOverhead перемерены.
 
 ---
 

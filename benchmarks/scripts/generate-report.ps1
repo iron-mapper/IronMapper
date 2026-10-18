@@ -6,7 +6,8 @@
 .DESCRIPTION
     Sections:
       1. Environment: machine, OS, .NET SDK/runtime, BenchmarkDotNet, versions of all packages
-         (Directory.Packages.props), date, commit, run mode (results/raw/run-info.json from run-all.ps1).
+         (Directory.Packages.props), date, commit, run mode (results/raw/run-info.json from run-all.ps1) and the
+         scenarios measured again after the full run (measurement files written after its end).
       2. One-page summary: one row per library.
       3. Charts (Mermaid xychart-beta): Collection by size, cold start.
       4. Full BenchmarkDotNet tables of every runtime scenario (results/raw/bdn/results/*-report-github.md).
@@ -129,6 +130,38 @@ $startupAot = Import-CsvIfExists (Get-StartupCsvPath 'Aot')
 $buildTime = Import-CsvIfExists (Join-Path (Get-ResultsRawDir) 'build-time.csv')
 $runInfo = if (Test-Path (Get-RunInfoPath)) { Get-Content (Get-RunInfoPath) -Raw | ConvertFrom-Json } else { $null }
 
+# Scenarios measured again after run-all.ps1 finished (e.g. a direct `dotnet run` of one BenchmarkDotNet class or
+# run-startup.ps1): every measurement file written after the end of the full run. Name, Time (UTC, newest file).
+# A scenario with several files lists the re-measured parts unless all of them were.
+function Get-RemeasuredInputs($info) {
+    $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal
+    $started = [datetime]::ParseExact($info.Started, "yyyy-MM-dd HH:mm 'UTC'", [cultureinfo]::InvariantCulture, $styles)
+    # Started is truncated to the minute; the margin keeps files of the last step inside the run.
+    $runEnd = $started.AddSeconds([double] $info.TotalSeconds + 120)
+    $inputs = [ordered]@{}
+    foreach ($s in $scenarios.Keys) { $inputs[$s] = [ordered]@{ $s = Join-Path $bdnDir "Comparison.Benchmarks.${s}Benchmark-report-full.json" } }
+    $inputs['Startup'] = [ordered]@{
+        'JIT'            = Get-StartupCsvPath 'Jit'
+        'NativeAOT'      = Get-StartupCsvPath 'Aot'
+        'BDN cold start' = Join-Path $bdnDir 'Comparison.Benchmarks.StartupBenchmark-report-full.json'
+    }
+    $inputs['BuildTime'] = [ordered]@{ BuildTime = Join-Path (Get-ResultsRawDir) 'build-time.csv' }
+
+    $found = foreach ($name in $inputs.Keys) {
+        $parts = $inputs[$name]
+        $newer = @(foreach ($part in $parts.Keys) {
+            $path = $parts[$part]
+            if (-not (Test-Path $path)) { continue }
+            $time = (Get-Item $path).LastWriteTimeUtc
+            if ($time -gt $runEnd) { [pscustomobject]@{ Part = $part; Time = $time } }
+        })
+        if (-not $newer.Count) { continue }
+        $label = if ($newer.Count -eq $parts.Count) { $name } else { "$name ($(($newer.Part) -join ', '))" }
+        [pscustomobject]@{ Name = $label; Time = ($newer | Sort-Object Time -Descending | Select-Object -First 1).Time }
+    }
+    $found | Sort-Object Time
+}
+
 $jitBaseline = $startupJit | Where-Object { $_.Probe -eq 'Baseline' -and $_.Status -eq 'ok' } | Select-Object -First 1
 $aotBaseline = $startupAot | Where-Object { $_.Probe -eq 'Baseline' -and $_.Status -eq 'ok' } | Select-Object -First 1
 
@@ -175,7 +208,12 @@ Add "| Report generated | $(Get-UtcStamp) |"
 Add "| Commit | $commitText |"
 if ($runInfo) {
     $steps = ($runInfo.Steps | ForEach-Object { "$($_.Name) $([timespan]::FromSeconds([double] $_.Seconds).ToString('h\:mm\:ss'))" }) -join ' · '
-    Add "| Run | $($runInfo.Mode), started $($runInfo.Started), total $([timespan]::FromSeconds([double] $runInfo.TotalSeconds).ToString('h\:mm\:ss')) ($steps) |"
+    $remeasured = @(Get-RemeasuredInputs $runInfo)
+    $remeasuredText = if ($remeasured.Count) {
+        '; re-measured separately after it (time the measurement finished): ' +
+            (($remeasured | ForEach-Object { "$($_.Name) $($_.Time.ToString('yyyy-MM-dd HH:mm', [cultureinfo]::InvariantCulture)) UTC" }) -join ' · ')
+    } else { '' }
+    Add "| Run | $($runInfo.Mode), started $($runInfo.Started), total $([timespan]::FromSeconds([double] $runInfo.TotalSeconds).ToString('h\:mm\:ss')) ($steps)$remeasuredText |"
 }
 else { Add '| Run | results/raw/run-info.json not found: the scripts were run one by one, not through `run-all.ps1` |' }
 Add

@@ -83,31 +83,37 @@ public static class ManualMappings
         FullName = src.FirstName + " " + src.LastName,
     };
 
+    // One small method per type: nested initializers (src.Address.X, src.Product.X) made MapLine too large
+    // for the JIT inliner, so it stayed a call per line (see README, "Baseline Manual").
     private static CustomerDto MapCustomer(CustomerEntity src) => new()
     {
         Id = src.Id,
         Name = src.Name,
         Email = src.Email,
-        Address = new AddressDto
-        {
-            Street = src.Address.Street,
-            City = src.Address.City,
-            PostalCode = src.Address.PostalCode,
-            Country = src.Address.Country,
-        },
+        Address = MapAddress(src.Address),
+    };
+
+    private static AddressDto MapAddress(AddressEntity src) => new()
+    {
+        Street = src.Street,
+        City = src.City,
+        PostalCode = src.PostalCode,
+        Country = src.Country,
     };
 
     private static OrderLineDto MapLine(OrderLineEntity src) => new()
     {
         Id = src.Id,
-        Product = new ProductDto
-        {
-            Id = src.Product.Id,
-            Sku = src.Product.Sku,
-            Name = src.Product.Name,
-            Price = src.Product.Price,
-        },
+        Product = MapProduct(src.Product),
         Quantity = src.Quantity,
         UnitPrice = src.UnitPrice,
+    };
+
+    private static ProductDto MapProduct(ProductEntity src) => new()
+    {
+        Id = src.Id,
+        Sku = src.Sku,
+        Name = src.Name,
+        Price = src.Price,
     };
 }
