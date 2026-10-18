@@ -53,7 +53,8 @@ UserDto[] arr = entities.MapToUserDtoArray();
 ### Nested collection properties
 
 When a source property is a collection and the destination property is a collection with a **different**
-element type, the generator calls `MapTo{DestElementType}()` for every element:
+element type, the generator calls `MapTo{DestElementType}()` (or its qualified name, see
+[Method names and collisions](configuration.md#method-names-and-collisions)) for every element:
 
 ```csharp
 [MapTo(typeof(BlogDto))]
@@ -128,8 +129,9 @@ The in-place overload only assigns the mapped properties. It:
 - The generated extension methods (`source.MapToDto()`) are plain compiled C# with no reflection.
 - `IMapper` from `IronMapper.Extensions.DI` (`RuntimeMapper`) uses reflection. On the first call for a
   `(TSource, TDest)` pair it scans the loaded assemblies (skipping names that start with `System.` or
-  `Microsoft.`) for `IronMapper.Generated.GeneratedMappers` and looks up `MapTo{TDest.Name}` with the exact
-  source type; the `MethodInfo` is cached. **Every call** is then made through `MethodInfo.Invoke`.
+  `Microsoft.`) for `IronMapper.Generated.GeneratedMappers` and looks up a `MapTo*` method by signature (exact
+  source type as the parameter, `TDest` as the return type), so qualified names (`IM0013`) are found too; the
+  `MethodInfo` is cached. **Every call** is then made through `MethodInfo.Invoke`.
 - `IMapper.Map<TDest>(object)` uses the runtime type of the source; a derived source type does not match a
   mapping declared for its base type.
 - `IMapper.Map<List<TDto>>(list)` is not supported and throws `MappingException`

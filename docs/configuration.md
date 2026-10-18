@@ -23,6 +23,66 @@ methods. Code in other assemblies can use an internal mapping only through `[Int
 
 ---
 
+## Method names and collisions
+
+Every mapping generates `MapTo{Name}` (new object), the in-place overload `MapTo{Name}(destination)`,
+`MapTo{Name}List` and `MapTo{Name}Array`, where `{Name}` is the **simple name** of the destination type. Mappings to
+different destination types from different source types are overloads and keep these names even when the simple names
+are equal (`Shop.Item → Shop.ItemDto` and `Stock.Item → Stock.ItemDto` both use `MapToItemDto`).
+
+### Same type pair defined twice
+
+A type pair is generated **once**, and warning [`IM0007`](diagnostics.md#im0007--duplicate-mapping-definition)
+lists all definitions. The definition that is generated:
+
+1. `CreateMap` in a `MappingProfile`;
+2. `ReverseMap()` in a profile;
+3. `[MapTo]`;
+4. `[MapFrom]`.
+
+Profiles take precedence over attributes because a profile is the explicit configuration (`ForMember`, hooks, `When`),
+as the IM0007 message has always stated; an explicit `CreateMap` beats a `ReverseMap()`, which maps by name only. Among
+definitions of the same kind, the one from the profile (or type) whose full name sorts first (ordinal) wins, then the
+first call in the constructor. All other mappings of the project are generated.
+
+### One source type, several destination types with the same simple name
+
+Two methods `MapToUserDto(this User)` cannot coexist (`CS0111`), so **all** mappings of that group get a qualified
+name, and warning [`IM0013`](diagnostics.md#im0013--mapping-method-name-qualified-to-avoid-a-collision) gives the name
+to call. The first rule that makes every name of the group unique (and different from the other method names of the
+same source type) is used:
+
+1. the last 1, 2, … segments of the destination's namespace and containing types, before the name;
+2. the type arguments by simple names, after the name;
+3. both;
+4. the type arguments by full names.
+
+| Mappings from `App.User` / `App.Item` | Generated names |
+|---|---|
+| `App.Admin.UserDto`, `App.Public.UserDto` | `MapToAdminUserDto`, `MapToPublicUserDto` (+ `List`, `Array`) |
+| `App.Orders.Dto`, `App.Invoices.Dto` (nested types) | `MapToOrdersDto`, `MapToInvoicesDto` |
+| `App.Box<int>`, `App.Box<string>` | `MapToBoxOfInt32`, `MapToBoxOfString` |
+| `Global` namespace: `Dto` and `App.Dto` | `MapToGlobalDto`, `MapToAppDto` |
+| `App.SummaryDto` (no collision) | `MapToSummaryDto`, unchanged |
+
+Generated code that maps nested collection elements and `IMapper` (`IronMapper.Extensions.DI`, which matches methods
+by signature) use the qualified names automatically. Code you write — including `MapFrom` lambdas — must call the
+qualified name. If no rule gives unique names (they are all taken by other mappings), the mappings of that group are not
+generated and error [`IM0014`](diagnostics.md#im0014--mapping-method-name-collision-cannot-be-resolved) is reported.
+
+Names that compiled before do not change: the rules apply only to groups that used to fail with `CS0111`. Adding a
+second destination type with the same simple name later does rename the existing mapping of that source type
+(IM0013 reports the new name). To keep `MapToUserDto`, rename one of the destination types.
+
+### Helper and file names
+
+`BeforeMap`/`AfterMap` and `AddTransformer` helpers are named `BeforeMap_{Source}_{Dest}`,
+`TransformValue_{Type}_{Source}_{Dest}` by simple names. When another mapping has the same simple names, the full names
+are used instead (`TransformValue_String_Shop_Item_Shop_ItemDto`). These helpers are `private`. Generated files are
+named after the full names of both types (`Shop.Item_MapTo_Shop.ItemDto.g.cs`).
+
+---
+
 ## Attributes
 
 ### `[MapTo(typeof(TDest))]`

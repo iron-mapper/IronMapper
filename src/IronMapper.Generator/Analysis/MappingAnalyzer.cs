@@ -31,13 +31,18 @@ internal static class MappingAnalyzer
             return ImmutableArray<MappingDescriptor>.Empty;
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
+        var index = 0;
         foreach (var attr in ctx.Attributes)
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
             if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol destSymbol) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct);
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct)?.WithOrigin(
+                CreateAttributeOrigin("MapTo", sourceSymbol, destSymbol, index++),
+                $"[MapTo] on '{sourceSymbol.ToDisplayString()}'",
+                originRank: 2,
+                SymbolHelpers.GetDestinationNaming(destSymbol));
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
@@ -58,19 +63,27 @@ internal static class MappingAnalyzer
             return ImmutableArray<MappingDescriptor>.Empty;
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
+        var index = 0;
         foreach (var attr in ctx.Attributes)
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
             if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol sourceSymbol) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct);
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct)?.WithOrigin(
+                CreateAttributeOrigin("MapFrom", sourceSymbol, destSymbol, index++),
+                $"[MapFrom] on '{destSymbol.ToDisplayString()}'",
+                originRank: 3,
+                SymbolHelpers.GetDestinationNaming(destSymbol));
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
 
         return builder.ToImmutable();
     }
+
+    private static string CreateAttributeOrigin(string attribute, INamedTypeSymbol source, INamedTypeSymbol dest, int index)
+        => $"attr:{attribute}:{SymbolHelpers.GetFullyQualifiedName(source)}->{SymbolHelpers.GetFullyQualifiedName(dest)}#{index:D4}";
 
     // -----------------------------------------------------------------------
     // Core analysis logic
@@ -184,7 +197,7 @@ internal static class MappingAnalyzer
             // Priority 1: explicit [MapProperty("DestName")] on a source property.
             if (sourceByDestName.TryGetValue(destProp.Name, out var mappedProp))
             {
-                var (collectionMapMethod, collectionOutputType) =
+                var (collectionMapMethod, collectionOutputType, collectionPairKey) =
                     DetectCollectionMapping(mappedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: mappedProp.Name,
@@ -195,14 +208,15 @@ internal static class MappingAnalyzer
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     collectionElementMapMethod: collectionMapMethod,
-                    collectionOutputType: collectionOutputType));
+                    collectionOutputType: collectionOutputType,
+                    collectionElementPairKey: collectionPairKey));
                 continue;
             }
 
             // Priority 2: matching name (case-insensitive).
             if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
-                var (collectionMapMethod, collectionOutputType) =
+                var (collectionMapMethod, collectionOutputType, collectionPairKey) =
                     DetectCollectionMapping(namedProp.Type, destProp.Type);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
@@ -213,7 +227,8 @@ internal static class MappingAnalyzer
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     collectionElementMapMethod: collectionMapMethod,
-                    collectionOutputType: collectionOutputType));
+                    collectionOutputType: collectionOutputType,
+                    collectionElementPairKey: collectionPairKey));
                 continue;
             }
 
@@ -303,10 +318,8 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol converterSymbol)
             {
-                var ns = SymbolHelpers.GetNamespace(converterSymbol);
-                return ns is null
-                    ? converterSymbol.Name
-                    : $"{ns}.{converterSymbol.Name}";
+                // Fully qualified, so nested and generic converter types work (global::App.Outer.Converter).
+                return SymbolHelpers.GetFullyQualifiedName(converterSymbol);
             }
         }
         return null;
@@ -324,24 +337,25 @@ internal static class MappingAnalyzer
     /// collection types whose element types differ, returns the name of the mapping method
     /// to call on each element and the output collection kind.  Otherwise returns (null, null).
     /// </summary>
-    private static (string? mapMethod, string? outputType) DetectCollectionMapping(
+    private static (string? mapMethod, string? outputType, string? pairKey) DetectCollectionMapping(
         ITypeSymbol sourcePropType,
         ITypeSymbol destPropType)
     {
         if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem)
             || srcElem is null)
-            return (null, null);
+            return (null, null, null);
 
         if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem)
             || dstElem is null)
-            return (null, null);
+            return (null, null, null);
 
         // Only generate Select() when element types differ — same-element collections are copied directly.
         if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
-            return (null, null);
+            return (null, null, null);
 
         var mapMethod = $"MapTo{dstElem.Name}";
         var outputType = SymbolHelpers.GetCollectionOutputType(destPropType);
-        return (mapMethod, outputType);
+        var pairKey = $"{SymbolHelpers.GetFullyQualifiedName(srcElem)}->{SymbolHelpers.GetFullyQualifiedName(dstElem)}";
+        return (mapMethod, outputType, pairKey);
     }
 }

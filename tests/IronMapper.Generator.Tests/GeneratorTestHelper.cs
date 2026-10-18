@@ -76,6 +76,52 @@ internal static class GeneratorTestHelper
         return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors);
     }
 
+    /// <summary>
+    /// Like <see cref="RunGeneratorAndCompile"/>, and when there are no errors also emits the assembly, loads it into
+    /// an isolated context and returns the result of the static method <c>Program.Run()</c> (a string) declared in
+    /// <paramref name="source"/>. <c>runResult</c> is <see langword="null"/> when the code does not compile.
+    /// </summary>
+    public static (IReadOnlyList<string> generatedSources, IReadOnlyList<Diagnostic> generatorDiagnostics, IReadOnlyList<Diagnostic> compilationErrors, string? runResult)
+        RunGeneratorCompileAndRun(string source)
+    {
+        var compilation = CreateCompilation(source);
+
+        CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
+        driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(
+            compilation, out var outputCompilation, out _);
+
+        var runResult = driver.GetRunResult();
+        var generatedSources = runResult.GeneratedTrees.Select(t => t.ToString()).ToList();
+        var generatedTrees = new HashSet<SyntaxTree>(runResult.GeneratedTrees);
+        var compilationErrors = outputCompilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error
+                        || (d.Severity == DiagnosticSeverity.Warning
+                            && d.Location.SourceTree is not null
+                            && generatedTrees.Contains(d.Location.SourceTree)))
+            .ToList();
+        if (compilationErrors.Count > 0)
+            return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors, null);
+
+        using var stream = new MemoryStream();
+        var emit = outputCompilation.Emit(stream);
+        if (!emit.Success)
+            throw new InvalidOperationException("Emit failed:\n" + string.Join("\n", emit.Diagnostics));
+
+        var context = new System.Runtime.Loader.AssemblyLoadContext($"run-{Guid.NewGuid():N}", isCollectible: true);
+        try
+        {
+            stream.Position = 0;
+            var assembly = context.LoadFromStream(stream);
+            var program = assembly.GetTypes().Single(t => t.Name == "Program");
+            var result = (string)program.GetMethod("Run")!.Invoke(null, null)!;
+            return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors, result);
+        }
+        finally
+        {
+            context.Unload();
+        }
+    }
+
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------

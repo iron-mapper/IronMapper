@@ -15,12 +15,14 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0012`. 
 | IM0004 | Error | Cyclic mapping detected | **Not reported yet** |
 | IM0005 | Warning | Empty MappingProfile | Yes |
 | IM0006 | Error | `[MapProperty]` destination property not found | Yes |
-| IM0007 | Warning | Duplicate mapping definition | **Not reported yet** |
+| IM0007 | Warning | Duplicate mapping definition | Yes — attributes and profiles |
 | IM0008 | Error | Abstract or interface destination type | Yes — attributes and profiles |
 | IM0009 | Warning | Record constructor parameter not mapped | Yes — `[MapTo]`/`[MapFrom]` only |
 | IM0010 | Error | Mapping type is not accessible from generated code | Yes — attributes and profiles |
 | IM0011 | Error | Profile lambda uses a member that generated code cannot access | Yes — profiles |
 | IM0012 | Error | Profile lambda captures state | Yes — profiles |
+| IM0013 | Warning | Mapping method name qualified to avoid a collision | Yes — attributes and profiles |
+| IM0014 | Error | Mapping method name collision cannot be resolved | Yes — attributes and profiles |
 
 All diagnostics are currently reported **without a source location**, so the IDE lists them in the
 Error List but does not point to a line in your code.
@@ -115,14 +117,22 @@ Levenshtein distance ≤ 2) exists in `IronMapper.CodeFixes`; it is not covered 
 
 ## IM0007 — Duplicate mapping definition
 
-**Severity:** Warning · **Not reported yet**
+**Severity:** Warning
 
-**Message (declared):** `Both an attribute and a MappingProfile define a mapping from '{0}' to '{1}'. The profile-based mapping takes precedence.`
+**Message:** `Mapping from '{0}' to '{1}' is defined more than once: {2}. Only the definition from {3} is generated; remove the others.`
 
-**Current behavior:** no duplicate detection is implemented, and the "profile takes precedence" rule is not
-implemented either. If the same source/destination pair is defined twice (for example by `[MapTo]` and by
-`CreateMap` in a profile), the generator fails with warning `CS8785` ("HintName ... must be unique") and
-**generates no mapping code at all** for the project. Define each pair only once.
+**Cause:** the same source/destination pair is defined more than once: `[MapTo]` and `CreateMap`, `[MapTo]` and
+`[MapFrom]`, two profiles, or `CreateMap` and the `ReverseMap()` of another map.
+
+**Behavior:** the pair is generated once. Precedence: `CreateMap` in a profile, then `ReverseMap()`, then `[MapTo]`,
+then `[MapFrom]`; among definitions of the same kind, the profile (or type) whose full name sorts first, then the
+first call in the constructor. All other mappings of the project are generated. See
+[Method names and collisions](configuration.md#same-type-pair-defined-twice).
+
+Before this was implemented, a duplicate pair made the generator fail with `CS8785` ("HintName ... must be unique"),
+and no mapping code was generated for the project at all.
+
+**Fix:** keep one definition.
 
 ---
 
@@ -205,3 +215,33 @@ parameter or local function of the constructor. None of these exist when the gen
 See [Profile lambdas](configuration.md#profile-lambdas).
 
 The affected mapping is not generated (for `AddTransformer`, the transformer is dropped); other mappings are.
+
+---
+
+## IM0013 — Mapping method name qualified to avoid a collision
+
+**Severity:** Warning
+
+**Message:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.`
+
+**Cause:** one source type is mapped to several destination types with the same simple name (different namespaces,
+nested in different types, or different type arguments). `MapTo{Name}` would be declared twice (`CS0111`), so these
+mappings get qualified names, e.g. `MapToAdminUserDto` and `MapToPublicUserDto`, or `MapToBoxOfInt32`. The rule is
+described in [Method names and collisions](configuration.md#one-source-type-several-destination-types-with-the-same-simple-name).
+
+**Fix:** call the method by the name in the message, or rename one of the destination types to get `MapTo{Name}` back.
+If the qualified names are intended, suppress the warning with `<NoWarn>$(NoWarn);IM0013</NoWarn>`.
+
+---
+
+## IM0014 — Mapping method name collision cannot be resolved
+
+**Severity:** Error
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: another mapping from '{0}' has a destination type named '{2}', and every qualified method name (for example '{3}') is already used by another mapping. Rename one of the destination types.`
+
+**Cause:** the qualified names from IM0013 are all taken by other mappings of the same source type (for example,
+`N1.Dto` and `N2.Dto` would become `MapToN1Dto`/`MapToN2Dto`, but types named `N1Dto` and `N2Dto` are mapped too).
+
+**Fix:** rename one of the destination types. Only the mappings of the colliding group are skipped; other mappings are
+generated.
