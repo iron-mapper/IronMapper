@@ -3,6 +3,13 @@
 > **Draft.** The full README (methodology, how to run, results) is written in stage 6 of
 > [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md). This file collects the notes that must end up in it.
 
+## Environment
+
+- .NET SDK 10.0.4xx, PowerShell 7 (`pwsh`) for the scripts in `scripts/`.
+- NativeAOT toolchain: Windows — Visual Studio (or Build Tools) with the C++ x64 tools; Linux — clang + zlib; macOS — Xcode command line tools.
+- Windows: if `vswhere.exe` is not on `PATH`, the scripts add the Visual Studio Installer folder to `PATH` for the NativeAOT publish (`Initialize-NativeToolchain` in `scripts/BenchmarkCommon.psm1`; without it the link step fails with MSB3073 when `NoDefaultCurrentDirectoryInExePath` is set).
+- AutoMapper license key: `AUTOMAPPER_LICENSE_KEY` or `~/.automapper/license.txt`.
+
 ## Notes for reading the results
 
 ### Collection sizes and the garbage collector
@@ -24,6 +31,9 @@ can be compared with each other.
   `new T().Convert(...)` on every mapping.
 - Collections: IronMapper generates `Enumerable.ToList(Enumerable.Select(...))`, `Manual` and Mapperly use
   `new List<T>(count)` + loop. Part of the difference to `Manual` in collection benchmarks comes from this.
+- NativeAOT: the same `Enumerable.Select` + `ToList` makes the executable ~230 KB larger than with Mapperly, because
+  the LINQ `Select` path needs the NativeAOT runtime type loader; a loop would avoid it (verified in isolation, see
+  [results/aot.md](results/aot.md)). Useful feedback for the generator.
 - Nested single objects need a `MapFrom(s => s.X.MapToXDto())` per property (documented workaround).
 - `IronMapper_IMapper` is the DI path (`IMapper` from `AddIronMapper`): reflection lookup once, then
   `MethodInfo.Invoke` on every call. Collections go through the lazy `MapCollection` + `ToList()`.
@@ -46,4 +56,8 @@ every benchmark runs in three separate processes and BenchmarkDotNet aggregates 
 ## What is not measured, and why
 
 - Multi-threaded throughput: every mapper is stateless on the measured path, so a parallel scenario shows nothing new.
-- `Mapster_Codegen` (Mapster.Tool): not evaluated yet.
+- `Mapster_Codegen`: Mapster has a code generation path, **Mapster.Tool** (a `dotnet tool` that generates mapper source as
+  a separate build step). It is not measured: it does not run as part of a plain `dotnet build` (BENCHMARK_SPEC.md, 2).
+  All Mapster numbers are for the runtime configuration (`TypeAdapterConfig` + `Compile()`), which does not work under NativeAOT.
+- AutoMapper under NativeAOT: AutoMapper does not support NativeAOT (it builds the mapping code at runtime); the AOT
+  probe is published anyway to record the warnings and the failure ([results/aot.md](results/aot.md)).

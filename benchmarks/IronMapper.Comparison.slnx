@@ -14,6 +14,9 @@
     <Project Path="probes/StartupProbe.Mapster/StartupProbe.Mapster.csproj" />
     <Project Path="probes/StartupProbe.AutoMapper/StartupProbe.AutoMapper.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/MstatReport/MstatReport.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Comparison.Tests/Comparison.Tests.csproj" />
   </Folder>

@@ -15,8 +15,8 @@
 | 1. Каркас, props, проекты, модели, генератор данных | принят |
 | 2. Мапперы + тесты эквивалентности и семантики | принят |
 | 3. Runtime-бенчмарки (§7) | принят, плюс две доработки (см. ниже) |
-| **4. Холодный старт (§8)** | **в работе: JIT готов, NativeAOT не выполнен** |
-| 5. NativeAOT, footprint, build time (§9–11) | не начат |
+| 4. Холодный старт (§8) | принят (JIT + NativeAOT сняты на новой машине) |
+| **5. NativeAOT, footprint, build time (§9–11)** | **выполнен, ждёт приёмки** |
 | 6. Отчёт, README, полный прогон (§12) | не начат (есть черновик README) |
 
 ### Этап 4: что сделано
@@ -59,6 +59,26 @@
 
 ---
 
+### Этап 5 (2026-10-18, новая машина)
+
+Машина: Intel Core i7-12650H (10 ядер / 16 потоков, гибридный), 64 ГБ, Windows 11 10.0.26300, .NET SDK 10.0.401,
+runtime 10.0.12, PowerShell 7.6.6, VS 2026 Community (C++ x64). Все итоговые цифры этапов 4–5 сняты на ней.
+
+- `scripts/BenchmarkCommon.psm1` — общий модуль: пути, публикация проб (`Publish-StartupProbe`), разбор IL-предупреждений,
+  форматирование, `Write-ReportFile` (UTF-8 без BOM, только LF), `Initialize-NativeToolchain` (обход `vswhere`, см. §3).
+- AOT-публикация в `run-startup.ps1` теперь с `-p:TrimmerSingleWarn=false` и `-p:IlcGenerateMstatFile=true` (бинарник
+  не меняется — проверено по размерам), mstat копируется в `results/raw/startup/mstat/`, stderr упавших запусков —
+  в `results/raw/startup/run-<mode>-<probe>.stderr.txt`.
+- `run-aot.ps1` сам ничего не публикует: вызывает `run-startup.ps1 -Mode Aot` (или `-ReportOnly`) и собирает
+  `results/aot.md` + `results/aot-size-breakdown.md`.
+- `run-footprint.ps1` → `results/footprint.md` (в спецификации скрипт не назван).
+- `tools/MstatReport` — свой разборщик mstat на `System.Reflection.Metadata` (внешних инструментов нет; sizoscope — GUI).
+- `run-build-time.ps1` → `probes/BuildProbe.<Lib>.N<n>` + `results/build-time.md`.
+- `benchmarks/.gitattributes`: `results/** text eol=lf`.
+- Разница IronMapper vs Mapperly в AOT (~232 КБ): `Enumerable.Select`+`ToList` в сгенерированном коде коллекций тянет
+  runtime type loader (`System.Private.TypeLoader` +102 566 байт); подтверждено отдельным опытом (консоль foreach vs
+  Select+ToList: 1 112 576 → 1 435 136 байт, тот же +102 566 в TypeLoader).
+
 ## 2. Решения сверх спецификации
 
 | Раздел | Решение |
@@ -72,13 +92,22 @@
 | §6 | Тесты на `xunit.v3.mtp-off` 4.x (VSTest), т.к. `dotnet test` на SDK .NET 10 принимает MTP-проекты только с opt-in в `global.json`. |
 | §6.4 | Матрица пишется тестом (`FeatureMatrixTests`) в `results/feature-matrix.md`, по-английски; null-случаи — в двух вариантах (non-nullable / nullable-аннотации, `NullableOrderEntity`), т.к. Mapperly генерирует код по аннотациям. Позиционный record в IronMapper не объявлен (CS7036 ломает сборку) → N/A. |
 | §7 | `DiOverheadBenchmark`: Manual как baseline в каждой категории, методы с префиксами `Flat_` / `Nested_`; AutoMapper `IMapper` из `AddAutoMapper`, Mapster `IMapper` = `ServiceMapper` из scope. Артефакты BDN → `results/raw/bdn`. Итоговые замеры — **`launchCount = 3`** (принято; в коде ещё не зашито — передать `--launchCount 3` в `run-all.ps1` на этапе 6). |
+| §9 | AOT-публикацию, прогоны и проверку контрольной суммы делает только `run-startup.ps1`; `run-aot.ps1` переиспользует его и строит отчёт из `results/raw/`. Предупреждения группируются по пробе (= по библиотеке). |
+| §10 | Размер publish — все файлы кроме `.pdb`; размеры `.nupkg` — из глобальной папки NuGet. |
+| §11 | Проекты `BuildProbe.<Lib>.N<n>` (classlib), доп. строка `Manual`; вложенность ссылается только на уже существующие пары (ровно N пар, каждая настроена один раз — IM0007); одиночный вложенный объект у IronMapper через `MapFrom`. Сборки с `--no-restore` (restore до серии), вывод CLI на английском (`DOTNET_CLI_UI_LANGUAGE=en`) для разбора ReportAnalyzer. hyperfine не установлен — работал собственный таймер; ветка с hyperfine не проверена. |
 | §8 | Пробы подключают конфигурации ссылками на исходники; DI-части настроек вынесены в `*.DependencyInjection.cs` / `IronMapperDiSetup.cs`, чтобы пробы не тянули лишние пакеты. Время — wall-clock от `Process.Start` до выхода (накладные расходы скрипта одинаковы → смотреть Δ). |
 
 Заметки для итогового README собраны в черновике [README.md](README.md).
 
 ---
 
-## 3. Известные особенности окружения (старый ноутбук)
+## 3. Известные особенности окружения
+
+**Новая машина (этапы 4–5):** под Claude Code в процессе задана `NoDefaultCurrentDirectoryInExePath=1`, из-за этого
+`VsDevCmd.bat` (VS 2026) не находит `vswhere.exe` и линковка NativeAOT падает с MSB3073. Скрипты обходят это сами
+(`Initialize-NativeToolchain`). `core.autocrlf=true` в системном gitconfig — отсюда предупреждения LF→CRLF.
+
+**Старый ноутбук:**
 
 - Windows 11, Intel Core Ultra 7 155H — **гибридный CPU**: P-ядра = логические 0, 1, 10–19 (маска `0xFFC03`),
   E/LP-E = 2–9, 20, 21. Привязка к P-ядрам на результат почти не влияла. На новой машине топология другая.
@@ -117,9 +146,11 @@ macOS: Xcode CLT), ключ AutoMapper в `~/.automapper/license.txt` или `AU
 ```bash
 cd benchmarks
 dotnet build IronMapper.Comparison.slnx -c Release   # 0 ошибок, 0 предупреждений
-dotnet test IronMapper.Comparison.slnx -c Release    # ожидается 128/128
+dotnet test IronMapper.Comparison.slnx -c Release    # 128/128
 pwsh ./scripts/run-startup.ps1 -Mode Both            # JIT + NativeAOT + BDN ColdStart → results/startup.md
+pwsh ./scripts/run-aot.ps1 -ReportOnly               # → results/aot.md, aot-size-breakdown.md
+pwsh ./scripts/run-footprint.ps1                     # → results/footprint.md
+pwsh ./scripts/run-build-time.ps1                    # → results/build-time.md (~10 мин)
 ```
 
-Если не хватает памяти для AOT: `pwsh ./scripts/run-startup.ps1 -Mode Aot -LowMemory` (после `-Mode Jit`;
-отчёт соберётся из обоих CSV). Затем — отчёт по этапу 4 и стоп; дальше этап 5 (§9–11).
+Дальше — этап 6 (§12): `run-all.ps1` (+ `--launchCount 3` для BDN), `generate-report.ps1` → `RESULTS.md`, итоговый README.

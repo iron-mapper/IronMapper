@@ -137,7 +137,8 @@ public class FeatureMatrixTests
 
         var path = Path.Combine(FindBenchmarksDirectory(), "results", FileName);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, sb.ToString().Replace("\r\n", "\n"));
+        // LF only and no BOM, like the script-generated reports (benchmarks/.gitattributes: results/** eol=lf).
+        File.WriteAllText(path, sb.ToString().Replace("\r\n", "\n").Replace("\r", ""), new UTF8Encoding(false));
 
         Assert.True(File.Exists(path));
     }

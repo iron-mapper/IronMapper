@@ -24,17 +24,17 @@ Expected checksum (Baseline): `12742788875462939321`. Status ok means every run 
 
 ### NativeAOT
 
-2026-10-18 13:17 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
+2026-10-18 13:48 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
 
 | Probe | Median, ms | p95, ms | Min, ms | Mean, ms | Δ median vs Baseline, ms | Status |
 |---|---:|---:|---:|---:|---:|---|
-| Baseline | 10.0 | 11.0 | 9.3 | 10.0 | 0.0 | ok |
-| Manual | 9.7 | 10.7 | 9.0 | 9.8 | -0.2 | ok |
-| IronMapper | 10.0 | 12.5 | 9.1 | 10.3 | 0.1 | ok |
-| IronMapper_IMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. IronMapper.Exceptions.MappingException: No mapping registered from 'OrderEntity' to 'OrderDto'. Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the IronMapper Source Generator has run on the project that owns these types. |
-| Mapperly | 10.1 | 13.0 | 9.2 | 10.3 | 0.1 | ok |
-| Mapster | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.MissingMethodException: No parameterless constructor defined for type 'Mapster.NameMatchingStrategy'. |
-| AutoMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.TypeInitializationException: A type initializer threw an exception. To determine which type, inspect the InnerException's StackTrace property. |
+| Baseline | 10.0 | 13.2 | 9.0 | 10.2 | 0.0 | ok |
+| Manual | 9.8 | 11.6 | 9.1 | 10.0 | -0.2 | ok |
+| IronMapper | 9.8 | 10.6 | 9.1 | 9.9 | -0.2 | ok |
+| IronMapper_IMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. IronMapper.Exceptions.MappingException: No mapping registered from 'OrderEntity' to 'OrderDto'. Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the IronMapper Source Generator has run on the project that owns these types. |
+| Mapperly | 9.8 | 11.2 | 9.1 | 9.9 | -0.2 | ok |
+| Mapster | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.MissingMethodException: No parameterless constructor defined for type 'Mapster.NameMatchingStrategy'. |
+| AutoMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.TypeInitializationException: A type initializer threw an exception. To determine which type, inspect the InnerException's StackTrace property. |
 
 ## In-process cold start (BenchmarkDotNet `StartupBenchmark`)
 

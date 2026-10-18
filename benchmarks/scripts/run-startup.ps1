@@ -7,12 +7,15 @@
 .DESCRIPTION
     1. Publishes every probe framework-dependent (JIT) and/or with NativeAOT for the current RID. NativeAOT probes are
        published strictly one after another, with `dotnet build-server shutdown` after each one (ILC needs a lot of
-       memory); before that the script checks the free memory.
+       memory); before that the script checks the free memory. NativeAOT publishes also keep every trim/AOT warning
+       separately and the mstat size file (results/raw/startup/mstat/), which run-aot.ps1 and run-footprint.ps1 use.
+       Publishing and the toolchain setup live in BenchmarkCommon.psm1.
     2. Runs each probe WarmupRuns times (disk cache), then Runs times. The runs are interleaved (run 1 of every probe,
        then run 2 of every probe, ...), so a slow phase of the machine is spread over all probes instead of hitting one.
     3. Wall-clock time from Process.Start to exit (stdout read to the end): median / p95 / min / mean.
        Every run must exit with 0 and print the same checksum as the Baseline probe (the mapping really ran).
-       Each mode writes its own CSV: results/raw/startup-jit.csv, results/raw/startup-aot.csv.
+       Each mode writes its own CSV: results/raw/startup-jit.csv, results/raw/startup-aot.csv. The full stderr of a
+       failed run is kept in results/raw/startup/run-<mode>-<probe>.stderr.txt.
     4. Runs StartupBenchmark (BDN, RunStrategy.ColdStart, 20 launches) when the JIT mode is measured.
     5. Builds results/startup.md from every CSV that exists and the BDN report, so the modes can be run separately.
 
@@ -51,56 +54,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot 'BenchmarkCommon.psm1') -Force
 
-$benchmarksDir = Split-Path -Parent $PSScriptRoot
-$resultsRawDir = Join-Path $benchmarksDir 'results' 'raw'
-$logDir = Join-Path $resultsRawDir 'startup'
-$publishRoot = Join-Path $logDir 'publish'
-$reportPath = Join-Path $benchmarksDir 'results' 'startup.md'
-$bdnReport = Join-Path $resultsRawDir 'bdn' 'results' 'Comparison.Benchmarks.StartupBenchmark-report-github.md'
+$reportPath = Join-Path (Get-ResultsDir) 'startup.md'
+$bdnReport = Join-Path (Get-ResultsRawDir) 'bdn' 'results' 'Comparison.Benchmarks.StartupBenchmark-report-github.md'
 $allModes = @('Jit', 'Aot')
-
-function Get-CsvPath([string] $mode) { Join-Path $resultsRawDir "startup-$($mode.ToLowerInvariant()).csv" }
-
-function Get-CurrentRid {
-    $os = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
-    return "$os-$arch"
-}
-
-function Get-ProbeExecutable([string] $dir, [string] $probe) {
-    $name = "StartupProbe.$probe"
-    if ($IsWindows) { $name += '.exe' }
-    return Join-Path $dir $name
-}
-
-function Get-ProbeDir([string] $mode, [string] $probe) { Join-Path $publishRoot $mode.ToLowerInvariant() $probe }
-
-# Free (available) physical memory in bytes, or $null when it cannot be determined.
-function Get-FreeMemoryBytes {
-    try {
-        if ($IsWindows) {
-            return [double] (Get-CimInstance -ClassName Win32_OperatingSystem).FreePhysicalMemory * 1KB
-        }
-        if ($IsLinux) {
-            $line = Get-Content '/proc/meminfo' | Where-Object { $_ -match '^MemAvailable:\s+(\d+)\s+kB' } | Select-Object -First 1
-            if ($line -and $line -match '(\d+)') { return [double] $Matches[1] * 1KB }
-            return $null
-        }
-        if ($IsMacOS) {
-            $vm = & vm_stat
-            $pageSize = if ($vm[0] -match 'page size of (\d+) bytes') { [double] $Matches[1] } else { 4096 }
-            $pages = 0
-            foreach ($name in 'Pages free', 'Pages inactive', 'Pages speculative') {
-                $l = $vm | Where-Object { $_ -like "${name}:*" } | Select-Object -First 1
-                if ($l -and $l -match '(\d+)\.?$') { $pages += [double] $Matches[1] }
-            }
-            return $pages * $pageSize
-        }
-    }
-    catch { }
-    return $null
-}
 
 function Confirm-FreeMemory {
     $free = Get-FreeMemoryBytes
@@ -119,26 +77,6 @@ function Confirm-FreeMemory {
     }
     $answer = Read-Host 'Continue anyway? [y/N]'
     if ($answer -notmatch '^(y|yes)$') { throw 'Aborted by the user.' }
-}
-
-function Publish-Probe([string] $probe, [string] $mode, [string] $rid) {
-    $project = Join-Path $benchmarksDir 'probes' "StartupProbe.$probe" "StartupProbe.$probe.csproj"
-    $outDir = Get-ProbeDir $mode $probe
-    $log = Join-Path $logDir "publish-$($mode.ToLowerInvariant())-$probe.log"
-    if (Test-Path $outDir) { Remove-Item -Recurse -Force $outDir }
-
-    # --disable-build-servers: no MSBuild/compiler server processes stay in memory between the publishes.
-    $publishArgs = @('publish', $project, '-c', 'Release', '-r', $rid, '-o', $outDir, '-nologo', '--disable-build-servers')
-    if ($mode -eq 'Aot') {
-        $publishArgs += '-p:PublishAot=true'
-        if ($LowMemory) { $publishArgs += '-p:IlcSingleThreaded=true' }
-    }
-    else { $publishArgs += @('--self-contained', 'false') }
-
-    & dotnet @publishArgs *> $log
-    $ok = $LASTEXITCODE -eq 0 -and (Test-Path (Get-ProbeExecutable $outDir $probe))
-    if ($mode -eq 'Aot') { & dotnet build-server shutdown *>> $log }
-    return [pscustomobject]@{ Probe = $probe; Mode = $mode; Ok = $ok; Dir = $outDir; Log = $log }
 }
 
 function Invoke-ProbeOnce([string] $exe) {
@@ -166,24 +104,9 @@ function Invoke-ProbeOnce([string] $exe) {
     }
 }
 
-function Get-Percentile([double[]] $sorted, [double] $p) {
-    # Nearest-rank method.
-    $rank = [math]::Ceiling($p * $sorted.Count)
-    return $sorted[[math]::Max(0, $rank - 1)]
-}
-
-function Format-Ms($value) {
-    if ($null -eq $value -or "$value" -eq '') { return '–' }
-    return ([double] $value).ToString('N1', [cultureinfo]::InvariantCulture)
-}
-
-function ConvertTo-InvariantNumber($value) {
-    if ($null -eq $value) { return '' }
-    return ([double] $value).ToString('R', [cultureinfo]::InvariantCulture)
-}
-
 # Publishes (unless -SkipPublish), runs and writes results/raw/startup-<mode>.csv for one mode.
 function Measure-Mode([string] $m, [string] $rid) {
+    if ($m -eq 'Aot') { Initialize-NativeToolchain }
     if ($SkipPublish) {
         $published = foreach ($probe in $Probes) {
             $dir = Get-ProbeDir $m $probe
@@ -195,7 +118,7 @@ function Measure-Mode([string] $m, [string] $rid) {
         # Strictly sequential: one probe at a time.
         $published = foreach ($probe in $Probes) {
             Write-Host "Publishing $probe ($m)..."
-            Publish-Probe $probe $m $rid
+            Publish-StartupProbe -Probe $probe -Mode $m -Rid $rid -LowMemory:$LowMemory
         }
     }
     foreach ($p in $published | Where-Object { -not $_.Ok }) {
@@ -208,6 +131,8 @@ function Measure-Mode([string] $m, [string] $rid) {
         $samples[$p.Probe] = [System.Collections.Generic.List[double]]::new()
         $outputs[$p.Probe] = [System.Collections.Generic.HashSet[string]]::new()
         $failures[$p.Probe] = $null
+        $errorPath = Get-RunErrorPath $m $p.Probe
+        if (Test-Path $errorPath) { Remove-Item -Force $errorPath }
     }
 
     $total = $WarmupRuns + $Runs
@@ -219,7 +144,10 @@ function Measure-Mode([string] $m, [string] $rid) {
             try { $r = Invoke-ProbeOnce (Get-ProbeExecutable $p.Dir $p.Probe) }
             catch { $failures[$p.Probe] = $_.Exception.Message; continue }
             if ($r.ExitCode -ne 0) {
-                $firstLine = ($r.Error -split "`n" | Select-Object -First 1)
+                # The full stderr (exception, inner exceptions, stack) is kept for the reports.
+                Set-Content -Path (Get-RunErrorPath $m $p.Probe) -Value $r.Error -Encoding utf8NoBOM
+                $firstLine = ($r.Error -split '?
+' | Select-Object -First 1).Trim()
                 $failures[$p.Probe] = "exit code $($r.ExitCode): $firstLine"
                 continue
             }
@@ -253,14 +181,14 @@ function Measure-Mode([string] $m, [string] $rid) {
         }
         [pscustomobject] $row
     }
-    $csv = Get-CsvPath $m
+    $csv = Get-StartupCsvPath $m
     $rows | Export-Csv -Path $csv -NoTypeInformation -Encoding utf8NoBOM
     Write-Host "Written: $csv"
 }
 
 function Write-StartupReport {
     $data = foreach ($m in $allModes) {
-        $csv = Get-CsvPath $m
+        $csv = Get-StartupCsvPath $m
         if (Test-Path $csv) { [pscustomobject]@{ Mode = $m; Rows = @(Import-Csv $csv) } }
     }
 
@@ -306,7 +234,7 @@ function Write-StartupReport {
                 $status = 'checksum differs from JIT'
             }
             $delta = if ($r.MedianMs -and $baseline) { Format-Ms ([double] $r.MedianMs - [double] $baseline.MedianMs) } else { '–' }
-            [void] $sb.AppendLine("| $($r.Probe) | $(Format-Ms $r.MedianMs) | $(Format-Ms $r.P95Ms) | $(Format-Ms $r.MinMs) | $(Format-Ms $r.MeanMs) | $delta | $status |")
+            [void] $sb.AppendLine("| $($r.Probe) | $(Format-Ms $r.MedianMs) | $(Format-Ms $r.P95Ms) | $(Format-Ms $r.MinMs) | $(Format-Ms $r.MeanMs) | $delta | $(Format-Cell $status) |")
         }
         [void] $sb.AppendLine()
     }
@@ -321,11 +249,10 @@ function Write-StartupReport {
     else { [void] $sb.AppendLine('_No BenchmarkDotNet report yet: it runs together with `-Mode Jit` or `-Mode Both`._') }
     [void] $sb.AppendLine()
 
-    Set-Content -Path $reportPath -Value ($sb.ToString() -replace "`r`n", "`n") -NoNewline -Encoding utf8NoBOM
-    Write-Host "Written: $reportPath"
+    Write-ReportFile $reportPath $sb.ToString()
 }
 
-New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+New-Item -ItemType Directory -Force -Path (Get-StartupLogDir) | Out-Null
 
 if (-not $ReportOnly) {
     $rid = Get-CurrentRid
@@ -336,8 +263,8 @@ if (-not $ReportOnly) {
 
     if ('Jit' -in $modes -and -not $SkipBdn) {
         Write-Host 'Running StartupBenchmark (BenchmarkDotNet, ColdStart)...'
-        $bdnLog = Join-Path $logDir 'bdn-startup.log'
-        $project = Join-Path $benchmarksDir 'src' 'Comparison.Benchmarks' 'Comparison.Benchmarks.csproj'
+        $bdnLog = Join-Path (Get-StartupLogDir) 'bdn-startup.log'
+        $project = Join-Path (Get-BenchmarksDir) 'src' 'Comparison.Benchmarks' 'Comparison.Benchmarks.csproj'
         & dotnet run -c Release --project $project -- --filter '*StartupBenchmark*' *> $bdnLog
         if ($LASTEXITCODE -ne 0) { Write-Warning "StartupBenchmark failed; see $bdnLog" }
     }
