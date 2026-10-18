@@ -23,16 +23,22 @@ Default behavior of each library, without extra configuration for the case. Not 
 
 | Case | Manual | IronMapper | IronMapper_IMapper | Mapperly | Mapster | AutoMapper |
 |---|---|---|---|---|---|---|
-| Top-level source is `null` (Flat) | throws `NullReferenceException` | throws `ArgumentNullException` | throws `ArgumentNullException` | throws `NullReferenceException` | returns `null` | returns `null` |
-| Nested object is `null` (`Order.Customer`) | throws `NullReferenceException` | throws `ArgumentNullException` | throws `TargetInvocationException` | throws `NullReferenceException` | `null` → `null` | `null` → `null` |
-| Nested collection is `null` (`Order.Lines`) | throws `NullReferenceException` | `null` → `null` | `null` → `null` | throws `NullReferenceException` | `null` → `null` | `null` → empty list |
+| Top-level source is `null`; declared non-nullable (`UserEntity`) | throws `NullReferenceException` | throws `ArgumentNullException` | throws `ArgumentNullException` | throws `NullReferenceException` | returns `null` | returns `null` |
+| Top-level source is `null`; declared nullable (`UserEntity?` → `UserDto?`) | returns `null` | throws `ArgumentNullException` | throws `ArgumentNullException` | returns `null` | returns `null` | returns `null` |
+| Nested object is `null`; declared non-nullable (`CustomerEntity Customer`) | throws `NullReferenceException` | throws `ArgumentNullException` | throws `TargetInvocationException` | throws `NullReferenceException` | `null` → `null` | `null` → `null` |
+| Nested object is `null`; declared nullable (`CustomerEntity? Customer`) | `null` → `null` | throws `ArgumentNullException` | throws `TargetInvocationException` | `null` → `null` | `null` → `null` | `null` → `null` |
+| Nested collection is `null`; declared non-nullable (`List<OrderLineEntity> Lines`) | throws `NullReferenceException` | `null` → `null` | `null` → `null` | throws `NullReferenceException` | `null` → `null` | `null` → empty list |
+| Nested collection is `null`; declared nullable (`List<OrderLineEntity>? Lines`) | `null` → `null` | `null` → `null` | `null` → `null` | `null` → `null` | `null` → `null` | `null` → empty list |
 | `List<string>` → `List<string>` | new list (copy) | reference copied (same list) | reference copied (same list) | reference copied (same list) | new list (copy) | new list (copy) |
 | Positional record as destination | supported (constructor) | N/A: does not compile: CS7036 in the generated file (new T { ... } without constructor arguments) | N/A: does not compile: CS7036 in the generated file (new T { ... } without constructor arguments) | supported (constructor) | supported (constructor) | supported (constructor) |
 | Flattening by name (`Customer.Address.City` → `CustomerAddressCity`) | automatic (2 and 3 levels) | not supported: properties stay `null` | not supported: properties stay `null` | automatic (2 and 3 levels) | automatic (2 and 3 levels) | automatic (2 and 3 levels) |
 
 Notes:
 
-- The models declare nested objects and collections as non-nullable (`= null!`), because the timed data never contains `null`. Mapperly follows nullable annotations, so it does not check such properties for `null` (not tested here with nullable properties).
+- Nullable annotations: the benchmark models declare nested objects and collections non-nullable (`= null!`), because the timed data never contains `null`. Mapperly generates code from the nullable annotations: for a non-nullable member it emits no `null` check (a `null` there fails with `NullReferenceException`), for a nullable member it does. The `null` rows are therefore shown for both declarations; the nullable variant uses `NullableOrderEntity`/`NullableOrderDto` and `UserEntity?` → `UserDto?`. The other libraries do not read annotations; their results differ between the variants only where the configuration differs.
+- IronMapper, nullable nested object: the documented workaround `MapFrom(s => s.Customer!.MapToCustomerDto())` has no `null` check; a user who needs `null` → `null` has to write the check in the lambda (`s.Customer == null ? null : ...`).
 - IronMapper_IMapper: a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`).
+- `List<string>` → `List<string>`: IronMapper and Mapperly (by default, without `UseDeepCloning`) assign the same list; Mapster and AutoMapper create a new list. Collections with the same element type are kept out of the timed scenarios for this reason (BENCHMARK_SPEC.md, 4).
 - IronMapper, flattening: in `MappingProfile` mappings unmatched destination properties are skipped silently (IM0001 is reported for `[MapTo]`/`[MapFrom]` only, docs/diagnostics.md). This comparison configures IronMapper only through a profile, so the build gives no hint.
+- IronMapper_IMapper, collections: `MapCollection<TSource, TDest>` returns a lazy `IEnumerable<TDest>`; the benchmark materializes it with `ToList()` (no known capacity, so the list grows while filling). `Map<List<TDto>>(list)` throws `MappingException` (issue #8).
 - IronMapper, positional record: the mapping is not declared in the code, because it breaks the build (checked with IronMapper 1.1.3: CS7036 in the generated file, no IronMapper diagnostic).

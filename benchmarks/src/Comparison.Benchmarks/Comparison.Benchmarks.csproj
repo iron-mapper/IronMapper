@@ -12,6 +12,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Comparison.Mappers\Comparison.Mappers.csproj" />
+    <!-- Extern alias: its IronMapper.Generated.GeneratedMappers would clash with the one in Comparison.Mappers. -->
+    <ProjectReference Include="..\Comparison.Mappers.IronMapperStaticFormat\Comparison.Mappers.IronMapperStaticFormat.csproj"
+                      Aliases="StaticFormat" />
   </ItemGroup>
 
 </Project>

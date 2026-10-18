@@ -3,6 +3,8 @@ using Comparison.Models.Custom;
 using Comparison.Models.Flat;
 using Comparison.Models.Nested;
 using Mapster;
+using MapsterMapper;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Comparison.Mappers.Mapster;
 
@@ -24,5 +26,17 @@ public static class MapsterSetup
 
         config.Compile();
         return config;
+    }
+
+    /// <summary>
+    /// The DI path (Mapster.DependencyInjection): the config as a singleton + <see cref="ServiceMapper"/> as the scoped
+    /// <see cref="IMapper"/>, resolved from a scope (DiOverheadBenchmark).
+    /// </summary>
+    public static IMapper CreateMapperFromServices()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(CreateConfig());
+        services.AddScoped<IMapper, ServiceMapper>();
+        return services.BuildServiceProvider().CreateScope().ServiceProvider.GetRequiredService<IMapper>();
     }
 }

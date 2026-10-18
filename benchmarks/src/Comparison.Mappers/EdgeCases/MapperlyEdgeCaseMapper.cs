@@ -1,4 +1,5 @@
 using Comparison.Models.EdgeCases;
+using Comparison.Models.Flat;
 using Comparison.Models.Nested;
 using Riok.Mapperly.Abstractions;
 
@@ -14,6 +15,10 @@ public static partial class MapperlyEdgeCaseMappings
     [MapperIgnoreSource(nameof(OrderEntity.Total))]
     [MapperIgnoreSource(nameof(OrderEntity.Lines))]
     public static partial OrderFlatDto MapFlattening(OrderEntity src);
+
+    public static partial UserDto? MapNullableUser(UserEntity? src);
+
+    public static partial NullableOrderDto MapNullableOrder(NullableOrderEntity src);
 }
 
 public sealed class MapperlyEdgeCaseMapper : IEdgeCaseMapper
@@ -22,4 +27,6 @@ public sealed class MapperlyEdgeCaseMapper : IEdgeCaseMapper
     public TagsDto MapTags(TagsEntity src) => MapperlyEdgeCaseMappings.MapTags(src);
     public PointRecordDto MapPoint(PointEntity src) => MapperlyEdgeCaseMappings.MapPoint(src);
     public OrderFlatDto MapFlattening(OrderEntity src) => MapperlyEdgeCaseMappings.MapFlattening(src);
+    public UserDto? MapNullableUser(UserEntity? src) => MapperlyEdgeCaseMappings.MapNullableUser(src);
+    public NullableOrderDto MapNullableOrder(NullableOrderEntity src) => MapperlyEdgeCaseMappings.MapNullableOrder(src);
 }

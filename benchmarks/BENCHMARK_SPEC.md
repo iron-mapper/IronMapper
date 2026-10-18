@@ -121,7 +121,7 @@ public interface IComparisonMapper
 - **IronMapper — коллекция**: `list.MapToOrderDtoList()`.
 - **IronMapper_IMapper**: собрать `ServiceProvider` с `AddIronMapper(...)` в `[GlobalSetup]`, резолвить `IMapper` один раз, в замере — только `mapper.Map<...>(...)`. Коллекции через `IMapper` — `MapCollection<TSource, TDest>` (`Map<List<T>>` не поддерживается, issue #8).
 - **Mapperly**: `[Mapper] partial class`; in-place — метод с `[MappingTarget]`; кастомная конфигурация — `[MapProperty]`, `[MapperIgnoreTarget]`/`[MapperIgnoreSource]`, user-implemented метод для конвертера.
-- **Mapster**: собственный `TypeAdapterConfig` (не `GlobalSettings`), конфигурация + `config.Compile()` в setup, вызов `src.Adapt<TDest>(config)`. Проверить, что вложенные объекты создаются заново, а не копируются по ссылке.
+- **Mapster**: собственный `TypeAdapterConfig` (не `GlobalSettings`), конфигурация + `config.Compile()` в setup, вызов `src.Adapt<TSource, TDest>(config)` — типизированная перегрузка, как `Map<TSource, TDest>` у AutoMapper (`Adapt<TDest>(config)` принимает `object` и определяет тип источника во время выполнения). Проверить, что вложенные объекты создаются заново, а не копируются по ссылке.
 - **AutoMapper**: `MapperConfiguration` с `cfg.LicenseKey = Environment.GetEnvironmentVariable("AUTOMAPPER_LICENSE_KEY")` (или переменная окружения, если версия читает её сама), `ILoggerFactory` — `NullLoggerFactory`, `CreateMapper()` в setup. В тестах — `AssertConfigurationIsValid()`.
 - **Manual**: простой ручной код, без LINQ там, где он не нужен; коллекции — `new List<T>(capacity)` + цикл. (Отметить в README: если IronMapper генерирует `Enumerable.ToList(Enumerable.Select(...))`, разница с Manual в коллекциях частично объясняется этим — это полезная обратная связь для генератора.)
 
@@ -147,7 +147,7 @@ public interface IComparisonMapper
 | `FlatBenchmark` | Один плоский объект | — |
 | `NestedBenchmark` | Один Order с вложенными объектами и строками | — |
 | `CollectionBenchmark` | `List<OrderEntity>` → `List<OrderDto>` | `[Params(10, 1_000, 100_000)]` |
-| `CustomConfigBenchmark` | Переименование/игнор/конвертер/вычисляемое | — |
+| `CustomConfigBenchmark` | Переименование/игнор/конвертер/вычисляемое. Дополнительная строка `IronMapper_StaticFormat`: `MapFrom(s => SalaryFormat.Format(s.Salary))` вместо `UseConverter<T>()` — обходной путь, показывает стоимость создания конвертера (в README и отчёте подписать именно так) | — |
 | `InPlaceBenchmark` | Обновление существующего объекта | только поддерживающие |
 | `DiOverheadBenchmark` | IronMapper ext. method vs `IronMapper_IMapper` vs AutoMapper `IMapper` vs Mapster `IMapper` (если есть) — Flat и Nested | — |
 

@@ -13,9 +13,12 @@ internal static class EdgeCaseFacts
 
     public static readonly Case[] Cases =
     [
-        new("null-source", "Top-level source is `null` (Flat)", NullSource),
-        new("null-nested", "Nested object is `null` (`Order.Customer`)", NullNested),
-        new("null-collection", "Nested collection is `null` (`Order.Lines`)", NullCollection),
+        new("null-source", "Top-level source is `null`; declared non-nullable (`UserEntity`)", NullSource),
+        new("null-source-nullable", "Top-level source is `null`; declared nullable (`UserEntity?` → `UserDto?`)", NullSourceNullable),
+        new("null-nested", "Nested object is `null`; declared non-nullable (`CustomerEntity Customer`)", NullNested),
+        new("null-nested-nullable", "Nested object is `null`; declared nullable (`CustomerEntity? Customer`)", NullNestedNullable),
+        new("null-collection", "Nested collection is `null`; declared non-nullable (`List<OrderLineEntity> Lines`)", NullCollection),
+        new("null-collection-nullable", "Nested collection is `null`; declared nullable (`List<OrderLineEntity>? Lines`)", NullCollectionNullable),
         new("same-element-collection", "`List<string>` → `List<string>`", SameElementCollection),
         new("positional-record", "Positional record as destination", PositionalRecord),
         new("flattening", "Flattening by name (`Customer.Address.City` → `CustomerAddressCity`)", Flattening),
@@ -41,14 +44,39 @@ internal static class EdgeCaseFacts
     {
         var src = new TestDataGenerator().CreateOrder();
         src.Lines = null!;
-        var result = Mappers.Get(name).MapNested(src);
-        return result.Lines switch
-        {
-            null => "`null` → `null`",
-            { Count: 0 } => "`null` → empty list",
-            _ => "`null` → non-empty list (?)",
-        };
+        return DescribeNullCollection(Mappers.Get(name).MapNested(src).Lines);
     });
+
+    private static string NullSourceNullable(string name) => Run(() =>
+        Mappers.GetEdgeCase(name).MapNullableUser(null) is null ? "returns `null`" : "returns a default object");
+
+    private static string NullNestedNullable(string name) => Run(() =>
+    {
+        var result = Mappers.GetEdgeCase(name).MapNullableOrder(CreateNullableOrder(customer: false, lines: true));
+        return result.Customer is null ? "`null` → `null`" : "creates an empty object";
+    });
+
+    private static string NullCollectionNullable(string name) => Run(() =>
+        DescribeNullCollection(Mappers.GetEdgeCase(name).MapNullableOrder(CreateNullableOrder(customer: true, lines: false)).Lines));
+
+    private static NullableOrderEntity CreateNullableOrder(bool customer, bool lines)
+    {
+        var order = new TestDataGenerator().CreateOrder();
+        return new NullableOrderEntity
+        {
+            Id = order.Id,
+            Number = order.Number,
+            Customer = customer ? order.Customer : null,
+            Lines = lines ? order.Lines : null,
+        };
+    }
+
+    private static string DescribeNullCollection<T>(List<T>? lines) => lines switch
+    {
+        null => "`null` → `null`",
+        { Count: 0 } => "`null` → empty list",
+        _ => "`null` → non-empty list (?)",
+    };
 
     private static string SameElementCollection(string name) => Run(() =>
     {

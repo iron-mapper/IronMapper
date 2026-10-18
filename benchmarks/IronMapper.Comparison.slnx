@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Comparison.Models/Comparison.Models.csproj" />
     <Project Path="src/Comparison.Mappers/Comparison.Mappers.csproj" />
+    <Project Path="src/Comparison.Mappers.IronMapperStaticFormat/Comparison.Mappers.IronMapperStaticFormat.csproj" />
     <Project Path="src/Comparison.Benchmarks/Comparison.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -1,4 +1,5 @@
 using Comparison.Models.EdgeCases;
+using Comparison.Models.Flat;
 using Comparison.Models.Nested;
 
 namespace Comparison.Mappers.EdgeCases;
@@ -20,4 +21,10 @@ public interface IEdgeCaseMapper
 
     /// <summary><c>Customer.Address.City</c> → <c>CustomerAddressCity</c> by naming convention only.</summary>
     OrderFlatDto MapFlattening(OrderEntity src);
+
+    /// <summary>Flat mapping declared with a nullable source and result (<c>UserEntity?</c> → <c>UserDto?</c>).</summary>
+    UserDto? MapNullableUser(UserEntity? src);
+
+    /// <summary>Nested object and collection declared nullable on both sides.</summary>
+    NullableOrderDto MapNullableOrder(NullableOrderEntity src);
 }

@@ -24,6 +24,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Comparison.Mappers\Comparison.Mappers.csproj" />
+    <ProjectReference Include="..\..\src\Comparison.Mappers.IronMapperStaticFormat\Comparison.Mappers.IronMapperStaticFormat.csproj"
+                      Aliases="StaticFormat" />
   </ItemGroup>
 
 </Project>
