@@ -101,12 +101,19 @@ dotnet run --project tests/IronMapper.Benchmarks -c Release
 
 Anything that touches packaging (`dotnet pack`, `.nupkg` layout, `eng/verify-package.ps1`) or CI
 (`.github/workflows/*`, MSBuild targets, build order) must be verified only after
-`git clean -xdf -e .claude/`. CI always starts from a fresh clone; leftover `bin/`/`obj/` from earlier
+`git clean -xdf -e .claude/ -e IRONMAPPER_PLAN.md`. CI always starts from a fresh clone; leftover `bin/`/`obj/` from earlier
 local builds hide missing build steps (e.g. a pack that only works because the generator DLL was
 already built).
 
+**Before any clean-tree check, run `git add -A` first (stage only, do not commit).** `git clean -x` deletes
+untracked files, including new files that are not in the index yet (new tests, new sources).
+`git add` is allowed; `git commit`, `git push` and `git tag` are not — the maintainer does those.
+
 ```bash
-git clean -xdf -e .claude/
+git add -A
+git clean -xdf -e .claude/ -e IRONMAPPER_PLAN.md
+dotnet build IronMapper.slnx -c Release
+dotnet test IronMapper.slnx
 pwsh ./eng/verify-package.ps1 -PackageDir ./artifacts/packages
 ```
 

@@ -12,3 +12,5 @@ IM0007 | IronMapper | Warning | DuplicateMappingDefinition
 IM0008 | IronMapper | Error | AbstractDestinationType
 IM0009 | IronMapper | Warning | RecordParameterNotMapped
 IM0010 | IronMapper | Error | InaccessibleMappingType
+IM0011 | IronMapper | Error | LambdaMemberNotAccessible
+IM0012 | IronMapper | Error | LambdaCapturesState

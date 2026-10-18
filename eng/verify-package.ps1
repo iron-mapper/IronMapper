@@ -26,9 +26,12 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+# Paths inside the repository are built from the script location, never from the current directory.
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $PackageDir) { $PackageDir = Join-Path $repoRoot 'artifacts/packages' }
-$PackageDir = [System.IO.Path]::GetFullPath($PackageDir)
+# Resolve a relative -PackageDir against the PowerShell location (Set-Location / cd), not the .NET process
+# directory: [IO.Path]::GetFullPath uses the latter, e.g. C:\WINDOWS\system32. Works for folders that do not exist yet.
+$PackageDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PackageDir)
 
 function Invoke-Dotnet {
     & dotnet @args
