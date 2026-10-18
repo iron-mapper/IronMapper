@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Own props for the comparison benchmarks. Deliberately does NOT import the repository root
+    Directory.Build.props: that one turns on TreatWarningsAsErrors, GenerateDocumentationFile,
+    the package Version and NuGet packaging properties, none of which belong here.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!--
+      IronMapper source: the published NuGet package (default) or the local sources in ../src.
+      Maintainer switch: dotnet run -c Release -p:UseLocalIronMapper=true
+    -->
+    <UseLocalIronMapper Condition="'$(UseLocalIronMapper)' == ''">false</UseLocalIronMapper>
+    <IronMapperSrcDir>$(MSBuildThisFileDirectory)..\src\</IronMapperSrcDir>
+  </PropertyGroup>
+</Project>

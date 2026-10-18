@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Comparison.Models</RootNamespace>
+    <!-- [MapTo] attributes for the IronMapper attribute scenarios live on these models. -->
+    <UsesIronMapper>true</UsesIronMapper>
+  </PropertyGroup>
+
+</Project>

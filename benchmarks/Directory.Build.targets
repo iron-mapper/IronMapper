@@ -1,0 +1,45 @@
+<Project>
+  <!--
+    IronMapper references for projects that set UsesIronMapper / UsesIronMapperDI = true.
+    Lives in .targets (not .props) so the project-level properties are already defined here.
+  -->
+  <ItemGroup Condition="'$(UsesIronMapper)' == 'true' And '$(UseLocalIronMapper)' != 'true'">
+    <PackageReference Include="IronMapper" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsesIronMapperDI)' == 'true' And '$(UseLocalIronMapper)' != 'true'">
+    <PackageReference Include="IronMapper.Extensions.DI" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UsesIronMapper)' == 'true' And '$(UseLocalIronMapper)' == 'true'">
+    <ProjectReference Include="$(IronMapperSrcDir)IronMapper\IronMapper.csproj" />
+    <ProjectReference Include="$(IronMapperSrcDir)IronMapper.Generator\IronMapper.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UsesIronMapperDI)' == 'true' And '$(UseLocalIronMapper)' == 'true'">
+    <ProjectReference Include="$(IronMapperSrcDir)IronMapper.Extensions.DI\IronMapper.Extensions.DI.csproj" />
+  </ItemGroup>
+
+  <!--
+    The ../src projects are not part of IronMapper.Comparison.slnx. In a solution build MSBuild strips
+    Configuration from references to projects outside the solution, so `-c Release` would build them
+    as Debug. Keep Configuration on every reference into ../src (direct and transitive), and drop
+    BuildingSolutionFile there so the references between the ../src projects keep it as well.
+  -->
+  <PropertyGroup Condition="'$(UseLocalIronMapper)' == 'true'">
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
+  </PropertyGroup>
+  <Target Name="_KeepConfigurationForLocalIronMapper"
+          Condition="'$(UseLocalIronMapper)' == 'true'"
+          DependsOnTargets="IncludeTransitiveProjectReferences"
+          BeforeTargets="AssignProjectConfiguration">
+    <PropertyGroup>
+      <_IronMapperSrcFullDir>$([System.IO.Path]::GetFullPath('$(IronMapperSrcDir)'))</_IronMapperSrcFullDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <ProjectReference Update="@(ProjectReference)"
+                        Condition="$([System.String]::Copy('%(FullPath)').StartsWith('$(_IronMapperSrcFullDir)', StringComparison.OrdinalIgnoreCase))"
+                        UndefineProperties="%(ProjectReference.UndefineProperties);BuildingSolutionFile" />
+    </ItemGroup>
+  </Target>
+</Project>
