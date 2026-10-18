@@ -20,23 +20,25 @@ namespace IronMapper.Generator.CodeGeneration;
 internal static class MapperCodeEmitter
 {
     /// <summary>
-    /// Generates the source text for a single mapping and returns it together with a unique hint name.
+    /// Generates the source text for a single mapping. The method name, the helper-name scope and the hint name
+    /// come from <paramref name="entry"/> (see <see cref="Analysis.MappingPlanner"/>).
     /// </summary>
-    /// <returns>
-    /// A tuple of <c>(hintName, source)</c> where <c>hintName</c> is used as the AddSource key
-    /// and <c>source</c> is the full C# text of the generated file.
-    /// </returns>
-    public static (string hintName, string source) Emit(MappingDescriptor descriptor)
+    /// <param name="descriptor">The mapping to emit.</param>
+    /// <param name="entry">The plan entry of <paramref name="descriptor"/>.</param>
+    /// <param name="plan">The whole plan, used to resolve the method names of collection element mappings.</param>
+    /// <returns>The full C# text of the generated file; add it under <see cref="MappingPlanEntry.HintName"/>.</returns>
+    public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan)
     {
         var sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
         var destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
         // Never more accessible than the mapped types (CS0050/CS0051 otherwise).
         var accessibility  = descriptor.MethodAccessibility;
-        var methodName     = $"MapTo{descriptor.DestTypeName}";
+        // MapTo{Name}, or a qualified name when it collides (IM0013).
+        var methodName     = entry.MethodName;
 
-        // Scope transformer method names to this mapping to avoid CS0111 conflicts
-        // when multiple profiles in the same compilation register the same transformer type.
-        var scope = $"_{descriptor.SourceTypeName}_{descriptor.DestTypeName}";
+        // Scope hook and transformer method names to this mapping to avoid CS0111 conflicts
+        // (simple names, or full names when another mapping has the same simple names).
+        var scope = entry.HelperScope;
         var scopedTransformers = ScopeTransformers(descriptor.ValueTransformers, scope);
 
         var sb = new StringBuilder();
@@ -63,12 +65,12 @@ internal static class MapperCodeEmitter
             sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;"); // safe: `default!` is part of the emitted C# text, not a local operator
 
         var hasHooks = descriptor.BeforeMapLambdaBody is not null || descriptor.AfterMapLambdaBody is not null;
-        var beforeMapMethodName = $"BeforeMap_{descriptor.SourceTypeName}_{descriptor.DestTypeName}";
-        var afterMapMethodName  = $"AfterMap_{descriptor.SourceTypeName}_{descriptor.DestTypeName}";
+        var beforeMapMethodName = $"BeforeMap{scope}";
+        var afterMapMethodName  = $"AfterMap{scope}";
 
         if (descriptor.WholeObjectConverterType is not null)
         {
-            sb.AppendLine($"            return new global::{descriptor.WholeObjectConverterType}().Convert(source);");
+            sb.AppendLine($"            return new {descriptor.WholeObjectConverterType}().Convert(source);");
         }
         else if (descriptor.WholeObjectLambdaBody is not null)
         {
@@ -85,7 +87,7 @@ internal static class MapperCodeEmitter
             foreach (var prop in descriptor.PropertyMappings)
             {
                 if (prop.IsIgnored || prop.IsInitOnly) continue;
-                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers)};");
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, plan)};");
             }
 
             if (descriptor.AfterMapLambdaBody is not null)
@@ -101,7 +103,7 @@ internal static class MapperCodeEmitter
             {
                 if (prop.IsIgnored) continue;
                 sb.Append("                ");
-                sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers) + ",");
+                sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers, plan) + ",");
             }
             sb.AppendLine("            };");
         }
@@ -122,7 +124,7 @@ internal static class MapperCodeEmitter
         foreach (var prop in descriptor.PropertyMappings)
         {
             if (prop.IsIgnored || prop.IsInitOnly) continue;
-            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers)};");
+            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, plan)};");
         }
         sb.AppendLine("        }");
 
@@ -194,12 +196,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
-        var ns = descriptor.SourceNamespace is null
-            ? string.Empty
-            : descriptor.SourceNamespace.Replace('.', '_') + "_";
-        var hintName = $"{ns}{descriptor.SourceTypeName}_MapTo{descriptor.DestTypeName}.g.cs";
-
-        return (hintName, sb.ToString());
+        return sb.ToString();
     }
 
     /// <summary>
@@ -236,22 +233,22 @@ internal static class MapperCodeEmitter
     /// Builds an object-initializer line: <c>PropName = &lt;rhs&gt;</c>.
     /// </summary>
     private static string BuildPropertyInitializer(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers)
-        => $"{prop.DestPropertyName} = {BuildRhs(prop, transformers)}";
+        ImmutableArray<ValueTransformerDescriptor> transformers, MappingPlan plan)
+        => $"{prop.DestPropertyName} = {BuildRhs(prop, transformers, plan)}";
 
     /// <summary>
     /// Builds the right-hand side expression for a property mapping.
     /// </summary>
     private static string BuildRhs(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers)
+        ImmutableArray<ValueTransformerDescriptor> transformers, MappingPlan plan)
     {
         string raw;
         if (prop.LambdaBody is not null)
             raw = prop.LambdaBody;
         else if (prop.ConverterType is not null)
-            raw = $"new global::{prop.ConverterType}().Convert(source.{prop.SourcePropertyName})";
+            raw = $"new {prop.ConverterType}().Convert(source.{prop.SourcePropertyName})";
         else if (prop.CollectionElementMapMethod is not null)
-            raw = BuildCollectionRhs(prop);
+            raw = BuildCollectionRhs(prop, plan);
         else
             raw = $"source.{prop.SourcePropertyName}";
 
@@ -276,10 +273,13 @@ internal static class MapperCodeEmitter
     /// <summary>
     /// Builds the RHS for a nested collection property, emitting a null-guard and a LINQ Select.
     /// </summary>
-    private static string BuildCollectionRhs(PropertyMappingDescriptor prop)
+    private static string BuildCollectionRhs(PropertyMappingDescriptor prop, MappingPlan plan)
     {
+        // The element mapping may have a qualified name (IM0013); mappings not in this compilation keep MapTo{Name}.
+        var elementMethod = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
+                            ?? prop.CollectionElementMapMethod;
         var srcExpr    = $"source.{prop.SourcePropertyName}";
-        var selectExpr = $"global::System.Linq.Enumerable.Select({srcExpr}, x => x.{prop.CollectionElementMapMethod}())";
+        var selectExpr = $"global::System.Linq.Enumerable.Select({srcExpr}, x => x.{elementMethod}())";
 
         return prop.CollectionOutputType switch
         {

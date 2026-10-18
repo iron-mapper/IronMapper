@@ -14,3 +14,5 @@ IM0009 | IronMapper | Warning | RecordParameterNotMapped
 IM0010 | IronMapper | Error | InaccessibleMappingType
 IM0011 | IronMapper | Error | LambdaMemberNotAccessible
 IM0012 | IronMapper | Error | LambdaCapturesState
+IM0013 | IronMapper | Warning | QualifiedMethodName
+IM0014 | IronMapper | Error | UnresolvableMethodNameCollision

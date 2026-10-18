@@ -44,12 +44,6 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 transform: static (ctx, ct) => MappingAnalyzer.ExtractFromMapFrom(ctx, ct))
             .SelectMany(static (arr, _) => arr);
 
-        context.RegisterSourceOutput(fromMapTo, static (spc, descriptor) =>
-            EmitDescriptor(spc, descriptor));
-
-        context.RegisterSourceOutput(fromMapFrom, static (spc, descriptor) =>
-            EmitDescriptor(spc, descriptor));
-
         // MappingProfile subclass pipeline — analyses constructor bodies for CreateMap<,>() chains.
         var fromProfiles = context.SyntaxProvider
             .CreateSyntaxProvider(
@@ -57,16 +51,34 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 transform: static (ctx, ct) => ProfileAnalyzer.ExtractFromProfile(ctx, ct))
             .SelectMany(static (arr, _) => arr);
 
-        context.RegisterSourceOutput(fromProfiles, static (spc, descriptor) =>
-            EmitDescriptor(spc, descriptor));
+        // Decisions across all mappings: duplicate pairs (IM0007), method name collisions (IM0013/IM0014),
+        // hint names and helper scopes. The plan is compared by value, so a mapping's file is re-emitted only
+        // when that mapping or a decision changes.
+        var plan = fromMapTo.Collect()
+            .Combine(fromMapFrom.Collect())
+            .Combine(fromProfiles.Collect())
+            .Select(static (all, _) => MappingPlanner.Create(all.Left.Left, all.Left.Right, all.Right));
 
-        // Accessibility of GeneratedMappers over all mappings of the assembly: public if any generated method is
-        // public, internal otherwise (an internal class is invisible to referencing assemblies). The final Select
-        // yields a string, so the declaration is re-emitted only when the accessibility actually changes.
-        var classAccessibility = fromMapTo.Select(static (d, _) => GetEmittedAccessibility(d)).Collect()
-            .Combine(fromMapFrom.Select(static (d, _) => GetEmittedAccessibility(d)).Collect())
-            .Combine(fromProfiles.Select(static (d, _) => GetEmittedAccessibility(d)).Collect())
-            .Select(static (all, _) => GetClassAccessibility(all.Left.Left, all.Left.Right, all.Right));
+        context.RegisterSourceOutput(plan, static (spc, mappingPlan) =>
+        {
+            foreach (var diag in mappingPlan.Diagnostics)
+                spc.ReportDiagnostic(Diagnostic.Create(diag.Descriptor, Location.None, diag.MessageArgs));
+        });
+
+        context.RegisterSourceOutput(fromMapTo.Combine(plan), static (spc, item) =>
+            EmitDescriptor(spc, item.Left, item.Right));
+
+        context.RegisterSourceOutput(fromMapFrom.Combine(plan), static (spc, item) =>
+            EmitDescriptor(spc, item.Left, item.Right));
+
+        context.RegisterSourceOutput(fromProfiles.Combine(plan), static (spc, item) =>
+            EmitDescriptor(spc, item.Left, item.Right));
+
+        // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
+        // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
+        // the plan does not generate (IM0007/IM0014) do not count. The final Select yields a string, so the
+        // declaration is re-emitted only when the accessibility actually changes.
+        var classAccessibility = plan.Select(static (mappingPlan, _) => GetClassAccessibility(mappingPlan));
 
         context.RegisterSourceOutput(classAccessibility, static (spc, accessibility) =>
         {
@@ -78,20 +90,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         });
     }
 
-    /// <summary>Accessibility of the methods emitted for <paramref name="descriptor"/>; null for diagnostic-only sentinels.</summary>
-    private static string? GetEmittedAccessibility(MappingDescriptor descriptor)
-        => descriptor.SourceTypeName.Length == 0 ? null : descriptor.MethodAccessibility;
-
-    private static string? GetClassAccessibility(params ImmutableArray<string?>[] groups)
+    private static string? GetClassAccessibility(MappingPlan plan)
     {
         string? result = null;
-        foreach (var group in groups)
+        foreach (var entry in plan.Entries)
         {
-            foreach (var accessibility in group)
-            {
-                if (accessibility == "public") return "public";
-                if (accessibility is not null) result = "internal";
-            }
+            if (!entry.Emit) continue;
+            if (entry.MethodAccessibility == "public") return "public";
+            result = "internal";
         }
 
         return result;
@@ -126,9 +132,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// Reports any analysis diagnostics collected in <paramref name="descriptor"/> and then
     /// adds the generated source file to the compilation.
     /// Sentinel descriptors (SourceTypeName is empty) carry only diagnostics and produce no source.
+    /// Definitions that the plan does not generate (duplicate pair, unresolvable name collision) produce
+    /// neither source nor their own diagnostics; the plan reports IM0007/IM0014 for them.
     /// </summary>
-    private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor)
+    private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor, MappingPlan plan)
     {
+        var entry = descriptor.SourceTypeName.Length == 0 ? null : plan.Find(descriptor.Origin);
+        if (descriptor.SourceTypeName.Length != 0 && entry is not { Emit: true }) return;
+
         // Report any diagnostics collected during analysis.
         foreach (var diag in descriptor.Diagnostics)
         {
@@ -137,9 +148,8 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         }
 
         // Sentinel descriptors (e.g. empty MappingProfile) carry diagnostics only.
-        if (descriptor.SourceTypeName.Length == 0) return;
+        if (entry is null) return;
 
-        var (hintName, source) = MapperCodeEmitter.Emit(descriptor);
-        spc.AddSource(hintName, source);
+        spc.AddSource(entry.HintName, MapperCodeEmitter.Emit(descriptor, entry, plan));
     }
 }

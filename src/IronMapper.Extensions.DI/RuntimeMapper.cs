@@ -17,8 +17,10 @@ namespace IronMapper.Extensions.DI;
 /// <c>IronMapper.Generated.GeneratedMappers</c> static class and caches a <see cref="MethodInfo"/>
 /// per <c>(sourceType, destType)</c> pair.  Every call then invokes the cached method via
 /// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and has not
-/// been verified with NativeAOT or trimming. Methods are matched by the destination type's simple name
-/// and the exact runtime source type (public and internal generated methods are both found);
+/// been verified with NativeAOT or trimming. Methods are matched by signature: a <c>MapTo*</c> method whose
+/// parameter is the exact source type and whose return type is the destination type (or, for the in-place
+/// overload, whose parameters are both types), so qualified method names (IM0013) are found too;
+/// public and internal generated methods are both found;
 /// assemblies whose names start with <c>System.</c> or
 /// <c>Microsoft.</c> are not scanned.
 /// </remarks>
@@ -118,22 +120,16 @@ public sealed class RuntimeMapper : IMapper
     /// static class and returns the single-parameter extension method matching the requested type pair.
     /// </summary>
     private static MethodInfo? FindGeneratedMethod(Type sourceType, Type destType)
-    {
-        var expectedName = $"MapTo{destType.Name}";
-        return FindInGeneratedClass(expectedName, new[] { sourceType });
-    }
+        => FindInGeneratedClass(new[] { sourceType }, destType);
 
     /// <summary>
     /// Scans all loaded assemblies for the two-parameter in-place extension method
     /// <c>MapToDestType(source, destination)</c>.
     /// </summary>
     private static MethodInfo? FindGeneratedInPlaceMethod(Type sourceType, Type destType)
-    {
-        var expectedName = $"MapTo{destType.Name}";
-        return FindInGeneratedClass(expectedName, new[] { sourceType, destType });
-    }
+        => FindInGeneratedClass(new[] { sourceType, destType }, typeof(void));
 
-    private static MethodInfo? FindInGeneratedClass(string methodName, Type[] paramTypes)
+    private static MethodInfo? FindInGeneratedClass(Type[] paramTypes, Type returnType)
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
@@ -148,16 +144,22 @@ public sealed class RuntimeMapper : IMapper
             var generatedClass = assembly.GetType("IronMapper.Generated.GeneratedMappers");
             if (generatedClass is null) continue;
 
-            var method = generatedClass.GetMethod(
-                methodName,
-                // Generated methods are internal when a mapped type is internal.
-                // Temporary until the reflection-free registry (plan item 1.3).
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
-                null,
-                paramTypes,
-                null);
+            // Generated methods are internal when a mapped type is internal.
+            // Temporary until the reflection-free registry (plan item 1.3).
+            foreach (var method in generatedClass.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+            {
+                // By signature, not by name: the name is MapTo{Dest.Name} or a qualified name (IM0013).
+                // MapToXList/MapToXArray take IEnumerable<T> and never match an exact element type.
+                if (!method.Name.StartsWith("MapTo", StringComparison.Ordinal) || method.ReturnType != returnType)
+                    continue;
+                var parameters = method.GetParameters();
+                if (parameters.Length != paramTypes.Length) continue;
 
-            if (method is not null) return method;
+                var matches = true;
+                for (var i = 0; i < parameters.Length && matches; i++)
+                    matches = parameters[i].ParameterType == paramTypes[i];
+                if (matches) return method;
+            }
         }
 
         return null;

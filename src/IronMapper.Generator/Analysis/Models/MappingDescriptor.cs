@@ -85,6 +85,37 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// </summary>
     public string MethodAccessibility { get; }
 
+    /// <summary>
+    /// Stable key of the definition site (e.g. <c>attr:MapTo:...</c>, <c>profile:App.UserProfile#0000.0002</c>).
+    /// Distinguishes several definitions of the same type pair; empty for diagnostic-only descriptors.
+    /// </summary>
+    public string Origin { get; }
+
+    /// <summary>Human-readable definition site for diagnostics, e.g. <c>MappingProfile 'App.UserProfile'</c>.</summary>
+    public string OriginDisplay { get; }
+
+    /// <summary>
+    /// Precedence when the same type pair is defined more than once (lower wins):
+    /// 0 = <c>CreateMap</c>, 1 = <c>ReverseMap()</c>, 2 = <c>[MapTo]</c>, 3 = <c>[MapFrom]</c>.
+    /// </summary>
+    public int OriginRank { get; }
+
+    /// <summary>
+    /// Namespace segments and containing types of the destination, outermost first, joined with '.'
+    /// (e.g. <c>App.Admin</c>, or <c>App.Orders</c> for a type nested in <c>App.Orders</c>); empty for the
+    /// global namespace. Used only to qualify colliding method names.
+    /// </summary>
+    public string DestQualifier { get; }
+
+    /// <summary>Type-argument part of a qualified method name by simple names (e.g. <c>OfInt32</c>); empty for non-generic types.</summary>
+    public string DestTypeArgsShort { get; }
+
+    /// <summary>Type-argument part of a qualified method name by full names (e.g. <c>OfSystem_Int32</c>); empty for non-generic types.</summary>
+    public string DestTypeArgsFull { get; }
+
+    /// <summary>Key of the type pair: <c>{SourceFullName}-&gt;{DestFullName}</c>.</summary>
+    public string PairKey => $"{SourceFullName}->{DestFullName}";
+
     /// <summary>Initialises a new <see cref="MappingDescriptor"/>.</summary>
     /// <param name="sourceTypeName">Simple (unqualified) name of the source type.</param>
     /// <param name="sourceNamespace">Namespace of the source type, or <see langword="null"/> for the global namespace.</param>
@@ -102,6 +133,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="sourceFullName">Fully-qualified source type name, or <see langword="null"/> to derive it.</param>
     /// <param name="destFullName">Fully-qualified destination type name, or <see langword="null"/> to derive it.</param>
     /// <param name="methodAccessibility">Accessibility modifier of the generated methods (<c>"public"</c> or <c>"internal"</c>).</param>
+    /// <param name="origin">Stable key of the definition site (see <see cref="Origin"/>).</param>
+    /// <param name="originDisplay">Human-readable definition site for diagnostics.</param>
+    /// <param name="originRank">Precedence among duplicate definitions (see <see cref="OriginRank"/>).</param>
+    /// <param name="destQualifier">Namespace and containing types of the destination (see <see cref="DestQualifier"/>).</param>
+    /// <param name="destTypeArgsShort">Type-argument name part by simple names (see <see cref="DestTypeArgsShort"/>).</param>
+    /// <param name="destTypeArgsFull">Type-argument name part by full names (see <see cref="DestTypeArgsFull"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -118,7 +155,13 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         ImmutableArray<ValueTransformerDescriptor> valueTransformers = default,
         string? sourceFullName = null,
         string? destFullName = null,
-        string methodAccessibility = "public")
+        string methodAccessibility = "public",
+        string origin = "",
+        string originDisplay = "",
+        int originRank = 0,
+        string destQualifier = "",
+        string destTypeArgsShort = "",
+        string destTypeArgsFull = "")
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -136,7 +179,26 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         SourceFullName = sourceFullName;
         DestFullName = destFullName;
         MethodAccessibility = methodAccessibility;
+        Origin = origin;
+        OriginDisplay = originDisplay;
+        OriginRank = originRank;
+        DestQualifier = destQualifier;
+        DestTypeArgsShort = destTypeArgsShort;
+        DestTypeArgsFull = destTypeArgsFull;
     }
+
+    /// <summary>
+    /// Returns a copy with the definition site (see <see cref="Origin"/>) and the destination naming parts
+    /// (see <see cref="DestQualifier"/>) set. Diagnostic-only descriptors are returned unchanged.
+    /// </summary>
+    public MappingDescriptor WithOrigin(string origin, string originDisplay, int originRank, DestinationNaming naming)
+        => SourceTypeName.Length == 0
+            ? this
+            : new(SourceTypeName, SourceNamespace, DestTypeName, DestNamespace, PropertyMappings, Diagnostics,
+                HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
+                BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
+                MethodAccessibility, origin, originDisplay, originRank,
+                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -156,7 +218,13 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || AfterMapLambdaBody != other.AfterMapLambdaBody
             || SourceFullName != other.SourceFullName
             || DestFullName != other.DestFullName
-            || MethodAccessibility != other.MethodAccessibility)
+            || MethodAccessibility != other.MethodAccessibility
+            || Origin != other.Origin
+            || OriginDisplay != other.OriginDisplay
+            || OriginRank != other.OriginRank
+            || DestQualifier != other.DestQualifier
+            || DestTypeArgsShort != other.DestTypeArgsShort
+            || DestTypeArgsFull != other.DestTypeArgsFull)
             return false;
 
         if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
@@ -190,6 +258,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (SourceFullName?.GetHashCode() ?? 0);
         hash = hash * 31 + (DestFullName?.GetHashCode() ?? 0);
         hash = hash * 31 + MethodAccessibility.GetHashCode();
+        hash = hash * 31 + Origin.GetHashCode();
+        hash = hash * 31 + OriginRank;
+        hash = hash * 31 + DestQualifier.GetHashCode();
+        hash = hash * 31 + DestTypeArgsShort.GetHashCode();
         foreach (var pm in PropertyMappings)
             hash = hash * 31 + pm.GetHashCode();
         foreach (var vt in ValueTransformers)

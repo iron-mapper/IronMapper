@@ -3,13 +3,15 @@
   <!--
     Library referenced by IronMapper.PackageConsumer: uses the packed IronMapper package and has public mappings
     (plus one internal), so its public IronMapper.Generated.GeneratedMappers is visible to the consumer, which
-    declares a class with the same name. Built by eng/verify-package.ps1 through the consumer; intentionally NOT
-    part of IronMapper.slnx.
+    declares a class with the same name. Members.cs has a method name collision (qualified names, IM0013).
+    Built by eng/verify-package.ps1 through the consumer; intentionally NOT part of IronMapper.slnx.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Members.cs: the qualified method names are intended. -->
+    <NoWarn>$(NoWarn);IM0013</NoWarn>
     <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>

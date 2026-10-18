@@ -390,7 +390,68 @@ public class GeneratedClassVisibilityTests
 
         Assert.NotEmpty(appDiagnostics);
         Assert.All(appDiagnostics, d => Assert.Equal("CS0121", d.Id));
-        Assert.All(appDiagnostics, d => Assert.EndsWith("App_Cart_MapToCartDto.g.cs", d.Location.SourceTree!.FilePath));
+        Assert.All(appDiagnostics, d => Assert.EndsWith("App.Cart_MapTo_App.CartDto.g.cs", d.Location.SourceTree!.FilePath));
+    }
+
+    [Fact]
+    public void ReferencedAssemblyWithQualifiedMethodNames_ConsumerCallsThem()
+    {
+        // A name collision (IM0013) inside a library with public maps: the qualified methods are public, the library's
+        // List/Array call them by their qualified simple name, the nested collection uses the qualified element map,
+        // and the referencing assembly (with its own GeneratedMappers) calls all of them.
+        var library = """
+            using System.Collections.Generic;
+            using IronMapper.Attributes;
+            using IronMapper.Configuration;
+
+            namespace Lib
+            {
+                [MapTo(typeof(Admin.MemberDto))]
+                [MapTo(typeof(Public.MemberDto))]
+                public class Member { public string Name { get; set; } = ""; }
+
+                public class Team { public List<Member> Members { get; set; } = new(); }
+                public class TeamProfile : MappingProfile
+                {
+                    public TeamProfile() { CreateMap<Team, Admin.TeamDto>(); }
+                }
+
+                public static class LibApi
+                {
+                    public static string Describe(string code, int amount) => code + ":" + amount;
+                }
+            }
+
+            namespace Lib.Admin
+            {
+                public class MemberDto { public string Name { get; set; } = ""; }
+                public class TeamDto { public List<MemberDto> Members { get; set; } = new(); }
+            }
+
+            namespace Lib.Public
+            {
+                public class MemberDto { public string Name { get; set; } = ""; }
+            }
+            """;
+        var calls = """
+            parts.Add(new Lib.Member { Name = "m" }.MapToAdminMemberDto().Name);
+            parts.Add(new[] { new Lib.Member { Name = "l" } }.MapToPublicMemberDtoList()[0].Name);
+            parts.Add(new[] { new Lib.Member { Name = "a" } }.MapToAdminMemberDtoArray()[0].Name);
+            var target = new Lib.Public.MemberDto();
+            new Lib.Member { Name = "i" }.MapToPublicMemberDto(target);
+            parts.Add(target.Name);
+            parts.Add(new Lib.Team { Members = { new Lib.Member { Name = "t" } } }.MapToTeamDto().Members[0].Name);
+            """;
+
+        var (libraryCompilation, libraryDiagnostics) = GeneratorTestHelper.CompileProject("Lib", library);
+        Assert.Equal(new[] { "IM0013", "IM0013" }, libraryDiagnostics.Select(d => d.Id));
+        Assert.Equal(Accessibility.Public, GetGeneratedClass(libraryCompilation).DeclaredAccessibility);
+
+        var (libraryRef, libraryImage) = GeneratorTestHelper.EmitReference(libraryCompilation);
+        var (app, appDiagnostics) = GeneratorTestHelper.CompileProject("App", App(calls), libraryRef);
+
+        AssertClean(appDiagnostics);
+        Assert.Equal("7,8,n,s:3,m,l,a,i,t", Run(app, ("Lib", libraryImage)));
     }
 
     // ------------------------------------------------------------------

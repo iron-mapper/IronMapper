@@ -79,16 +79,17 @@ internal static class DiagnosticDescriptors
         description: "The destination property name specified in [MapProperty] does not match any public, settable property on the destination type. Check the spelling or update the destination type.");
 
     /// <summary>
-    /// IM0007 — Both a [MapTo]/[MapFrom] attribute and a MappingProfile define a mapping for the same type pair.
+    /// IM0007 — The same type pair is defined more than once ([MapTo], [MapFrom], CreateMap, ReverseMap).
+    /// Only one definition is generated.
     /// </summary>
     public static readonly DiagnosticDescriptor DuplicateMappingDefinition = new(
         id: "IM0007",
         title: "Duplicate mapping definition",
-        messageFormat: "Both an attribute and a MappingProfile define a mapping from '{0}' to '{1}'. The profile-based mapping takes precedence.",
+        messageFormat: "Mapping from '{0}' to '{1}' is defined more than once: {2}. Only the definition from {3} is generated; remove the others.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Remove either the [MapTo]/[MapFrom] attribute or the corresponding CreateMap<,>() call from the profile to avoid duplicate mapping definitions.");
+        description: "A type pair is generated once. Precedence: CreateMap in a MappingProfile, then ReverseMap(), then [MapTo], then [MapFrom]; among definitions of the same kind, the profile (or type) whose full name sorts first, then the first call in the constructor. The profile-based mapping takes precedence over attributes.");
 
     /// <summary>
     /// IM0008 — The destination type is abstract or an interface and cannot be instantiated.
@@ -150,4 +151,29 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Instance fields, properties and methods of the profile, 'this', local variables and parameters of the constructor do not exist in the generated code.");
+
+    /// <summary>
+    /// IM0013 — Several mappings from one source type have destination types with the same simple name, so
+    /// <c>MapTo{Name}</c> would be declared twice (CS0111). The mapping gets a qualified method name.
+    /// </summary>
+    public static readonly DiagnosticDescriptor QualifiedMethodName = new(
+        id: "IM0013",
+        title: "Mapping method name qualified to avoid a collision",
+        messageFormat: "Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The method name is qualified with the namespace and containing types of the destination (fewest trailing segments that make the names unique), then with its type arguments. Mappings without a collision keep MapTo{Name}. Rename one of the destination types to get the short name back, or suppress the warning with <NoWarn>IM0013</NoWarn>.");
+
+    /// <summary>
+    /// IM0014 — A method name collision could not be resolved by qualifying the name; the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnresolvableMethodNameCollision = new(
+        id: "IM0014",
+        title: "Mapping method name collision cannot be resolved",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: another mapping from '{0}' has a destination type named '{2}', and every qualified method name (for example '{3}') is already used by another mapping. Rename one of the destination types.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Other mappings in the project are still generated.");
 }

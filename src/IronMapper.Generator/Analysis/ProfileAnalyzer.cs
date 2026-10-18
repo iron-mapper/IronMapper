@@ -58,12 +58,14 @@ internal static class ProfileAnalyzer
         var profileName = classSymbol.ToDisplayString();
 
         // Look for the primary (or any) constructor body.
+        var ctorIndex = -1;
         foreach (var ctor in classDecl.Members)
         {
             ct.ThrowIfCancellationRequested();
 
             if (ctor is not ConstructorDeclarationSyntax ctorDecl) continue;
             if (ctorDecl.Body is null) continue;
+            ctorIndex++;
 
             // Pass 1: collect AddTransformer declarations.
             var transformersByType = new Dictionary<string, ValueTransformerDescriptor>();
@@ -83,12 +85,16 @@ internal static class ProfileAnalyzer
                 builder.Add(MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(transformerDiagnostics)));
 
             // Pass 2: process CreateMap chains.
+            var statementIndex = -1;
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
+                statementIndex++;
                 if (statement is not ExpressionStatementSyntax exprStmt) continue;
 
-                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, profileName, ct);
+                // Stable key of this CreateMap call: profile, constructor, statement (zero-padded for ordinal sorting).
+                var origin = $"profile:{profileName}#{ctorIndex:D4}.{statementIndex:D4}";
+                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, profileName, origin, ct);
                 builder.AddRange(descriptors);
             }
         }
@@ -126,6 +132,7 @@ internal static class ProfileAnalyzer
         SemanticModel model,
         ImmutableArray<ValueTransformerDescriptor> transformers,
         string profileName,
+        string origin,
         CancellationToken ct)
     {
         // Problems found while rewriting lambdas (IM0011/IM0012); any problem skips the whole chain.
@@ -194,10 +201,7 @@ internal static class ProfileAnalyzer
                         if (methodSym?.TypeArguments.Length > 0
                             && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
                         {
-                            var ns = SymbolHelpers.GetNamespace(convSym);
-                            wholeObjectConverterType = ns is null
-                                ? convSym.Name
-                                : $"{ns}.{convSym.Name}";
+                            wholeObjectConverterType = SymbolHelpers.GetFullyQualifiedName(convSym);
                         }
                     }
                     else if (inv.ArgumentList.Arguments.Count == 1)
@@ -241,7 +245,9 @@ internal static class ProfileAnalyzer
             sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
             wholeObjectConverterType, wholeObjectLambdaBody,
             beforeMapBody, afterMapBody, transformers, model, ct);
-        if (forward is not null) results.Add(forward);
+        if (forward is not null)
+            results.Add(forward.WithOrigin(
+                origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol)));
 
         if (reverseMap)
         {
@@ -257,7 +263,10 @@ internal static class ProfileAnalyzer
                 beforeMapBody: null,
                 afterMapBody: null,
                 transformers, model, ct);
-            if (reverse is not null) results.Add(reverse);
+            if (reverse is not null)
+                results.Add(reverse.WithOrigin(
+                    origin + ":reverse", $"ReverseMap() in MappingProfile '{profileName}'", originRank: 1,
+                    SymbolHelpers.GetDestinationNaming(sourceSymbol)));
         }
 
         return results;
@@ -299,9 +308,7 @@ internal static class ProfileAnalyzer
             if (methodSym?.TypeArguments.Length > 0
                 && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
             {
-                var ns = SymbolHelpers.GetNamespace(convSym);
-                var converterTypeName = ns is null ? convSym.Name : $"{ns}.{convSym.Name}";
-                configs.Add((destPropName, null, false, converterTypeName));
+                configs.Add((destPropName, null, false, SymbolHelpers.GetFullyQualifiedName(convSym)));
             }
             return;
         }
@@ -481,7 +488,7 @@ internal static class ProfileAnalyzer
             // Priority 2: direct name-match.
             else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
-                var (collectionMapMethod, collectionOutputType) =
+                var (collectionMapMethod, collectionOutputType, collectionPairKey) =
                     DetectCollectionMapping(namedProp.Type, destProp.Type);
                 var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 propertyMappings.Add(new PropertyMappingDescriptor(
@@ -494,7 +501,8 @@ internal static class ProfileAnalyzer
                     isInitOnly: isInitOnly,
                     collectionElementMapMethod: collectionMapMethod,
                     collectionOutputType: collectionOutputType,
-                    sourcePropertyTypeFqn: typeFqn));
+                    sourcePropertyTypeFqn: typeFqn,
+                    collectionElementPairKey: collectionPairKey));
             }
             // Priority 3: IncludeMembers flattening.
             else if (includedResolution.TryGetValue(destProp.Name, out var included))
@@ -535,18 +543,19 @@ internal static class ProfileAnalyzer
     /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are
     /// collection types whose element types differ, returns the mapping method name and output kind.
     /// </summary>
-    private static (string? mapMethod, string? outputType) DetectCollectionMapping(
+    private static (string? mapMethod, string? outputType, string? pairKey) DetectCollectionMapping(
         ITypeSymbol sourcePropType,
         ITypeSymbol destPropType)
     {
         if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null)
-            return (null, null);
+            return (null, null, null);
         if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null)
-            return (null, null);
+            return (null, null, null);
         if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
-            return (null, null);
+            return (null, null, null);
 
-        return ($"MapTo{dstElem.Name}", SymbolHelpers.GetCollectionOutputType(destPropType));
+        return ($"MapTo{dstElem.Name}", SymbolHelpers.GetCollectionOutputType(destPropType),
+            $"{SymbolHelpers.GetFullyQualifiedName(srcElem)}->{SymbolHelpers.GetFullyQualifiedName(dstElem)}");
     }
 
     // -----------------------------------------------------------------------

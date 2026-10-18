@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using IronMapper.Generator.Analysis.Models;
 using Microsoft.CodeAnalysis;
 
 namespace IronMapper.Generator.Analysis;
@@ -77,6 +78,59 @@ internal static class SymbolHelpers
     /// </summary>
     public static string GetFullyQualifiedName(ITypeSymbol type)
         => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+    /// <summary>
+    /// Returns the parts of <paramref name="destType"/> used to qualify a colliding <c>MapTo{Name}</c> method name:
+    /// namespace segments and containing types (outermost first) and the type arguments.
+    /// </summary>
+    public static DestinationNaming GetDestinationNaming(INamedTypeSymbol destType)
+    {
+        var segments = new List<string>();
+        for (var containing = destType.ContainingType; containing is not null; containing = containing.ContainingType)
+            segments.Insert(0, containing.Name);
+        for (var ns = destType.ContainingNamespace; ns is not null && !ns.IsGlobalNamespace; ns = ns.ContainingNamespace)
+            segments.Insert(0, ns.Name);
+
+        if (destType.TypeArguments.Length == 0)
+            return new DestinationNaming(string.Join(".", segments), string.Empty, string.Empty);
+
+        var shortArgs = new List<string>();
+        var fullArgs = new List<string>();
+        foreach (var argument in destType.TypeArguments)
+        {
+            shortArgs.Add(GetShortTypeName(argument));
+            fullArgs.Add(ToIdentifier(GetFullyQualifiedName(argument)));
+        }
+
+        return new DestinationNaming(
+            string.Join(".", segments),
+            "Of" + string.Join("And", shortArgs),
+            "Of" + string.Join("And", fullArgs));
+    }
+
+    /// <summary>
+    /// Turns a type name into identifier characters: drops <c>global::</c> and replaces every character that is
+    /// not a letter, digit or underscore with <c>_</c> (e.g. <c>global::App.Box&lt;int&gt;</c> → <c>App_Box_int_</c>).
+    /// </summary>
+    public static string ToIdentifier(string typeName)
+    {
+        if (typeName.StartsWith("global::", System.StringComparison.Ordinal))
+            typeName = typeName.Substring("global::".Length);
+
+        var chars = typeName.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+            if (!char.IsLetterOrDigit(chars[i]) && chars[i] != '_') chars[i] = '_';
+        return new string(chars);
+    }
+
+    // Int32, StringArray, ListOfInt32, DictionaryOfStringAndInt32.
+    private static string GetShortTypeName(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol array => GetShortTypeName(array.ElementType) + "Array",
+        INamedTypeSymbol { TypeArguments.Length: > 0 } named =>
+            named.Name + "Of" + string.Join("And", System.Linq.Enumerable.Select(named.TypeArguments, GetShortTypeName)),
+        _ => type.Name,
+    };
 
     /// <summary>
     /// Determines the accessibility modifier for generated methods whose signatures use

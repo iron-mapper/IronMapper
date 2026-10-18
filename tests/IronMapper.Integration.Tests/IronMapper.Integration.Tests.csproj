@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <!-- QualifiedNameMapperTests maps one source to two MemberDto types on purpose (qualified method names). -->
+    <NoWarn>$(NoWarn);IM0013</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
