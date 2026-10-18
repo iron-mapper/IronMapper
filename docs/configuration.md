@@ -81,6 +81,46 @@ second destination type with the same simple name later does rename the existing
 are used instead (`TransformValue_String_Shop_Item_Shop_ItemDto`). These helpers are `private`. Generated files are
 named after the full names of both types (`Shop.Item_MapTo_Shop.ItemDto.g.cs`).
 
+## Multi-project solutions
+
+Every project that references the `IronMapper` package gets its own class `IronMapper.Generated.GeneratedMappers`
+with the mappings of that project. The name is the same in every assembly.
+
+**Accessibility of the class.** The class is `public` if at least one generated method of the project is `public`,
+and `internal` otherwise. A project with only internal mappings therefore exposes nothing: projects that reference it
+do not see its class at all (unless it grants `[InternalsVisibleTo]`).
+
+**Calling mappings of a referenced project.** Use the extension method syntax with `using IronMapper.Generated;`:
+
+```csharp
+using IronMapper.Generated;
+
+var dto = product.MapToProductDto();      // public mapping declared in a referenced project
+var order = entity.MapToOrderDto();       // mapping declared in this project
+```
+
+Mappings of the current project and public mappings of referenced projects can be used side by side; this builds with
+`TreatWarningsAsErrors` (covered by `GeneratedClassVisibilityTests` and by the package consumer in
+`tests/IronMapper.PackageConsumer`, which references two libraries that use IronMapper).
+
+Qualified names ([`IM0013`](#one-source-type-several-destination-types-with-the-same-simple-name)) of a referenced
+project's public mappings are called the same way, by the name the warning reported in that project
+(`member.MapToAdminMemberDto()`, `members.MapToAdminMemberDtoList()`).
+
+Two limitations remain:
+
+- **Do not name the class.** `GeneratedMappers.MapToOrderDto(entity)` binds to the class of the current project. If a
+  referenced project's class is also visible (it has public mappings, or it grants `[InternalsVisibleTo]`), the
+  compiler reports warning `CS0436` (an error with `TreatWarningsAsErrors`), and the referenced project's methods are
+  not reachable this way. The extension method syntax has no such problem.
+- **Define each mapping in one project.** If a referenced project already exposes a mapping for a type pair and the
+  current project maps the same pair again, the current project still builds, but calling `source.MapToX()` in it is
+  ambiguous (`CS0121`). The same happens inside the generated code when a nested collection's element type is mapped
+  in both projects. Keep the mapping in the project that owns the types.
+
+`IMapper` (`IronMapper.Extensions.DI`) finds generated methods in every loaded assembly, whether the class is public
+or internal.
+
 ---
 
 ## Attributes

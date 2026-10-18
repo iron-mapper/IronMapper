@@ -129,7 +129,8 @@ internal static class MappingPlanner
             var emit = !dropped.Contains(mapping.Origin) && !skipped.Contains(mapping.Origin);
             if (!emit)
             {
-                entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, false, PlainName(mapping), string.Empty, string.Empty));
+                entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, false, PlainName(mapping), string.Empty, string.Empty,
+                    mapping.MethodAccessibility));
                 continue;
             }
 
@@ -142,7 +143,8 @@ internal static class MappingPlanner
             for (var n = 2; !hintNames.Add(hintName); n++)
                 hintName = $"{hintBase}_{n}.g.cs";
 
-            entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodNames[mapping.Origin], hintName, helperScope));
+            entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodNames[mapping.Origin], hintName, helperScope,
+                mapping.MethodAccessibility));
         }
 
         return new MappingPlan(

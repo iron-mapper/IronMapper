@@ -24,6 +24,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IronMapper\IronMapper.csproj" />
     <ProjectReference Include="..\..\src\IronMapper.Generator\IronMapper.Generator.csproj" />
+    <!-- RuntimeMapper is exercised against in-memory compilations (GeneratedClassVisibilityTests). -->
+    <ProjectReference Include="..\..\src\IronMapper.Extensions.DI\IronMapper.Extensions.DI.csproj" />
   </ItemGroup>
 
 </Project>

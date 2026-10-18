@@ -22,12 +22,29 @@
 - Nested collection properties call the element mapping by its actual (possibly qualified) name.
 - `IMapper` (`IronMapper.Extensions.DI`) finds generated methods by signature instead of `MapTo{TDest.Name}`, so
   qualified names work through `IMapper` too.
+- **`IronMapper.Generated.GeneratedMappers` is `internal` when all mappings of the project are internal.** It was
+  always `public`, so a project with only internal mappings still exposed the class to every project that referenced
+  it, and naming `GeneratedMappers` there reported `CS0436`. The accessibility is now computed over all generated
+  mappings of the assembly and declared once, in `GeneratedMappers.g.cs`; it is `public` if at least one generated method is.
+- A project that maps a type pair already exposed by a referenced project no longer fails with `CS0121` inside its
+  own generated `MapToXList`/`MapToXArray` methods: they call the method of their own class by its simple (possibly
+  qualified) name.
+- The class name stays `IronMapper.Generated.GeneratedMappers` in every assembly, so code that compiles on 1.1.2
+  (`using IronMapper.Generated;` + `source.MapToX()`, and `GeneratedMappers.MapToX(source)` within one project) keeps
+  working. See [Multi-project solutions](docs/configuration.md#multi-project-solutions) for the remaining limitations.
 
 ### Added
 
 - Diagnostic `IM0013` (warning): a mapping method name was qualified because of a collision; the message has the name
   to call.
 - Diagnostic `IM0014` (error): a method name collision cannot be resolved; the colliding mappings are not generated.
+
+### Build
+
+- `tests/IronMapper.PackageConsumer` references two libraries that also use the packed package
+  (`IronMapper.PackageConsumer.InternalLib`, only internal mappings; `IronMapper.PackageConsumer.PublicLib`, public
+  mappings, including a method name collision with qualified names called from the consumer) and builds with
+  `TreatWarningsAsErrors`.
 
 ## [1.1.2] - 2026-10-18
 

@@ -101,8 +101,12 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <summary>Suffix of hook and transformer helper names, e.g. <c>_User_UserDto</c>.</summary>
     public string HelperScope { get; }
 
+    /// <summary>Accessibility of the generated methods (<c>public</c>/<c>internal</c>), as in <see cref="MappingDescriptor.MethodAccessibility"/>.</summary>
+    public string MethodAccessibility { get; }
+
     /// <summary>Initialises a new <see cref="MappingPlanEntry"/>.</summary>
-    public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope)
+    public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
+        string methodAccessibility)
     {
         Origin = origin;
         PairKey = pairKey;
@@ -110,6 +114,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         MethodName = methodName;
         HintName = hintName;
         HelperScope = helperScope;
+        MethodAccessibility = methodAccessibility;
     }
 
     /// <inheritdoc/>
@@ -120,7 +125,8 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && Emit == other.Emit
            && MethodName == other.MethodName
            && HintName == other.HintName
-           && HelperScope == other.HelperScope;
+           && HelperScope == other.HelperScope
+           && MethodAccessibility == other.MethodAccessibility;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -134,6 +140,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + MethodName.GetHashCode();
         hash = hash * 31 + HintName.GetHashCode();
         hash = hash * 31 + HelperScope.GetHashCode();
+        hash = hash * 31 + MethodAccessibility.GetHashCode();
         return hash;
     }
 }

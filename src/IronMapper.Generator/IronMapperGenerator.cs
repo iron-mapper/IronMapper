@@ -73,6 +73,34 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(fromProfiles.Combine(plan), static (spc, item) =>
             EmitDescriptor(spc, item.Left, item.Right));
+
+        // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
+        // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
+        // the plan does not generate (IM0007/IM0014) do not count. The final Select yields a string, so the
+        // declaration is re-emitted only when the accessibility actually changes.
+        var classAccessibility = plan.Select(static (mappingPlan, _) => GetClassAccessibility(mappingPlan));
+
+        context.RegisterSourceOutput(classAccessibility, static (spc, accessibility) =>
+        {
+            // No generated mappings: there is no class to declare.
+            if (accessibility is null) return;
+
+            var (hintName, source) = MapperCodeEmitter.EmitClassDeclaration(accessibility);
+            spc.AddSource(hintName, source);
+        });
+    }
+
+    private static string? GetClassAccessibility(MappingPlan plan)
+    {
+        string? result = null;
+        foreach (var entry in plan.Entries)
+        {
+            if (!entry.Emit) continue;
+            if (entry.MethodAccessibility == "public") return "public";
+            result = "internal";
+        }
+
+        return result;
     }
 
     /// <summary>

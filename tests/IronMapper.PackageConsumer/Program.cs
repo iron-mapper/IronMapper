@@ -25,6 +25,26 @@ var shopItem = new Shop.Item { Name = "a" }.MapToItemDto();
 var stockItem = new Stock.Item { Name = "c" }.MapToItemDto();
 var tagDto = new Tag { Label = "t" }.MapToTagDto();
 
+// Referenced libraries that also use IronMapper: InternalLib has only internal maps (its GeneratedMappers is
+// internal and invisible here), PublicLib has public maps called from this assembly.
+var internalLib = InternalLib.InternalLibApi.Describe("s", 3);
+var productDto = new PublicLib.Product { Name = "p" }.MapToProductDto();
+var priceDtos = new[] { new PublicLib.Price { Amount = 2.5m } }.MapToPriceDtoArray();
+var productTarget = new PublicLib.ProductDto();
+new PublicLib.Product { Name = "q" }.MapToProductDto(productTarget);
+var publicLibInternal = PublicLib.PublicLibApi.Reveal("r");
+var internalLibClass = typeof(InternalLib.InternalLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
+var publicLibClass = typeof(PublicLib.PublicLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
+
+// Name collision inside PublicLib: one source, two destinations named MemberDto (IM0013, suppressed there). The
+// qualified methods are public and called from here; their List/Array call MapToX(x) by the qualified simple name.
+var adminMember = new PublicLib.Member { Name = "m" }.MapToAdminMemberDto();
+var publicMembers = new[] { new PublicLib.Member { Name = "l" } }.MapToPublicMemberDtoList();
+var adminMembers = new[] { new PublicLib.Member { Name = "a" } }.MapToAdminMemberDtoArray();
+var publicMemberTarget = new PublicLib.Public.MemberDto();
+new PublicLib.Member { Name = "i" }.MapToPublicMemberDto(publicMemberTarget);
+var teamDto = new PublicLib.Team { Members = { new PublicLib.Member { Name = "t" } } }.MapToTeamDto();
+
 var failures = new List<string>();
 if (dto.Id != 42) failures.Add($"Id: expected 42, got {dto.Id}");
 if (dto.FullName != "Alice") failures.Add($"FullName: expected 'Alice', got '{dto.FullName}'");
@@ -38,6 +58,18 @@ if (sessionDto.Title != "INTRO!") failures.Add($"Extension method from profile u
 if (shopItem.Name != "as1") failures.Add($"Shop.Item: expected 'as1', got '{shopItem.Name}'");
 if (stockItem.Name != "ct2") failures.Add($"Stock.Item: expected 'ct2', got '{stockItem.Name}'");
 if (tagDto.Label != "T") failures.Add($"Nested [MapConverter]: expected 'T', got '{tagDto.Label}'");
+if (internalLib != "s:3") failures.Add($"InternalLib: expected 's:3', got '{internalLib}'");
+if (productDto.Name != "p") failures.Add($"PublicLib [MapTo] from consumer: expected 'p', got '{productDto.Name}'");
+if (priceDtos.Length != 1 || priceDtos[0].Amount != 2.5m) failures.Add("PublicLib profile array map from consumer: expected [2.5]");
+if (productTarget.Name != "q") failures.Add($"PublicLib in-place map from consumer: expected 'q', got '{productTarget.Name}'");
+if (publicLibInternal != "r") failures.Add($"PublicLib internal map: expected 'r', got '{publicLibInternal}'");
+if (internalLibClass is null || internalLibClass.IsPublic) failures.Add("InternalLib: GeneratedMappers must exist and be internal (only internal maps)");
+if (publicLibClass is null || !publicLibClass.IsPublic) failures.Add("PublicLib: GeneratedMappers must exist and be public");
+if (adminMember is not PublicLib.Admin.MemberDto { Name: "m" }) failures.Add($"PublicLib MapToAdminMemberDto: expected 'm', got '{adminMember.Name}'");
+if (publicMembers.Count != 1 || publicMembers[0].Name != "l") failures.Add("PublicLib MapToPublicMemberDtoList: expected ['l']");
+if (adminMembers.Length != 1 || adminMembers[0].Name != "a") failures.Add("PublicLib MapToAdminMemberDtoArray: expected ['a']");
+if (publicMemberTarget.Name != "i") failures.Add($"PublicLib in-place MapToPublicMemberDto: expected 'i', got '{publicMemberTarget.Name}'");
+if (teamDto.Members.Count != 1 || teamDto.Members[0].Name != "t") failures.Add("PublicLib nested collection of qualified element map: expected ['t']");
 
 if (failures.Count > 0)
 {
@@ -205,6 +237,16 @@ namespace Stock
             CreateMap<Item, ItemDto>().BeforeMap((s, d) => d.Name = "b").AfterMap((s, d) => d.Name = d.Name + "2");
             AddTransformer<string>(v => v + "t");
         }
+    }
+}
+
+// The same pair is mapped in PublicLib ([MapTo]). The generated MapToTagDtoList/Array of this assembly must call
+// this assembly's method; calling tag.MapToTagDto() here would be ambiguous (CS0121), so it is not called.
+public class DuplicateTagProfile : MappingProfile
+{
+    public DuplicateTagProfile()
+    {
+        CreateMap<PublicLib.Tag, PublicLib.TagDto>();
     }
 }
 

@@ -4,17 +4,25 @@
     Smoke test for the packed IronMapper.nupkg. Restored from a local feed by eng/verify-package.ps1;
     intentionally NOT part of IronMapper.slnx. If the source generator is missing from the package,
     the generated MapTo* methods do not exist and this project fails to compile.
+    It references two libraries that also use the package, so three assemblies declare
+    IronMapper.Generated.GeneratedMappers (InternalLib: internal; PublicLib and this project: public).
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="IronMapper" Version="[$(IronMapperVersion)]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper.PackageConsumer.InternalLib\IronMapper.PackageConsumer.InternalLib.csproj" />
+    <ProjectReference Include="..\IronMapper.PackageConsumer.PublicLib\IronMapper.PackageConsumer.PublicLib.csproj" />
   </ItemGroup>
 
 </Project>

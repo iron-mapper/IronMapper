@@ -129,9 +129,9 @@ In-place перегрузка только присваивает замапле
 - Сгенерированные extension-методы (`source.MapToDto()`) — обычный скомпилированный C# без reflection.
 - `IMapper` из `IronMapper.Extensions.DI` (`RuntimeMapper`) использует reflection. При первом вызове для пары
   `(TSource, TDest)` он сканирует загруженные сборки (пропуская имена, начинающиеся с `System.` или
-  `Microsoft.`) в поисках `IronMapper.Generated.GeneratedMappers` и ищет метод `MapTo*` по сигнатуре (точный
-  тип source в параметре, `TDest` в возвращаемом типе), поэтому находит и уточнённые имена (`IM0013`); найденный
-  `MethodInfo` кэшируется. **Каждый вызов** затем выполняется через `MethodInfo.Invoke`.
+  `Microsoft.`) в поисках `IronMapper.Generated.GeneratedMappers` (public или internal) и ищет метод `MapTo*` по
+  сигнатуре (точный тип source в параметре, `TDest` в возвращаемом типе), поэтому находит и уточнённые имена
+  (`IM0013`); найденный `MethodInfo` кэшируется. **Каждый вызов** затем выполняется через `MethodInfo.Invoke`.
 - `IMapper.Map<TDest>(object)` использует runtime-тип source; производный тип source не совпадёт с маппингом,
   объявленным для базового типа.
 - `IMapper.Map<List<TDto>>(list)` не поддерживается и бросает `MappingException`

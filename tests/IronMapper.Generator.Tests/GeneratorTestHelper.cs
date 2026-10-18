@@ -122,6 +122,49 @@ internal static class GeneratorTestHelper
         }
     }
 
+    /// <summary>
+    /// Compiles <paramref name="source"/> as assembly <paramref name="assemblyName"/> with the generator, like a
+    /// project with <c>TreatWarningsAsErrors</c>: returns the output compilation and every warning and error
+    /// (generator and compiler, user code included). Use <see cref="EmitReference"/> to reference the result
+    /// from another compilation.
+    /// </summary>
+    public static (CSharpCompilation compilation, IReadOnlyList<Diagnostic> warningsAndErrors)
+        CompileProject(string assemblyName, string source, params MetadataReference[] references)
+    {
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            syntaxTrees: new[] { CSharpSyntaxTree.ParseText(source, ParseOptions) },
+            references: GetFrameworkReferences()
+                .Append(MetadataReference.CreateFromFile(typeof(MapToAttribute).Assembly.Location))
+                .Concat(references),
+            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithNullableContextOptions(NullableContextOptions.Enable)
+                // Missing XML comments on user types are not what these tests check (CS1591 is NoWarn in the repo).
+                .WithSpecificDiagnosticOptions(new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Suppress }));
+
+        CSharpGeneratorDriver.Create(new IronMapperGenerator())
+            .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
+
+        var warningsAndErrors = generatorDiagnostics
+            .Concat(outputCompilation.GetDiagnostics())
+            .Where(d => d.Severity >= DiagnosticSeverity.Warning)
+            .ToList();
+
+        return ((CSharpCompilation)outputCompilation, warningsAndErrors);
+    }
+
+    /// <summary>Emits <paramref name="compilation"/> and returns the image, as a project reference would see it.</summary>
+    public static (MetadataReference reference, byte[] image) EmitReference(Compilation compilation)
+    {
+        using var stream = new MemoryStream();
+        var result = compilation.Emit(stream);
+        if (!result.Success)
+            throw new InvalidOperationException("Emit failed:\n" + string.Join("\n", result.Diagnostics));
+
+        var image = stream.ToArray();
+        return (MetadataReference.CreateFromImage(image), image);
+    }
+
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
