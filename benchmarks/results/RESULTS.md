@@ -9,8 +9,8 @@
 |---|---|
 | Machine | 12th Gen Intel(R) Core(TM) i7-12650H (10 cores, 16 threads) · 64 GB RAM · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · .NET runtime 10.0.12 |
 | BenchmarkDotNet | 0.15.8 · Windows 11 (10.0.26300.9711) · .NET 10.0.12 (10.0.12, 10.0.1226.42308) · X64 |
-| Report generated | 2026-10-18 17:19 UTC |
-| Commit | `f5da226` + uncommitted changes in `benchmarks/` |
+| Report generated | 2026-10-18 17:21 UTC |
+| Commit | `0c8bd98` |
 | Run | Full, started 2026-10-18 14:37 UTC, total 1:15:46 (Build 0:00:07 · Tests 0:00:04 · Runtime 1:07:25 · Startup 0:02:23 · AOT 0:00:04 · Footprint 0:00:10 · BuildTime 0:05:31 · Report 0:00:02); re-measured separately after it (time the measurement finished): Collection 2026-10-18 16:55 UTC · DiOverhead 2026-10-18 17:05 UTC · Nested 2026-10-18 17:11 UTC · Startup 2026-10-18 17:18 UTC |
 
 | Package | Version | Role |
