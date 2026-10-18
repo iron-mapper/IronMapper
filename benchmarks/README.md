@@ -1,63 +1,177 @@
 # Mapper comparison benchmarks
 
-> **Draft.** The full README (methodology, how to run, results) is written in stage 6 of
-> [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md). This file collects the notes that must end up in it.
+Comparison of IronMapper with other .NET object mappers: speed, allocations, cold start, NativeAOT compatibility,
+size, and build time. Everything here can be reproduced with one script; the numbers of the last full run are in
+**[results/RESULTS.md](results/RESULTS.md)**.
 
-## Environment
+The specification of this suite is [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md).
 
-- .NET SDK 10.0.4xx, PowerShell 7 (`pwsh`) for the scripts in `scripts/`.
-- NativeAOT toolchain: Windows — Visual Studio (or Build Tools) with the C++ x64 tools; Linux — clang + zlib; macOS — Xcode command line tools.
-- Windows: if `vswhere.exe` is not on `PATH`, the scripts add the Visual Studio Installer folder to `PATH` for the NativeAOT publish (`Initialize-NativeToolchain` in `scripts/BenchmarkCommon.psm1`; without it the link step fails with MSB3073 when `NoDefaultCurrentDirectoryInExePath` is set).
-- AutoMapper license key: `AUTOMAPPER_LICENSE_KEY` or `~/.automapper/license.txt`.
+## Participants
 
-## Notes for reading the results
+| Id | Library | Mode |
+|---|---|---|
+| `Manual` | — | Hand-written code, the **baseline** of every comparison |
+| `IronMapper` | IronMapper (NuGet) | Source generator: generated extension methods (`source.MapToXxx()`) |
+| `IronMapper_IMapper` | IronMapper + IronMapper.Extensions.DI | `IMapper` from dependency injection (reflection lookup, then `MethodInfo.Invoke` per call) |
+| `Mapperly` | Riok.Mapperly | Source generator: `[Mapper]` partial class |
+| `Mapster` | Mapster | Runtime: own `TypeAdapterConfig`, `Compile()` in setup, `Adapt<TSource, TDest>(config)` |
+| `AutoMapper` | AutoMapper | Runtime: `MapperConfiguration`, `CreateMapper()` in setup |
 
-### Collection sizes and the garbage collector
+Exact package versions are pinned in [Directory.Packages.props](Directory.Packages.props) and listed in
+`RESULTS.md` (written automatically, together with the machine, OS, .NET SDK and runtime, date and commit).
 
-`CollectionBenchmark` reports `ns/item` and `B/item` (mean time and allocated bytes divided by `Count`), so the sizes
-can be compared with each other.
+IronMapper is the published NuGet package by default. To measure the local sources in `../src` instead:
+`-p:UseLocalIronMapper=true` on `dotnet build` / `dotnet run`, or the environment variable `UseLocalIronMapper=true`
+for the scripts (MSBuild reads environment variables as properties).
 
-- At **100 000** orders the time is dominated by the garbage collector: the result graph (~30 objects per order, ~3 M objects, ~160 MB) survives
-  into Gen1/Gen2, and promotions and full collections cost more than the mapping code itself. The differences
-  between libraries at this size mostly reflect how many bytes each one allocates, not how fast its mapping code is.
-- For a clean comparison of the **mapping code**, use `Count` = 10 and 1 000.
-- **Allocated** (and `B/item`) is a reliable metric at every size: it does not depend on GC timing.
+## What is measured
 
-### IronMapper
+| Area | How | Output |
+|---|---|---|
+| Runtime | BenchmarkDotNet, `[MemoryDiagnoser]`: Flat, Nested, Collection (10 / 1 000 / 100 000), CustomConfig, InPlace, DI overhead | `RESULTS.md` |
+| Correctness | xUnit: every mapper's result equals `Manual`'s, deep copy, in-place; edge-case behavior is recorded, not judged | [results/feature-matrix.md](results/feature-matrix.md) |
+| Cold start | Process start of a console per library (JIT and NativeAOT), plus BenchmarkDotNet `RunStrategy.ColdStart` in process | [results/startup.md](results/startup.md) |
+| NativeAOT | Publish with `PublishAot=true`, trim/AOT warnings, does it run and print the right checksum, executable size | [results/aot.md](results/aot.md) |
+| Size | `.nupkg` sizes and dependencies, framework-dependent publish size, AOT executable size | [results/footprint.md](results/footprint.md) |
+| Build time | Generated projects with 50 and 200 entity/DTO pairs per library, `dotnet build --no-incremental` | [results/build-time.md](results/build-time.md) |
 
-- `IronMapper_StaticFormat` (CustomConfig) is a **workaround**, not the documented converter API: it maps the salary
-  with `MapFrom(s => SalaryFormat.Format(s.Salary))` instead of `UseConverter<SalaryConverter>()`. It exists only to
-  show the cost of creating the converter: the generated code for `UseConverter<T>()` calls
-  `new T().Convert(...)` on every mapping.
-- Collections: IronMapper generates `Enumerable.ToList(Enumerable.Select(...))`, `Manual` and Mapperly use
-  `new List<T>(count)` + loop. Part of the difference to `Manual` in collection benchmarks comes from this.
-- NativeAOT: the same `Enumerable.Select` + `ToList` makes the executable ~230 KB larger than with Mapperly, because
-  the LINQ `Select` path needs the NativeAOT runtime type loader; a loop would avoid it (verified in isolation, see
-  [results/aot.md](results/aot.md)). Useful feedback for the generator.
-- Nested single objects need a `MapFrom(s => s.X.MapToXDto())` per property (documented workaround).
-- `IronMapper_IMapper` is the DI path (`IMapper` from `AddIronMapper`): reflection lookup once, then
-  `MethodInfo.Invoke` on every call. Collections go through the lazy `MapCollection` + `ToList()`.
+## Methodology and fairness rules
 
-### Baseline
+- **Same work.** Every mapper does the same work in the measured code: the same models, the same data, new objects
+  for every nested object and collection. A scenario a library cannot do is marked N/A in the feature matrix; it is
+  not made to fit by other means. Collections with the same element type (`List<string>` → `List<string>`) are kept
+  out of the timed scenarios, because some libraries copy the reference and others create a new list.
+- **Equivalence gate.** The benchmarks run only after `tests/Comparison.Tests` passes: for every mapper and scenario
+  the result is structurally equal to `Manual`'s (`Assert.Equivalent(..., strict: true)`), and no object of the result
+  is a reference to an object of the source.
+- **Baseline `Manual`.** Plain hand-written code: object initializers, `new List<T>(count)` + loop, no argument checks.
+  It was compared with the code generated by IronMapper and Mapperly in every scenario and never does more work.
+  Every table shows the ratio to `Manual`.
+- **Direct calls.** The benchmarks call each library directly (no shared interface, no virtual call), so nothing
+  prevents the JIT from inlining generated code. The interface `IComparisonMapper` is used only in the tests.
+- **Setup outside the measurement.** Data is generated deterministically (`new Random(42)`) in `[GlobalSetup]`;
+  mapper configuration (Mapster `Compile()`, AutoMapper `CreateMapper()`, the DI container) is built there as well.
+  Its cost is measured separately in the cold start benchmarks.
+- **`launchCount = 3`.** Every benchmark runs in three separate processes and BenchmarkDotNet aggregates them. The
+  result of one process depends on the decisions of Dynamic PGO: in CustomConfig the JIT output of `Manual` and
+  Mapperly is identical, yet Mapperly measured ~6 % faster in every launch of one run, and the difference disappears
+  with `DOTNET_TieredPGO=0` (ratio 0.98 ± 0.05); an early single-launch run had `Manual` at 82 ns instead of ~55 ns.
+  A ratio slightly below 1 therefore does not mean that a library is faster than hand-written code.
+- **Each probe references one library.** The cold start, NativeAOT and size probes (`probes/StartupProbe.*`) reference
+  only their own library and use the same configuration source files as the benchmarks, so sizes and startup times
+  are not mixed up between libraries. Every probe prints a checksum of the mapped order; a run counts only if the
+  checksum equals the one of the Baseline console (no mapper) and of its own JIT build.
 
-`Manual` is plain hand-written code doing the same work as the libraries: object initializers, the shared
-`SalaryFormat.Format` for the converter, `a + " " + b` for the computed property, `new List<T>(count)` + loop for
-collections, no argument checks. It was compared with the code generated by IronMapper and Mapperly for every
-scenario; it never does more work (IronMapper adds `ArgumentNullException` checks and `Enumerable.Select` + `ToList`,
-Mapperly calls helper methods for nested objects and the computed property).
+## How to read the results
 
-A result slightly faster than `Manual` (ratio < 1) does not mean the library beats hand-written code. In
-CustomConfig the JIT output of `Manual` and Mapperly is the same, yet Mapperly measured ~6 % faster in every launch;
-with `DOTNET_TieredPGO=0` the difference disappears (ratio 0.98 ± 0.05). The gap comes from Dynamic PGO optimizing the
-shared BCL `decimal` formatting code differently in each benchmark process. A single launch can also be off by much
-more (an early one-launch run had `Manual` at 82 ns instead of ~55 ns), so the final runs use **`launchCount = 3`**:
-every benchmark runs in three separate processes and BenchmarkDotNet aggregates them.
+- **Collection, 100 000 orders: the time is dominated by the garbage collector.** The result graph (~30 objects per
+  order, ~3 M objects, ~160 MB) survives into Gen1/Gen2, and promotions and full collections cost more than the
+  mapping code. Differences at this size mostly reflect how many bytes a library allocates.
+- **For a clean comparison of the mapping code, use `Count` = 10 and 1 000.** `CollectionBenchmark` also shows
+  `ns/item` and `B/item` (mean and allocated bytes divided by `Count`), so the sizes can be compared with each other.
+- **Allocated (and `B/item`) is reliable at every size**: it does not depend on GC timing.
+- **Cold start** has two parts: the process start of a console that sets up the mapper and maps one order
+  (compare the Δ to the empty Baseline console, not the absolute time, which includes the launch overhead of the
+  script), and the in-process BenchmarkDotNet cold start (configuration + first call, without process start).
+- **Build time**: Δ to a project with the same models and no mapper. The source generators pay at compile time,
+  the runtime mappers at startup; read it together with the cold start.
+- Differences of a few percent between runs, or of a few tens of milliseconds between single builds, are noise.
 
-## What is not measured, and why
+## Caveats
 
-- Multi-threaded throughput: every mapper is stateless on the measured path, so a parallel scenario shows nothing new.
-- `Mapster_Codegen`: Mapster has a code generation path, **Mapster.Tool** (a `dotnet tool` that generates mapper source as
-  a separate build step). It is not measured: it does not run as part of a plain `dotnet build` (BENCHMARK_SPEC.md, 2).
-  All Mapster numbers are for the runtime configuration (`TypeAdapterConfig` + `Compile()`), which does not work under NativeAOT.
-- AutoMapper under NativeAOT: AutoMapper does not support NativeAOT (it builds the mapping code at runtime); the AOT
-  probe is published anyway to record the warnings and the failure ([results/aot.md](results/aot.md)).
+- **`IronMapper_StaticFormat` is a workaround**, not the documented converter API. It maps the salary in
+  CustomConfig with `MapFrom(s => SalaryFormat.Format(s.Salary))` instead of `UseConverter<SalaryConverter>()`, only
+  to show the cost of creating the converter: the code generated for `UseConverter<T>()` calls `new T().Convert(...)`
+  on every mapping. The `IronMapper` row uses `UseConverter<T>()`, as a user would.
+- **IronMapper configures nested single objects through `MapFrom`.** IronMapper does not map nested single objects
+  automatically; the documented workaround is `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested
+  property (feature matrix: "manual setup"). The benchmarks and the build time projects use exactly that.
+  Collections of mapped types are automatic.
+- **IronMapper collections** are generated as `Enumerable.ToList(Enumerable.Select(...))`; `Manual` and Mapperly use
+  `new List<T>(count)` + loop. Part of the collection difference to `Manual` comes from this. Under NativeAOT the same
+  LINQ `Select` makes the executable ~230 KB larger than with Mapperly, because it needs the NativeAOT runtime type
+  loader (verified in isolation, see [results/aot.md](results/aot.md)).
+- **`IronMapper_IMapper`** goes through reflection (`MethodInfo.Invoke` per call); collections use the lazy
+  `MapCollection` + `ToList()` (`Map<List<T>>` is not supported, issue #8). It does not work under NativeAOT.
+- **Mapster calls `Compile()` in setup.** All mappings are compiled up front, as recommended for production. Without
+  `Compile()` Mapster compiles each type pair lazily on first use, so its cold start (and the first call of each
+  pair) would be different from what is measured here.
+- **Mapster.Tool is not measured.** Mapster also has a code generation path (Mapster.Tool, a `dotnet tool` run as a
+  separate build step). All Mapster numbers are for the runtime configuration.
+- **AutoMapper does not support NativeAOT**: it builds the mapping code at runtime. The AOT probe is published anyway
+  to record the warnings and the failure.
+- **Mapperly uses nullable annotations.** It generates `null` checks only for members declared nullable. The
+  benchmark models declare nested objects and collections non-nullable (the timed data contains no `null`), so
+  Mapperly emits no checks there; the feature matrix shows the `null` cases for both declarations.
+- **AutoMapper license**: AutoMapper 16 reads a license key (`AUTOMAPPER_LICENSE_KEY` or `~/.automapper/license.txt`).
+  Without it, it works but logs a license warning (asynchronously, ~1 s after start). Its package also brings
+  `Microsoft.IdentityModel.*` as dependencies ([results/footprint.md](results/footprint.md)).
+
+## What is not here, and why
+
+- **Multi-threaded throughput.** Every mapper is stateless on the measured path; a parallel scenario would show
+  nothing new.
+- **Mapster.Tool (`Mapster_Codegen`).** It does not run as part of a plain `dotnet build`, which the specification
+  requires for every participant.
+- **Positional records, flattening, `null` handling in the timed scenarios.** Support differs between libraries
+  (IronMapper does not compile positional records as destinations and does not flatten); the behavior is recorded in
+  the feature matrix, not timed.
+- **Other mappers.** The participants are fixed by the specification (BENCHMARK_SPEC.md, 2).
+- **Other machines and operating systems.** One full run on one machine; the scripts work on Windows, Linux and macOS
+  (PowerShell 7), so the numbers can be reproduced elsewhere.
+
+## Requirements
+
+- .NET SDK 10.0.4xx and PowerShell 7 (`pwsh`).
+- NativeAOT toolchain: Windows — Visual Studio or Build Tools with "Desktop development with C++"; Linux — clang and
+  zlib development files; macOS — Xcode command line tools.
+- Windows: if `vswhere.exe` is not on `PATH`, the scripts add the Visual Studio Installer folder to `PATH` for the
+  NativeAOT publish (`Initialize-NativeToolchain` in `scripts/BenchmarkCommon.psm1`; without it the link step fails
+  with MSB3073 when `NoDefaultCurrentDirectoryInExePath` is set).
+- At least 4 GB of free memory for the NativeAOT publish (`-LowMemory` compiles with one ILC thread).
+- AutoMapper license key, see Caveats (optional).
+
+## How to run
+
+Everything, in order, then `results/RESULTS.md` (about 1.5 h on the reference machine; the script prints an
+estimate and checks the environment first):
+
+```bash
+cd benchmarks
+pwsh ./scripts/run-all.ps1              # full run
+pwsh ./scripts/run-all.ps1 -Quick       # smoke test (~20 min): --job short, fewer runs, smaller N; not for publication
+pwsh ./scripts/run-all.ps1 -CheckOnly   # only the estimate and the environment checks
+./scripts/run-all.sh                    # the same on Linux/macOS
+```
+
+Close other applications and keep a laptop on mains power during the run.
+
+Step by step:
+
+```bash
+dotnet build IronMapper.Comparison.slnx -c Release
+dotnet test IronMapper.Comparison.slnx -c Release                       # gate + feature-matrix.md
+dotnet run -c Release --project src/Comparison.Benchmarks -- --filter '*.FlatBenchmark.*' --launchCount 3
+pwsh ./scripts/run-startup.ps1 -Mode Both                               # startup.md (JIT, NativeAOT, BDN cold start)
+pwsh ./scripts/run-aot.ps1 -ReportOnly                                  # aot.md from the NativeAOT run above
+pwsh ./scripts/run-footprint.ps1                                        # footprint.md
+pwsh ./scripts/run-build-time.ps1                                       # build-time.md (20 builds per project)
+pwsh ./scripts/generate-report.ps1                                      # RESULTS.md
+```
+
+Raw outputs (BenchmarkDotNet artifacts in all formats, CSVs, publish logs, mstat files, published probes) go to
+`results/raw/`, which is not committed; the `results/*.md` reports are.
+
+## Layout
+
+```
+src/Comparison.Models        entities, DTOs, deterministic test data
+src/Comparison.Mappers       one folder per library + the shared IComparisonMapper facade (tests)
+src/Comparison.Benchmarks    BenchmarkDotNet
+tests/Comparison.Tests       equivalence, deep copy, in-place, edge cases → feature-matrix.md
+probes/StartupProbe.*        one console per library (cold start, NativeAOT, size)
+probes/BuildProbe.*          generated by run-build-time.ps1 (not committed)
+tools/MstatReport            NativeAOT size breakdown from ILC .mstat files
+scripts/                     run-all, run-startup, run-aot, run-footprint, run-build-time, generate-report
+results/                     reports (RESULTS.md and the per-area pages); raw/ is not committed
+```

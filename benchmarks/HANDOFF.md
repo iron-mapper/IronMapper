@@ -16,8 +16,8 @@
 | 2. Мапперы + тесты эквивалентности и семантики | принят |
 | 3. Runtime-бенчмарки (§7) | принят, плюс две доработки (см. ниже) |
 | 4. Холодный старт (§8) | принят (JIT + NativeAOT сняты на новой машине) |
-| **5. NativeAOT, footprint, build time (§9–11)** | **выполнен, ждёт приёмки** |
-| 6. Отчёт, README, полный прогон (§12) | не начат (есть черновик README) |
+| 5. NativeAOT, footprint, build time (§9–11) | принят |
+| **6. Отчёт, README, полный прогон (§12)** | **скрипты и README готовы, `run-all.ps1 -Quick` проверен; полный прогон делает мейнтейнер** |
 
 ### Этап 4: что сделано
 
@@ -79,6 +79,23 @@ runtime 10.0.12, PowerShell 7.6.6, VS 2026 Community (C++ x64). Все итог�
   runtime type loader (`System.Private.TypeLoader` +102 566 байт); подтверждено отдельным опытом (консоль foreach vs
   Select+ToList: 1 112 576 → 1 435 136 байт, тот же +102 566 в TypeLoader).
 
+### Этап 6 (2026-10-18)
+
+- `scripts/run-all.ps1` (+ `run-all.sh`): Build → Tests (шлюз) → Runtime BDN (6 классов; полный — `--launchCount 3`,
+  `-Quick` — `--job short`) → `run-startup.ps1 -Mode Both` → `run-aot.ps1 -ReportOnly` → `run-footprint.ps1` →
+  `run-build-time.ps1` → `generate-report.ps1`. В начале — оценка длительности и проверки (SDK 10, свободная память,
+  ключ AutoMapper через Test-Path, NativeAOT-тулчейн); `-CheckOnly` — только они. Длительность шагов пишется в
+  `results/raw/run-info.json` и попадает в RESULTS.md. Логи dotnet — `results/raw/run-all/`.
+- Оценка полного прогона ~93 мин (Runtime ~70 — экстраполяция: 53 кейса × 3 запуска; остальное измерено).
+  `-Quick` на этой машине — 10:42.
+- `scripts/generate-report.ps1` → `results/RESULTS.md`: окружение + версии пакетов (из `Directory.Packages.props`),
+  коммит, режим прогона (для Quick — предупреждение «не публиковать»), сводная таблица, Mermaid-графики, полные таблицы
+  BDN, встроенные feature-matrix/startup/aot/footprint/build-time.
+- `run-build-time.ps1`: ветка hyperfine удалена (не запускалась ни разу), по умолчанию 20 сборок.
+- README переписан полностью (методика, как читать, оговорки, «Чего здесь нет и почему», запуск).
+- **Сейчас в `results/*.md` — цифры Quick-прогона** (RESULTS.md помечен предупреждением). Их перезапишет полный прогон;
+  коммитить Quick-результаты не нужно.
+
 ## 2. Решения сверх спецификации
 
 | Раздел | Решение |
@@ -94,7 +111,8 @@ runtime 10.0.12, PowerShell 7.6.6, VS 2026 Community (C++ x64). Все итог�
 | §7 | `DiOverheadBenchmark`: Manual как baseline в каждой категории, методы с префиксами `Flat_` / `Nested_`; AutoMapper `IMapper` из `AddAutoMapper`, Mapster `IMapper` = `ServiceMapper` из scope. Артефакты BDN → `results/raw/bdn`. Итоговые замеры — **`launchCount = 3`** (принято; в коде ещё не зашито — передать `--launchCount 3` в `run-all.ps1` на этапе 6). |
 | §9 | AOT-публикацию, прогоны и проверку контрольной суммы делает только `run-startup.ps1`; `run-aot.ps1` переиспользует его и строит отчёт из `results/raw/`. Предупреждения группируются по пробе (= по библиотеке). |
 | §10 | Размер publish — все файлы кроме `.pdb`; размеры `.nupkg` — из глобальной папки NuGet. |
-| §11 | Проекты `BuildProbe.<Lib>.N<n>` (classlib), доп. строка `Manual`; вложенность ссылается только на уже существующие пары (ровно N пар, каждая настроена один раз — IM0007); одиночный вложенный объект у IronMapper через `MapFrom`. Сборки с `--no-restore` (restore до серии), вывод CLI на английском (`DOTNET_CLI_UI_LANGUAGE=en`) для разбора ReportAnalyzer. hyperfine не установлен — работал собственный таймер; ветка с hyperfine не проверена. |
+| §11 | Проекты `BuildProbe.<Lib>.N<n>` (classlib), доп. строка `Manual`; вложенность ссылается только на уже существующие пары (ровно N пар, каждая настроена один раз — IM0007); одиночный вложенный объект у IronMapper через `MapFrom`. Сборки с `--no-restore` (restore до серии), вывод CLI на английском (`DOTNET_CLI_UI_LANGUAGE=en`) для разбора ReportAnalyzer. hyperfine не используется (решение мейнтейнера: ветка не проверялась и удалена); 20 сборок на проект. |
+| §12 | Сводка: «Cold start» — Δ медианы старта процесса (JIT) к Baseline; «Δ размера» — два столбца (JIT publish и AOT exe); «Δ build» — при максимальном N. Графики: три bar-chart Collection (ns/item по размерам; у xychart-beta нет легенды, поэтому по графику на размер) + cold start (процесс и BDN). |
 | §8 | Пробы подключают конфигурации ссылками на исходники; DI-части настроек вынесены в `*.DependencyInjection.cs` / `IronMapperDiSetup.cs`, чтобы пробы не тянули лишние пакеты. Время — wall-clock от `Process.Start` до выхода (накладные расходы скрипта одинаковы → смотреть Δ). |
 
 Заметки для итогового README собраны в черновике [README.md](README.md).
@@ -145,12 +163,9 @@ macOS: Xcode CLT), ключ AutoMapper в `~/.automapper/license.txt` или `AU
 
 ```bash
 cd benchmarks
-dotnet build IronMapper.Comparison.slnx -c Release   # 0 ошибок, 0 предупреждений
-dotnet test IronMapper.Comparison.slnx -c Release    # 128/128
-pwsh ./scripts/run-startup.ps1 -Mode Both            # JIT + NativeAOT + BDN ColdStart → results/startup.md
-pwsh ./scripts/run-aot.ps1 -ReportOnly               # → results/aot.md, aot-size-breakdown.md
-pwsh ./scripts/run-footprint.ps1                     # → results/footprint.md
-pwsh ./scripts/run-build-time.ps1                    # → results/build-time.md (~10 мин)
+pwsh ./scripts/run-all.ps1 -CheckOnly   # оценка и проверки окружения
+pwsh ./scripts/run-all.ps1              # полный прогон (~1.5 ч) → results/*.md + results/RESULTS.md
+pwsh ./scripts/run-all.ps1 -Quick       # проверка конвейера (~11 мин), цифры не для публикации
 ```
 
-Дальше — этап 6 (§12): `run-all.ps1` (+ `--launchCount 3` для BDN), `generate-report.ps1` → `RESULTS.md`, итоговый README.
+Осталось: полный прогон `run-all.ps1` (мейнтейнер), проверка RESULTS.md и коммит результатов.

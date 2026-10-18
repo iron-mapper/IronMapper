@@ -61,15 +61,6 @@ function Get-ProbePackages([string] $probe) {
     $result
 }
 
-function Measure-Folder([string] $dir) {
-    $files = @(Get-ChildItem -Path $dir -File -Recurse | Where-Object Extension -ne '.pdb')
-    [pscustomobject]@{
-        Files = $files.Count
-        Size  = ($files | Measure-Object -Property Length -Sum).Sum
-        Names = @($files | ForEach-Object Name)
-    }
-}
-
 # --- framework-dependent publish (reuse run-startup.ps1 output, publish what is missing) ---
 $jit = @{}
 foreach ($probe in $probes) {
@@ -79,7 +70,7 @@ foreach ($probe in $probes) {
         $r = Publish-StartupProbe -Probe $probe -Mode Jit
         if (-not $r.Ok) { Write-Warning "Publish failed: $probe; see $($r.Log)"; continue }
     }
-    $jit[$probe] = Measure-Folder $dir
+    $jit[$probe] = Measure-PublishFolder $dir
 }
 
 # --- packages ---

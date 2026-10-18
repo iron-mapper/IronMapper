@@ -25,8 +25,9 @@
           AutoMapper  Profile: CreateMap per pair
 
     Measurement per project ("series"): `dotnet build-server shutdown`, restore, WarmupRuns builds, then Runs timed
-    `dotnet build --no-incremental -c Release --no-restore` (wall-clock); the build servers stay up within a series.
-    With hyperfine on PATH it is used for the timing (unless -NoHyperfine). After the series, one more build (not timed)
+    `dotnet build --no-incremental -c Release --no-restore` (wall-clock, Stopwatch); the build servers stay up within a
+    series. Runs = 20 by default: at N = 200 the run-to-run noise of 10 builds was close to the differences between
+    the source generators. After the series, one more build (not timed)
     with -p:ReportAnalyzer=true reports the generator execution time and emits the generated files, so the script can
     check that every pair was really generated.
 
@@ -39,16 +40,14 @@
 [CmdletBinding()]
 param(
     [int[]] $Sizes = @(50, 200),
-    [int] $Runs = 10,
+    [int] $Runs = 20,
     [int] $WarmupRuns = 2,
     [ValidateSet('Baseline', 'Manual', 'IronMapper', 'Mapperly', 'Mapster', 'AutoMapper')]
     [string[]] $Libraries = @('Baseline', 'Manual', 'IronMapper', 'Mapperly', 'Mapster', 'AutoMapper'),
     # Only generate the projects.
     [switch] $GenerateOnly,
     # Only rebuild results/build-time.md from results/raw/build-time.csv.
-    [switch] $ReportOnly,
-    # Time the builds with the script's own stopwatch even if hyperfine is available.
-    [switch] $NoHyperfine
+    [switch] $ReportOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -267,14 +266,6 @@ function Measure-WithStopwatch([string] $project) {
     , $times.ToArray()
 }
 
-function Measure-WithHyperfine([string] $project, [string] $name) {
-    $json = Join-Path $rawDir "$name.hyperfine.json"
-    $command = "dotnet build `"$project`" --no-incremental -c Release --no-restore -nologo -v q"
-    & hyperfine --runs $Runs --warmup 0 --shell=none --export-json $json $command | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "hyperfine failed for $project" }
-    , ([double[]] (Get-Content $json -Raw | ConvertFrom-Json).results[0].times)
-}
-
 # Generator execution time per generator assembly (objects with Name, Seconds) from a -p:ReportAnalyzer=true build log.
 function Get-GeneratorTimes([string[]] $lines) {
     $count = 0
@@ -324,8 +315,7 @@ function Measure-BuildProbe([string] $lib, [int] $n) {
     }
     Set-Content -Path (Join-Path $rawDir "$name.warnings.txt") -Value ($warnings -join "`n") -Encoding utf8NoBOM
 
-    $useHyperfine = -not $NoHyperfine -and (Get-Command hyperfine -ErrorAction SilentlyContinue)
-    $times = if ($useHyperfine) { Measure-WithHyperfine $project $name } else { Measure-WithStopwatch $project }
+    $times = Measure-WithStopwatch $project
 
     # Not timed: generator execution time + the generated files, to check that every pair was generated.
     $generatedDir = Join-Path $rawDir "$name.generated"
@@ -354,7 +344,6 @@ function Measure-BuildProbe([string] $lib, [int] $n) {
         AllGeneratorsS    = ($null -eq $allGeneratorsS) ? '' : (ConvertTo-InvariantNumber $allGeneratorsS)
         GeneratedMappings = "$(Get-GeneratedMappingCount $lib $generatedDir)"
         Warnings          = $warnings.Count
-        Timer             = $useHyperfine ? 'hyperfine' : 'stopwatch'
         WarmupRuns        = $WarmupRuns
         Date              = Get-UtcStamp
     }
@@ -398,7 +387,7 @@ function Write-BuildTimeReport {
         '`Mapperly` a `[Mapper]` class with one partial method per pair; `Mapster` `NewConfig` per pair; `AutoMapper` a `Profile` with `CreateMap` per pair.')
     [void] $sb.AppendLine()
     [void] $sb.AppendLine("**Measurement.** Per project: ``dotnet build-server shutdown``, restore, $($meta.WarmupRuns) warmup builds, then $($meta.Runs) timed " +
-        '`dotnet build --no-incremental -c Release --no-restore` (wall-clock, timer: ' + $meta.Timer + '). The build servers stay running within a project''s series, ' +
+        '`dotnet build --no-incremental -c Release --no-restore` (wall-clock, measured by the script). The build servers stay running within a project''s series, ' +
         'as in a normal edit-build loop. `--no-restore` keeps the (identical) restore check out of the numbers. ' +
         '**Generator, s** is the execution time of the library''s source generator in one more build with `-p:ReportAnalyzer=true` (not timed); ' +
         '**Generated** counts the mapping methods found in the emitted generated sources (must equal N); **Generated code** is the size of those sources.')

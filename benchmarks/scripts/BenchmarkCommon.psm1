@@ -80,6 +80,43 @@ function Initialize-NativeToolchain {
     Write-Host "vswhere.exe was not on PATH; added $installerDir for the NativeAOT toolchain."
 }
 
+<#
+    Checks that the NativeAOT toolchain of the current OS is present. Returns an object with Ok and Detail.
+    Windows: Visual Studio / Build Tools with the C++ x64 (or ARM64) tools, found with vswhere (after
+    Initialize-NativeToolchain). Linux: clang (zlib cannot be checked reliably; a missing zlib fails the link step).
+    macOS: Xcode command line tools (xcrun).
+#>
+function Test-NativeToolchain {
+    if ($IsWindows) {
+        Initialize-NativeToolchain
+        $vswhere = Get-Command 'vswhere.exe' -CommandType Application -ErrorAction SilentlyContinue
+        if (-not $vswhere) { return [pscustomobject]@{ Ok = $false; Detail = 'vswhere.exe not found: install Visual Studio or Build Tools with "Desktop development with C++"' } }
+        $component = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'ARM64' } else { 'x86.x64' }
+        $path = & $vswhere.Source -latest -prerelease -products * -requires "Microsoft.VisualStudio.Component.VC.Tools.$component" -property installationPath
+        if ($path) { return [pscustomobject]@{ Ok = $true; Detail = "C++ tools in $path" } }
+        return [pscustomobject]@{ Ok = $false; Detail = "no Visual Studio installation with Microsoft.VisualStudio.Component.VC.Tools.$component" }
+    }
+    if ($IsLinux) {
+        $clang = Get-Command clang -ErrorAction SilentlyContinue
+        if ($clang) { return [pscustomobject]@{ Ok = $true; Detail = "clang at $($clang.Source) (zlib is not checked)" } }
+        return [pscustomobject]@{ Ok = $false; Detail = 'clang not found (NativeAOT needs clang and zlib development files)' }
+    }
+    if ($IsMacOS) {
+        & xcrun --version *> $null
+        if ($LASTEXITCODE -eq 0) { return [pscustomobject]@{ Ok = $true; Detail = 'Xcode command line tools' } }
+        return [pscustomobject]@{ Ok = $false; Detail = 'Xcode command line tools not found (xcode-select --install)' }
+    }
+    [pscustomobject]@{ Ok = $false; Detail = 'unknown OS' }
+}
+
+# AutoMapper license key: the environment variable or the file (only Test-Path; the key is never read here).
+function Test-AutoMapperLicense {
+    if ($env:AUTOMAPPER_LICENSE_KEY) { return [pscustomobject]@{ Ok = $true; Detail = 'AUTOMAPPER_LICENSE_KEY is set' } }
+    $file = Join-Path $HOME '.automapper' 'license.txt'
+    if (Test-Path $file) { return [pscustomobject]@{ Ok = $true; Detail = "$file exists" } }
+    [pscustomobject]@{ Ok = $false; Detail = 'no AUTOMAPPER_LICENSE_KEY and no ~/.automapper/license.txt: AutoMapper still runs, but logs a license warning' }
+}
+
 # Free (available) physical memory in bytes, or $null when it cannot be determined.
 function Get-FreeMemoryBytes {
     try {
@@ -133,6 +170,19 @@ function Get-MachineSummary {
     $parts -join ' · '
 }
 
+# Package versions from Directory.Packages.props (Central Package Management): objects with Id, Version, Label.
+function Get-PackageVersions {
+    [xml] $props = Get-Content (Join-Path $script:BenchmarksDir 'Directory.Packages.props') -Raw
+    foreach ($group in $props.Project.ItemGroup) {
+        foreach ($p in @($group.PackageVersion)) {
+            if ($p) { [pscustomobject]@{ Id = $p.Include; Version = $p.Version; Label = $group.Label } }
+        }
+    }
+}
+
+# results/raw/run-info.json, written by run-all.ps1: run mode, start/end, duration of each step.
+function Get-RunInfoPath { Join-Path (Get-ResultsRawDir) 'run-info.json' }
+
 function Get-UtcStamp { (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm', [cultureinfo]::InvariantCulture) + ' UTC' }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -181,6 +231,16 @@ function Publish-StartupProbe {
         }
     }
     [pscustomobject]@{ Probe = $Probe; Mode = $Mode; Ok = $ok; Dir = $outDir; Log = $log }
+}
+
+# File count and total size of a publish folder, without .pdb files; Names = file names.
+function Measure-PublishFolder([string] $Dir) {
+    $files = @(Get-ChildItem -Path $Dir -File -Recurse | Where-Object Extension -ne '.pdb')
+    [pscustomobject]@{
+        Files = $files.Count
+        Size  = [long] ($files | Measure-Object -Property Length -Sum).Sum
+        Names = @($files | ForEach-Object Name)
+    }
 }
 
 <#
