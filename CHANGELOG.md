@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [Unreleased] → ## [1.1.3] - 2026-10-18
+
 ### Fixed
 
 - **A type pair defined twice no longer breaks the whole project.** `[MapTo]` + `CreateMap`, `[MapTo]` + `[MapFrom]`,
