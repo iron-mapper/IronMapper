@@ -40,7 +40,8 @@ A result slightly faster than `Manual` (ratio < 1) does not mean the library bea
 CustomConfig the JIT output of `Manual` and Mapperly is the same, yet Mapperly measured ~6 % faster in every launch;
 with `DOTNET_TieredPGO=0` the difference disappears (ratio 0.98 ± 0.05). The gap comes from Dynamic PGO optimizing the
 shared BCL `decimal` formatting code differently in each benchmark process. A single launch can also be off by much
-more (an early one-launch run had `Manual` at 82 ns instead of ~55 ns), so final runs use several launches.
+more (an early one-launch run had `Manual` at 82 ns instead of ~55 ns), so the final runs use **`launchCount = 3`**:
+every benchmark runs in three separate processes and BenchmarkDotNet aggregates them.
 
 ## What is not measured, and why
 

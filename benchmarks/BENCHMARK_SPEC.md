@@ -142,6 +142,8 @@ public interface IComparisonMapper
 
 Общее: `[MemoryDiagnoser]`, `[CategoriesColumn]`, `[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]`, `RatioColumn` относительно `Manual`, Release, `Program` через `BenchmarkSwitcher` (запуск всех или по фильтру). Каждый бенчмарк возвращает результат (защита от dead code elimination). Экспорт: Markdown (GitHub), CSV, HTML, JSON.
 
+Итоговые замеры — `launchCount = 3` (каждый бенчмарк в трёх отдельных процессах). Причина: результат одного процесса зависит от решений Dynamic PGO и может заметно отличаться от другого процесса с тем же кодом (на этапе 3 один запуск дал `Manual` 82 нс вместо ~55 нс). Прогоны `--job short` / `dry` — только проверка работоспособности.
+
 | Класс | Что мерим | Параметры |
 |---|---|---|
 | `FlatBenchmark` | Один плоский объект | — |
