@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    IronMapper_StaticFormat: EmployeeEntity → EmployeeDto with MapFrom(s => SalaryFormat.Format(s.Salary)) instead of
+    UseConverter<T>(), to show the cost of creating the converter per call. A separate assembly, because IronMapper
+    generates one mapping per type pair per project (IM0007). Referenced with an extern alias, so its
+    GeneratedMappers class does not clash with the one in Comparison.Mappers.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Comparison.Mappers.IronMapperStaticFormat</RootNamespace>
+    <UsesIronMapper>true</UsesIronMapper>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Comparison.Mappers\Comparison.Mappers.csproj" />
+  </ItemGroup>
+
+</Project>

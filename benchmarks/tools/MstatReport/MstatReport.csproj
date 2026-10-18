@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Reads NativeAOT .mstat files (written by ILC with -p:IlcGenerateMstatFile=true) and prints a Markdown size
+    comparison by assembly, namespace and type. Used by scripts/run-aot.ps1 and scripts/run-footprint.ps1.
+    No packages: System.Reflection.Metadata is part of the shared framework.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+</Project>

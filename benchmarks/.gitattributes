@@ -1,0 +1,3 @@
+# Reports are generated with LF line endings (scripts/BenchmarkCommon.psm1 Write-ReportFile, FeatureMatrixTests);
+# keep them LF in the index and in every checkout, whatever core.autocrlf is set to.
+results/** text eol=lf

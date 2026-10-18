@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Shared settings of the StartupProbe.* consoles (BENCHMARK_SPEC.md, 8.2 and 9). Each probe references only the
+    library it measures (plus Comparison.Models for the data and the checksum), so publish size and startup time
+    are not distorted by other libraries. Mapping configurations are linked from Comparison.Mappers, so the probes
+    run exactly the configuration that the benchmarks and tests use.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <MappersDir>$(MSBuildThisFileDirectory)..\src\Comparison.Mappers\</MappersDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Comparison.Models\Comparison.Models.csproj" />
+  </ItemGroup>
+</Project>
