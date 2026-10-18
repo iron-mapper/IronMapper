@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\StartupProbe.props" />
+
+  <PropertyGroup>
+    <UsesIronMapper>true</UsesIronMapper>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MappersDir)Shared\SalaryFormat.cs" Link="Linked\SalaryFormat.cs" />
+    <Compile Include="$(MappersDir)IronMapper\ComparisonProfile.cs" Link="Linked\ComparisonProfile.cs" />
+    <Compile Include="$(MappersDir)IronMapper\SalaryConverter.cs" Link="Linked\SalaryConverter.cs" />
+  </ItemGroup>
+
+</Project>

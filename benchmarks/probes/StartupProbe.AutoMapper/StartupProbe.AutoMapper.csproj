@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\StartupProbe.props" />
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MappersDir)Shared\SalaryFormat.cs" Link="Linked\SalaryFormat.cs" />
+    <Compile Include="$(MappersDir)AutoMapper\AutoMapperSetup.cs" Link="Linked\AutoMapperSetup.cs" />
+    <Compile Include="$(MappersDir)AutoMapper\ComparisonAutoMapperProfile.cs" Link="Linked\ComparisonAutoMapperProfile.cs" />
+  </ItemGroup>
+
+</Project>

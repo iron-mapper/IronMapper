@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\StartupProbe.props" />
+
+  <ItemGroup>
+    <Compile Include="$(MappersDir)Shared\SalaryFormat.cs" Link="Linked\SalaryFormat.cs" />
+    <Compile Include="$(MappersDir)Manual\ManualMappings.cs" Link="Linked\ManualMappings.cs" />
+  </ItemGroup>
+
+</Project>
