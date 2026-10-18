@@ -10,17 +10,31 @@ Expected checksum (Baseline): `12742788875462939321`. Status ok means every run 
 
 ### Framework-dependent (JIT)
 
-2026-10-18 12:53 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.402 · 30 runs after 3 warmup runs
+2026-10-18 13:13 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
 
 | Probe | Median, ms | p95, ms | Min, ms | Mean, ms | Δ median vs Baseline, ms | Status |
 |---|---:|---:|---:|---:|---:|---|
-| Baseline | 55.0 | 60.6 | 52.0 | 55.9 | 0.0 | ok |
-| Manual | 57.3 | 61.5 | 52.9 | 57.2 | 2.3 | ok |
-| IronMapper | 58.3 | 64.7 | 53.6 | 59.3 | 3.3 | ok |
-| IronMapper_IMapper | 82.4 | 93.5 | 75.0 | 83.3 | 27.3 | ok |
-| Mapperly | 58.0 | 63.6 | 53.6 | 58.2 | 3.0 | ok |
-| Mapster | 177.5 | 189.9 | 160.5 | 177.5 | 122.5 | ok |
-| AutoMapper | 144.8 | 156.3 | 134.4 | 145.3 | 89.8 | ok |
+| Baseline | 47.5 | 55.6 | 45.8 | 48.8 | 0.0 | ok |
+| Manual | 49.1 | 56.4 | 46.8 | 50.0 | 1.7 | ok |
+| IronMapper | 50.1 | 56.0 | 47.6 | 50.7 | 2.6 | ok |
+| IronMapper_IMapper | 70.2 | 75.3 | 67.1 | 70.9 | 22.8 | ok |
+| Mapperly | 49.1 | 60.4 | 47.2 | 50.6 | 1.6 | ok |
+| Mapster | 147.4 | 154.3 | 141.3 | 148.4 | 99.9 | ok |
+| AutoMapper | 119.9 | 131.2 | 116.4 | 122.0 | 72.4 | ok |
+
+### NativeAOT
+
+2026-10-18 13:17 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
+
+| Probe | Median, ms | p95, ms | Min, ms | Mean, ms | Δ median vs Baseline, ms | Status |
+|---|---:|---:|---:|---:|---:|---|
+| Baseline | 10.0 | 11.0 | 9.3 | 10.0 | 0.0 | ok |
+| Manual | 9.7 | 10.7 | 9.0 | 9.8 | -0.2 | ok |
+| IronMapper | 10.0 | 12.5 | 9.1 | 10.3 | 0.1 | ok |
+| IronMapper_IMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. IronMapper.Exceptions.MappingException: No mapping registered from 'OrderEntity' to 'OrderDto'. Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the IronMapper Source Generator has run on the project that owns these types. |
+| Mapperly | 10.1 | 13.0 | 9.2 | 10.3 | 0.1 | ok |
+| Mapster | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.MissingMethodException: No parameterless constructor defined for type 'Mapster.NameMatchingStrategy'. |
+| AutoMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.TypeInitializationException: A type initializer threw an exception. To determine which type, inspect the InnerException's StackTrace property. |
 
 ## In-process cold start (BenchmarkDotNet `StartupBenchmark`)
 
@@ -29,21 +43,21 @@ Expected checksum (Baseline): `12742788875462939321`. Status ok means every run 
 ```
 
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.26300.9711)
-Intel Core Ultra 7 155H 3.80GHz, 1 CPU, 22 logical and 16 physical cores
-.NET SDK 10.0.402
-  [Host]     : .NET 10.0.13 (10.0.13, 10.0.1326.50504), X64 RyuJIT x86-64-v3
-  Job-BIOPTK : .NET 10.0.13 (10.0.13, 10.0.1326.50504), X64 RyuJIT x86-64-v3
+12th Gen Intel Core i7-12650H 2.30GHz, 1 CPU, 16 logical and 10 physical cores
+.NET SDK 10.0.401
+  [Host]     : .NET 10.0.12 (10.0.12, 10.0.1226.42308), X64 RyuJIT x86-64-v3
+  Job-BIOPTK : .NET 10.0.12 (10.0.12, 10.0.1226.42308), X64 RyuJIT x86-64-v3
 
 IterationCount=1  LaunchCount=20  RunStrategy=ColdStart  
 WarmupCount=0  
 
 ```
-| Method             | Mean       | Error     | StdDev    | Ratio | RatioSD |
-|------------------- |-----------:|----------:|----------:|------:|--------:|
-| Manual             |   2.151 ms | 0.1845 ms | 0.2124 ms |  1.01 |    0.13 |
-| IronMapper         |   2.370 ms | 0.1641 ms | 0.1890 ms |  1.11 |    0.13 |
-| IronMapper_IMapper |  28.285 ms | 1.0883 ms | 1.2533 ms | 13.26 |    1.30 |
-| Mapperly           |   2.174 ms | 0.0807 ms | 0.0929 ms |  1.02 |    0.10 |
-| Mapster            | 110.265 ms | 5.5660 ms | 6.4098 ms | 51.70 |    5.41 |
-| AutoMapper         |  97.211 ms | 5.5371 ms | 6.3765 ms | 45.58 |    4.96 |
+| Method             | Mean      | Error     | StdDev    | Ratio | RatioSD |
+|------------------- |----------:|----------:|----------:|------:|--------:|
+| Manual             |  1.686 ms | 0.1182 ms | 0.1361 ms |  1.01 |    0.11 |
+| IronMapper         |  1.876 ms | 0.1019 ms | 0.1173 ms |  1.12 |    0.11 |
+| IronMapper_IMapper | 21.802 ms | 1.1315 ms | 1.3031 ms | 13.01 |    1.21 |
+| Mapperly           |  1.757 ms | 0.0767 ms | 0.0884 ms |  1.05 |    0.09 |
+| Mapster            | 82.900 ms | 2.8813 ms | 3.3181 ms | 49.46 |    4.07 |
+| AutoMapper         | 67.030 ms | 1.5911 ms | 1.8323 ms | 39.99 |    3.09 |
 
