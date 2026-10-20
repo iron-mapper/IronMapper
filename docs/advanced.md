@@ -139,9 +139,10 @@ The in-place overload only assigns the mapped properties. It:
 
 ### Performance
 
-No benchmark results are published yet. `tests/IronMapper.Benchmarks` contains BenchmarkDotNet benchmarks
-(manual mapping vs. generated mapping, single object and 1000 items); they run in CI on `main`, and results
-will be documented once they are committed.
+The comparison benchmarks (hand-written code, Mapperly, Mapster, AutoMapper; speed, allocations, cold start,
+NativeAOT, size, build time) are in [`benchmarks/`](../benchmarks/README.md). Results of version 1.1.3 (.NET 10,
+one machine): [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md). CI only checks that the suite
+builds and that every scenario runs one iteration on .NET 10 and .NET 8; it does not publish numbers.
 
 ### NativeAOT and trimming
 

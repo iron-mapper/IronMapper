@@ -265,7 +265,7 @@ if (-not $ReportOnly) {
         Write-Host 'Running StartupBenchmark (BenchmarkDotNet, ColdStart)...'
         $bdnLog = Join-Path (Get-StartupLogDir) 'bdn-startup.log'
         $project = Join-Path (Get-BenchmarksDir) 'src' 'Comparison.Benchmarks' 'Comparison.Benchmarks.csproj'
-        & dotnet run -c Release --project $project -- --filter '*StartupBenchmark*' *> $bdnLog
+        & dotnet run -c Release -f net10.0 --project $project -- --filter '*StartupBenchmark*' *> $bdnLog
         if ($LASTEXITCODE -ne 0) { Write-Warning "StartupBenchmark failed; see $bdnLog" }
     }
 }

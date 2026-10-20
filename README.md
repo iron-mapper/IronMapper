@@ -24,7 +24,7 @@ The optional `IronMapper.Extensions.DI` package adds an `IMapper` service. It is
 | API style | Profile-based fluent API, `[AutoMap]` attribute | Attributes **or** profile-based fluent API |
 | `ProjectTo` for `IQueryable` | Yes | Not yet supported (planned, [#9](https://github.com/iron-mapper/IronMapper/issues/9)) |
 
-No performance or package-size numbers are published yet. Benchmarks exist in `tests/IronMapper.Benchmarks` (manual mapping vs. IronMapper); results will be added to the docs once they are measured and committed.
+Comparison benchmarks against hand-written code, Mapperly, Mapster and AutoMapper are in [`benchmarks/`](benchmarks/README.md); the results of version 1.1.3 (.NET 10, one machine) are in [`benchmarks/results/RESULTS.md`](benchmarks/results/RESULTS.md).
 
 ---
 

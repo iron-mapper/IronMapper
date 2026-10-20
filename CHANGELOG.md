@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Build
+
+- Comparison benchmarks (`benchmarks/`): the suite also targets `net8.0`; the runtime scenarios run on .NET 8 with
+  `dotnet run -f net8.0` (output in `results/raw/bdn-net8.0/`, the .NET 10 results stay the reference). The 1.1.3
+  results are frozen in `benchmarks/results/baseline-1.1.3/` as the reference for 1.2.0. The benchmark program exits
+  with code 1 when a benchmark fails or a filter matches nothing.
+- CI: the `benchmarks` job is now a smoke check of `benchmarks/` on every push and pull request (build against the
+  local sources, equivalence tests, one iteration of every runtime scenario on .NET 10 and .NET 8, no published
+  numbers). It replaces the run of the old `tests/IronMapper.Benchmarks` project, which is removed (IronMapper vs
+  hand-written code only, superseded by `benchmarks/`). README and `docs/advanced.md` point to `benchmarks/` and its
+  results instead.
+- CI and publish workflows use the released .NET SDK (`dotnet-quality: 'preview'` removed).
+
 ### Documentation
 
 - README: minimum .NET SDK for the source generator (8.0.400+, Roslyn 4.11) and what happens on an older SDK

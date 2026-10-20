@@ -8,16 +8,28 @@ public static class Program
 {
     /// <summary>
     /// Runs all benchmarks or a filtered subset, e.g.
-    /// <c>dotnet run -c Release -- --filter *Collection*</c> or <c>-- --filter * --job short</c>.
+    /// <c>dotnet run -c Release -f net10.0 -- --filter *Collection*</c> or <c>-- --filter * --job short</c>.
     /// </summary>
     public static void Main(string[] args)
     {
         // DefaultConfig already exports Markdown (GitHub), CSV and HTML; JSON is added here.
-        var config = DefaultConfig.Instance
-            .AddExporter(JsonExporter.Full)
-            .WithArtifactsPath(Path.Combine(FindBenchmarksDirectory(), "results", "raw", "bdn"));
+        var config = DefaultConfig.Instance.AddExporter(JsonExporter.Full);
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+        // results/raw/bdn holds the .NET 10 results that generate-report.ps1 reads; other runtimes get their own
+        // folder (bdn-net8.0) so they never overwrite them. An explicit --artifacts (e.g. the CI smoke run) wins.
+        if (!args.Contains("--artifacts"))
+        {
+            var folder = Environment.Version.Major == 10 ? "bdn" : $"bdn-net{Environment.Version.Major}.0";
+            config = config.WithArtifactsPath(Path.Combine(FindBenchmarksDirectory(), "results", "raw", folder));
+        }
+
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config).ToList();
+
+        // Non-zero exit code when a benchmark threw or a filter matched nothing, so scripts and CI notice it
+        // (--list and --help produce no summaries either and keep exit code 0).
+        var filterMatchedNothing = summaries.Count == 0 && args.Contains("--filter");
+        if (filterMatchedNothing || summaries.Any(s => s.HasCriticalValidationErrors || s.Reports.Any(r => !r.Success)))
+            Environment.ExitCode = 1;
     }
 
     private static string FindBenchmarksDirectory()

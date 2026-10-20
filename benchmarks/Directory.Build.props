@@ -4,8 +4,20 @@
     Directory.Build.props: that one turns on TreatWarningsAsErrors, GenerateDocumentationFile,
     the package Version and NuGet packaging properties, none of which belong here.
   -->
+  <!--
+    Target frameworks. The suite itself (src/ and tests/) also targets net8.0 (LTS), so the runtime scenarios can be
+    measured on both: dotnet run -c Release -f net8.0 ... The reference runtime of the published results is net10.0.
+    The probes (cold start, NativeAOT, size, build time) and tools/ stay on net10.0 only.
+  -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <ComparisonTargetFrameworks>net10.0;net8.0</ComparisonTargetFrameworks>
+    <_ComparisonProjectDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)'))</_ComparisonProjectDir>
+    <_IsComparisonSuiteProject Condition="$(_ComparisonProjectDir.StartsWith($([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', 'src')), StringComparison.OrdinalIgnoreCase)) Or $(_ComparisonProjectDir.StartsWith($([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', 'tests')), StringComparison.OrdinalIgnoreCase))">true</_IsComparisonSuiteProject>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFrameworks Condition="'$(_IsComparisonSuiteProject)' == 'true'">$(ComparisonTargetFrameworks)</TargetFrameworks>
+    <TargetFramework Condition="'$(_IsComparisonSuiteProject)' != 'true'">net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -15,7 +27,7 @@
 
     <!--
       IronMapper source: the published NuGet package (default) or the local sources in ../src.
-      Maintainer switch: dotnet run -c Release -p:UseLocalIronMapper=true
+      Maintainer switch: dotnet run -c Release -f net10.0 -p:UseLocalIronMapper=true
     -->
     <UseLocalIronMapper Condition="'$(UseLocalIronMapper)' == ''">false</UseLocalIronMapper>
     <IronMapperSrcDir>$(MSBuildThisFileDirectory)..\src\</IronMapperSrcDir>

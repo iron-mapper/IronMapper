@@ -112,6 +112,12 @@ The generator together with `IronMapper.Extensions.DI` and `Microsoft.Extensions
 Reference the packed `IronMapper` package (`PackageReference`), not the projects; built by `eng/verify-package.ps1`.
 Not in `IronMapper.slnx`.
 
+### `benchmarks/` (net10.0 + net8.0)
+Comparison suite: IronMapper (extension methods and `IMapper`) vs Mapperly, Mapster, AutoMapper and hand-written code.
+Own solution `benchmarks/IronMapper.Comparison.slnx`, not part of `IronMapper.slnx`. Uses the published IronMapper
+package unless `-p:UseLocalIronMapper=true`. Results: `benchmarks/results/RESULTS.md` (1.1.3 baseline frozen in
+`benchmarks/results/baseline-1.1.3/`). CI runs only a smoke check (build, equivalence tests, one iteration per
+scenario on net10.0 and net8.0); see `benchmarks/README.md`.
 ### `tests/IronMapper.Benchmarks` (net10.0, Exe)
 Old BenchmarkDotNet project: IronMapper vs manual mapping only. The `benchmarks` job in `ci.yml` still runs it on
 pushes to `main`. The comparison with other mappers is in `benchmarks/`.
@@ -165,6 +171,8 @@ dotnet test IronMapper.slnx --collect:"XPlat Code Coverage"
 # Pack and verify the NuGet packages (layout + consumer project)
 pwsh ./eng/verify-package.ps1
 
+# Comparison benchmarks (local sources); full run: pwsh benchmarks/scripts/run-all.ps1
+dotnet run -c Release -f net10.0 --project benchmarks/src/Comparison.Benchmarks -p:UseLocalIronMapper=true -- --filter '*.FlatBenchmark.*'
 # Comparison benchmarks: see benchmarks/ above
 ```
 
