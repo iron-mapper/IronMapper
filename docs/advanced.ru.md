@@ -161,17 +161,29 @@ IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; среднее время 
 
 ### NativeAOT и trimming
 
-Проверено публикацией NativeAOT (`PublishAot=true`, win-x64, .NET 10) консольного приложения, которое маппит заказ
-([`benchmarks/results/aot.md`](../benchmarks/results/aot.md)):
+Сгенерированные маппинги проверяются в NativeAOT в CI при каждом изменении: `eng/verify-aot.ps1` публикует
+консольное приложение на упакованном пакете с `PublishAot=true` для .NET 8 и .NET 10 (linux-x64) и запускает его
+(`tests/IronMapper.AotProbe`: маппинги из атрибутов и профиля, коллекции, обновление на месте, конвертер).
 
-- **Сгенерированные extension-методы: совместимы.** Предупреждений trimming/AOT нет; исполняемый файл запускается и
-  выдаёт правильный результат; время старта такое же, как без маппера. Файл на 255,5 КБ больше приложения без
-  маппера (у Mapperly +23,6 КБ), в основном потому, что сгенерированный код коллекций (`Enumerable.Select` +
-  `ToList`) подтягивает загрузчик типов NativeAOT.
-- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): несовместимы.** Публикация выдаёт IL2026 ×2, IL2062,
-  IL2072 и IL2075, а исполняемый файл падает при первом вызове с `MappingException: No mapping registered`:
+- **Сгенерированные extension-методы: совместимы.** Предупреждений trimming/AOT нет (проверка в CI падает на любом);
+  исполняемый файл запускается и выдаёт правильный результат. В наборе бенчмарков (win-x64, .NET 10,
+  [`benchmarks/results/aot.md`](../benchmarks/results/aot.md)) время старта такое же, как без маппера, а файл на
+  255,5 КБ больше приложения без маппера (у Mapperly +23,6 КБ), в основном потому, что сгенерированный код коллекций
+  (`Enumerable.Select` + `ToList`) подтягивает загрузчик типов NativeAOT.
+- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): пока несовместимы** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
   `RuntimeMapper` находит сгенерированные методы по имени через reflection (сканирование сборок `AppDomain`,
-  `Assembly.GetType`, `GetMethods`), чего trimmer не видит, и их метаданные не сохраняются.
-  Предупреждения указывают на сборку IronMapper, а не на ваш вызов. В приложениях с NativeAOT и trimming используйте extension-методы.
+  `Assembly.GetType`, `GetMethods`), чего trimmer не видит, их метаданные не сохраняются, и исполняемый файл падает
+  при первом вызове с `MappingException: No mapping registered`. `AddIronMapper` и `RuntimeMapper` помечены
+  `[RequiresUnreferencedCode]`, поэтому публикация с trimming или NativeAOT сообщает об этом на вашем вызове:
 
-Проверены только win-x64 и сценарий набора бенчмарков; в CI NativeAOT пока не проверяется.
+  ```text
+  Program.cs(8,1): warning IL2026: Using member 'IronMapper.Extensions.DI.IronMapperServiceCollectionExtensions.AddIronMapper(IServiceCollection, params Assembly[])' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. IMapper finds and calls the generated mapping methods through reflection; trimming and NativeAOT remove them, and mapping fails at runtime with MappingException. Call the generated MapTo* extension methods (using IronMapper.Generated;) instead. https://github.com/iron-mapper/IronMapper/issues/26
+  ```
+
+  CI проверяет, что это предупреждение есть, а других предупреждений из сборок IronMapper нет
+  (`tests/IronMapper.AotProbe.DI`). До 1.1.4 включительно предупреждения (IL2026, IL2062, IL2072, IL2075) указывали
+  внутрь сборки IronMapper, по умолчанию одним общим IL2104, а не на ваш вызов. В приложениях с NativeAOT и trimming
+  используйте extension-методы.
+- **`MappingValidator`** читает свойства и конструкторы переданных типов через reflection и тоже помечен
+  `[RequiresUnreferencedCode]`: вызов в приложении с trimming или NativeAOT даёт IL2026. Генератор сообщает об этих
+  проблемах при компиляции.

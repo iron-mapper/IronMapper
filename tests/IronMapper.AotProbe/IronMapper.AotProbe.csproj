@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    NativeAOT probe A: the generated extension methods (attributes, profile, collections, in-place, converter) published
+    with PublishAot against the packed IronMapper package. eng/verify-aot.ps1 publishes it for net8.0 and net10.0,
+    requires zero trim/AOT warnings (TreatWarningsAsErrors; TrimmerSingleWarn=false lists warnings inside libraries
+    one by one instead of a summary IL2104), runs the executable and checks its exit code.
+    Intentionally NOT part of IronMapper.slnx.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PublishAot>true</PublishAot>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronMapper" Version="[$(IronMapperVersion)]" />
+  </ItemGroup>
+
+</Project>

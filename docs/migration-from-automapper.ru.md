@@ -13,7 +13,7 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | Откуда берётся код маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
 | Ошибки конфигурации | Сообщает `AssertConfigurationIsValid()`, обычно вызываемый в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке: диагностики IM00xx или ошибки C# в сгенерированном коде. Несколько объявленных диагностик пока не выдаются, см. [диагностики](diagnostics.ru.md) |
 | Сервис `IMapper` | Основной API | Необязательный (`IronMapper.Extensions.DI`); вызывает сгенерированные методы через reflection |
-| NativeAOT / trimming | Не поддерживается: предупреждения при публикации, падает при запуске ([результаты](../benchmarks/results/aot.md)) | Сгенерированные extension-методы: без предупреждений, работают. `IMapper`: предупреждения, падает при запуске ([подробнее](advanced.ru.md#nativeaot-и-trimming)) |
+| NativeAOT / trimming | Не поддерживается: предупреждения при публикации, падает при запуске ([результаты](../benchmarks/results/aot.md)) | Сгенерированные extension-методы: без предупреждений, работают. `IMapper`: IL2026 на вызове `AddIronMapper`, падает при запуске ([подробнее](advanced.ru.md#nativeaot-и-trimming)) |
 | Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
 
 Производительность и размер, IronMapper 1.1.3 против AutoMapper 16.2.0 (.NET 10, один компьютер; отношение к ручному

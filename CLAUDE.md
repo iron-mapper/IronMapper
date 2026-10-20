@@ -38,13 +38,16 @@ IronMapper/
 │   ├── IronMapper.Integration.Tests/  # Generator + Extensions.DI together (DI, real-world models)
 │   ├── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
 │   ├── IronMapper.PackageConsumer.InternalLib/  # Library for the consumer: internal maps only (not in the .slnx)
-│   └── IronMapper.PackageConsumer.PublicLib/    # Library for the consumer: public maps (not in the .slnx)
+│   ├── IronMapper.PackageConsumer.PublicLib/    # Library for the consumer: public maps (not in the .slnx)
+│   ├── IronMapper.AotProbe/           # NativeAOT probe: generated extension methods (not in the .slnx)
+│   └── IronMapper.AotProbe.DI/        # NativeAOT probe: IMapper must warn IL2026 (not in the .slnx)
 ├── benchmarks/                        # Comparison suite vs Mapperly, Mapster, AutoMapper (own solution, not in the .slnx)
 ├── samples/IronMapper.Demo/           # Demo application
 ├── eng/verify-package.ps1            # dotnet pack + .nupkg layout check + consumer build
+├── eng/verify-aot.ps1                # dotnet pack + NativeAOT publish of the AOT probes (net8.0, net10.0)
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings-as-errors)
 ├── .editorconfig                      # C# code style
-└── .github/workflows/                 # ci.yml (build, test, pack & verify, benchmarks smoke), publish.yml (tag v* → NuGet)
+└── .github/workflows/                 # ci.yml (build, test, pack & verify, NativeAOT probes, benchmarks smoke), publish.yml (tag v* → NuGet)
 ```
 
 ---
@@ -93,6 +96,11 @@ signature and calls them with `MethodInfo.Invoke`. Consequences confirmed by the
 per call, exceptions wrapped in `TargetInvocationException`, and it fails under NativeAOT. Replacing it with a
 generated registry is planned (`IRONMAPPER_PLAN.md`, 1.3).
 
+Until then `AddIronMapper` and `RuntimeMapper` are `[RequiresUnreferencedCode]` (message in `TrimMessages.cs`), and
+so is `MappingValidator` in the runtime package: the app gets IL2026 at its own call. The net10.0 builds of both
+libraries use `IsAotCompatible`, so a new unannotated reflection use fails the build; the netstandard builds take the
+attribute from `Polyfills/` (same full name, internal).
+
 ### `tests/IronMapper.Tests` (net10.0)
 Runtime tests. References `IronMapper` and `IronMapper.Generator` as
 `OutputItemType="Analyzer" ReferenceOutputAssembly="false"` — the generator runs during test compilation so the
@@ -114,6 +122,12 @@ The generator together with `IronMapper.Extensions.DI` and `Microsoft.Extensions
 ### `tests/IronMapper.PackageConsumer` (+ `InternalLib`, `PublicLib`)
 Reference the packed `IronMapper` package (`PackageReference`), not the projects; built by `eng/verify-package.ps1`.
 Not in `IronMapper.slnx`.
+
+### `tests/IronMapper.AotProbe`, `tests/IronMapper.AotProbe.DI` (net8.0 + net10.0)
+Published with `PublishAot` against the packed packages by `eng/verify-aot.ps1` (CI job `aot`, ubuntu). `AotProbe`:
+generated extension methods, zero trim/AOT warnings, the executable checks the mapped values. `AotProbe.DI`: must
+report IL2026 on its `AddIronMapper` line and nothing else (not run). Not in `IronMapper.slnx`. Locally on Windows the
+publish needs the Visual Studio C++ build tools.
 
 ### `benchmarks/` — comparison suite (net10.0 + net8.0)
 IronMapper (extension methods and `IMapper`) vs **Mapperly, Mapster, AutoMapper** and hand-written `Manual`
@@ -173,6 +187,9 @@ dotnet test IronMapper.slnx --collect:"XPlat Code Coverage"
 # Pack and verify the NuGet packages (layout + consumer project)
 pwsh ./eng/verify-package.ps1
 
+# NativeAOT probes against the packed packages (net8.0, net10.0)
+pwsh ./eng/verify-aot.ps1
+
 # Comparison benchmarks (local sources); full run: pwsh benchmarks/scripts/run-all.ps1
 dotnet run -c Release -f net10.0 --project benchmarks/src/Comparison.Benchmarks -p:UseLocalIronMapper=true -- --filter '*.FlatBenchmark.*'
 ```
@@ -228,8 +245,8 @@ allocations).
 
 1. **Zero runtime overhead** — mapping code is ordinary C# compiled into the consuming assembly.
 2. **Compile-time errors** — misconfigured mappings fail at `dotnet build`, not at `app.Run()`.
-3. **AOT / NativeAOT compatible** — no `System.Reflection.Emit`, no dynamic IL. Verified for the generated extension
-   methods (`benchmarks/results/aot.md`); the `IMapper` DI path is not compatible yet.
+3. **AOT / NativeAOT compatible** — no `System.Reflection.Emit`, no dynamic IL. Checked for the generated extension
+   methods in CI (`eng/verify-aot.ps1`); the `IMapper` DI path is not compatible yet and warns (IL2026).
 4. **Debuggable** — generated `.cs` files can be stepped through in any IDE.
 5. **Trimming safe** — the generated code needs no `[DynamicallyAccessedMembers]` annotations (again, except `IMapper`).
 

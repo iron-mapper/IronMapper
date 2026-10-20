@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Publishing an app that uses `IMapper` with trimming or NativeAOT now warns at your call (expected).**
+  `AddIronMapper` (both overloads) and `RuntimeMapper` are marked `[RequiresUnreferencedCode]`, so the publish reports
+  `IL2026` on the `AddIronMapper` line (and when `RuntimeMapper` is created directly) with what to use instead: the
+  generated `MapTo*` extension methods. Until now it reported `IL2026`/`IL2062`/`IL2072`/`IL2075` inside
+  `IronMapper.Extensions.DI` (by default one summary `IL2104`), and the app failed with `MappingException` at run
+  time. `IMapper` still does not work in NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)); the
+  warning goes away when it gets a reflection-free registry. Apps with `TreatWarningsAsErrors` that publish trimmed
+  with `IMapper` fail at this warning instead of at run time.
+- `MappingValidator` is marked `[RequiresUnreferencedCode]` (it reads properties and constructors through
+  reflection): calling it in a trimmed or NativeAOT app reports `IL2026`. On .NET 8 and other targets that get the
+  `netstandard` assemblies, the attributes are internal copies with the same full names, which the trimmer recognizes.
+
 ### Fixed
 
 - **Diagnostics are updated after an edit in the IDE.** An edit that changed only the diagnostics of a mapping (for
@@ -16,6 +30,12 @@
   result of each analysis step was an `ImmutableArray` (compared by reference), so it counted as modified on every
   edit; now an equal result is `Unchanged`. The strict incremental caching tests are enabled (no `Skip`); new tests
   check that diagnostics appear and disappear after an edit.
+- `IronMapper` and `IronMapper.Extensions.DI` (net10.0) are built with `IsAotCompatible`: the trim and AOT analyzers
+  fail the build on an unannotated reflection use inside the libraries.
+- CI: the `aot` job (`eng/verify-aot.ps1`, ubuntu, net8.0 and net10.0) publishes two probes with `PublishAot` against
+  the packed packages: `tests/IronMapper.AotProbe` (attribute and profile mappings, collections, in-place update, a
+  converter) must have no trim/AOT warnings and its executable must check the mapped values;
+  `tests/IronMapper.AotProbe.DI` must report `IL2026` on its `AddIronMapper` line and nothing else.
 
 ## [1.1.4] - 2026-10-20
 

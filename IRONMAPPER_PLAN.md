@@ -84,14 +84,15 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
 | 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21). PR 1 (EquatableArray) — `fix/generator-equatable` |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29). PR 2 (AOT) — `fix/aot-honesty` |
 
 **Ветки (сверено 20.10.2026, после #28):**
 
 - `chore/test-infrastructure` — слита в `main` (#20, `eec934a`). `chore/benchmarks-baseline` — слита (#21, `f70f3d2`); конфликт в CLAUDE.md при слиянии разрешён не до конца (остались `tests/IronMapper.Benchmarks` и второй раздел `benchmarks/`) — исправлено в `docs/readme-refresh`.
 - `docs/readme-refresh` — слита (#28, `f95e31d`), выпуск 1.1.4. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable).
-- `fix/generator-equatable` — PR 1 релиза 1.2.0 (п.2.9), от `main` `f95e31d`; не слита.
-- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh` — уже в `main`. Удалить.
+- `fix/generator-equatable` — слита (#29, `533b927`), PR 1 релиза 1.2.0.
+- `fix/aot-honesty` — PR 2 релиза 1.2.0 (п.1.3 — атрибуты, п.1.4 — AOT-проба), от `main` `533b927`; не слита.
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable` — уже в `main`. Удалить.
 
 ---
 
@@ -134,8 +135,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### Порядок PR
 
 0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 8.
-1. **EquatableArray** (п.2.9). Сделано в `fix/generator-equatable` (не слита): данные пайплайна сравниваются по значению, включая диагностики; строгие тесты кэширования без Skip.
-2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26).
+1. **EquatableArray** (п.2.9). Сделано (#29): данные пайплайна сравниваются по значению, включая диагностики; строгие тесты кэширования без Skip.
+2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26). Сделано в `fix/aot-honesty` (не слита): только `[RequiresUnreferencedCode]` — динамической генерации кода в DI-пути нет (`MethodInfo.Invoke` в NativeAOT работает, ломает его trimming), `[RequiresDynamicCode]` был бы неправдой; IL2026 на вызове `AddIronMapper`. Job `aot` (`eng/verify-aot.ps1`), см. п.1.4.
 3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством.
 4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
 5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26).
@@ -168,15 +169,16 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Убрать `GetTypes()` и регистрацию профилей из `AddIronMapper` (профили нужны только генератору).
 - [ ] `Map<List<T>>`, `T[]`, `IEnumerable<T>` и др. как `TDest` — issue **#8**.
 - [ ] Тест: через `IMapper` пользователь получает исходное исключение (`ArgumentNullException`, исключение конвертера/хука) со стеком из сгенерированного метода.
-- [ ] Снять атрибуты `RequiresUnreferencedCode` (PR 2 релиза 1.2.0), добавить DI в AOT-пробу.
+- [ ] Снять атрибуты `RequiresUnreferencedCode` (поставлены в PR 2 релиза 1.2.0, `fix/aot-honesty`), перевести `tests/IronMapper.AotProbe.DI` на ноль предупреждений и запуск.
 
 **Готово, когда:** нет `System.Reflection` в `Extensions.DI` и в сгенерированном коде; цели `IMapper` из раздела 1.2.0 выполнены; тест с одноимёнными типами из разных пространств имён проходит.
 
 ### 1.4. NativeAOT в CI (аудит п.23)
 
 - [x] Подтверждено бенчмарками: extension-методы публикуются без IL-предупреждений, работают, к старту ничего не добавляют.
-- [ ] AOT-проба в CI (publish + запуск + проверка результата) — сейчас для extension-методов, DI — после 1.3.
-- [ ] `MappingValidator` (рефлексия): `RequiresUnreferencedCode` или убрать из публичного API.
+- [x] AOT-проба в CI (publish + запуск + проверка результата) — для extension-методов; DI — после 1.3 (`fix/aot-honesty`). Job `aot` в `ci.yml`, ubuntu, `eng/verify-aot.ps1` на упакованных пакетах, net8.0 и net10.0: `tests/IronMapper.AotProbe` (атрибуты, профиль с `MapFrom`, вложенная коллекция, `List`/`Array`, in-place, `[MapConverter]`) — ноль IL-предупреждений (`TreatWarningsAsErrors`, `TrimmerSingleWarn=false`), запуск проверяет значения; `tests/IronMapper.AotProbe.DI` — IL2026 на строке `AddIronMapper` в `Program.cs` и больше ничего (не запускается). Локально на Windows обе пробы проходят (~30 с с упаковкой, publish 5–8 с на пробу при тёплом кэше). На пакете 1.1.4 проба DI падает, как и должна: предупреждения внутри `IronMapper.Extensions.DI`, на вызове — ничего.
+- [x] Атрибуты DI-пути (`fix/aot-honesty`): `[RequiresUnreferencedCode]` на обеих перегрузках `AddIronMapper`, на `RegisterServices` и на классе `RuntimeMapper` (покрывает конструктор и подавляет предупреждения внутри); `IronMapperOptions` рефлексию не использует (только складывает сборки и типы в списки) — без атрибутов. Polyfill-атрибуты для netstandard2.0/2.1 (`Polyfills/`), `IsAotCompatible` для net10.0 обеих библиотек. При снятии атрибутов (п.1.3) — инвертировать пробу DI: ноль предупреждений и запуск.
+- [x] `MappingValidator` (рефлексия): `[RequiresUnreferencedCode]` на классе (`fix/aot-honesty`). Альтернатива — `[DynamicallyAccessedMembers]` на параметрах `Type` (без предупреждения при `typeof(X)`) — не выбрана: задача просила `RequiresUnreferencedCode`; можно пересмотреть в 2.0.0 вместе с судьбой валидатора.
 
 ### 1.4a. Размер AOT-бинарника (аудит п.23a)
 

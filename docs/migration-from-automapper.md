@@ -13,7 +13,7 @@ IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not 
 | Where mapping code comes from | Mapping plans built at runtime and compiled from expression trees ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C# generated at compile time |
 | Configuration errors | Reported by `AssertConfigurationIsValid()`, typically called in a unit test ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Some at build time: IM00xx diagnostics, or C# errors in the generated code. Several declared diagnostics are not reported yet, see [diagnostics](diagnostics.md) |
 | `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods via reflection |
-| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: warnings, fails at run time ([details](advanced.md#nativeaot-and-trimming)) |
+| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: IL2026 at the `AddIronMapper` call, fails at run time ([details](advanced.md#nativeaot-and-trimming)) |
 | License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
 
 Performance and size, IronMapper 1.1.3 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):

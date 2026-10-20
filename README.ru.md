@@ -24,8 +24,9 @@ English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main
   меньше (`IM0001` для них не выдаётся, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
 - **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,6 нс на объект. Вложенные объекты медленнее
   (×1,26), см. [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
-- **Работа в NativeAOT проверена для сгенерированных методов.** Они публикуются без предупреждений trimming/AOT и
-  работают корректно. Необязательный сервис `IMapper` в NativeAOT пока не работает ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
+- **Работа сгенерированных методов в NativeAOT проверяется в CI** (.NET 8 и .NET 10): они публикуются без
+  предупреждений trimming/AOT и работают корректно. Необязательный сервис `IMapper` в NativeAOT пока не работает и
+  предупреждает об этом при публикации: IL2026 на вашем вызове `AddIronMapper` ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Холодный старт — около 2 мс** (запуск процесса и первый маппинг сверх консольного приложения без маппера), тот же
   порядок, что у ручного кода. AutoMapper и Mapster тратят на этом десятки миллисекунд — строят конфигурацию маппинга
   ([результаты](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
@@ -196,7 +197,8 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
 ```
 
 `IMapper` находит и вызывает сгенерированные методы через reflection. Он медленнее extension-методов (см. таблицу
-выше) и не работает в NativeAOT; если типы известны при компиляции, вызывайте extension-методы напрямую.
+выше) и не работает в NativeAOT (публикация выдаёт IL2026 на `AddIronMapper`); если типы известны при компиляции,
+вызывайте extension-методы напрямую.
 
 ---
 
@@ -211,8 +213,9 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
   Используйте `MapFrom`.
 - **`IM0001` не выдаётся для маппингов из профилей** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
   остаётся со значением по умолчанию без предупреждения.
-- **`IMapper` (IronMapper.Extensions.DI) использует reflection и не работает в NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): предупреждения
-  IL2026/IL2062/IL2072/IL2075 при публикации, `MappingException` при запуске. В нём также нет перегрузки `Map` для
+- **`IMapper` (IronMapper.Extensions.DI) использует reflection и не работает в NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): публикация с
+  trimming или NativeAOT выдаёт IL2026 на вашем вызове `AddIronMapper`, а приложение падает с `MappingException` при
+  запуске. В нём также нет перегрузки `Map` для
   коллекций ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) и передачи контекста в вызов
   ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 - **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).

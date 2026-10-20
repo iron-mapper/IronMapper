@@ -9,6 +9,15 @@
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;compile-time</PackageTags>
   </PropertyGroup>
 
+  <!--
+    Trim and AOT analyzers for the net10.0 build: every reflection use must be annotated (RequiresUnreferencedCode),
+    so applications get IL2026 at their own call instead of a summary IL2104 for this assembly. The netstandard
+    build gets the same attributes from Polyfills/ (no analyzers there).
+  -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
