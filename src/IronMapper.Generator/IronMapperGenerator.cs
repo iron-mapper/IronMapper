@@ -34,7 +34,9 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 "IronMapper.Attributes.MapToAttribute",
                 predicate: static (node, _) => IsEligibleTypeDeclaration(node),
                 transform: static (ctx, ct) => MappingAnalyzer.ExtractFromMapTo(ctx, ct))
-            .SelectMany(static (arr, _) => arr);
+            .WithTrackingName(TrackingNames.MapToTransform)
+            .SelectMany(static (arr, _) => arr)
+            .WithTrackingName(TrackingNames.MapTo);
 
         // [MapFrom(typeof(TSource))] on dest class → extract descriptors (one per attribute).
         var fromMapFrom = context.SyntaxProvider
@@ -42,14 +44,18 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 "IronMapper.Attributes.MapFromAttribute",
                 predicate: static (node, _) => IsEligibleTypeDeclaration(node),
                 transform: static (ctx, ct) => MappingAnalyzer.ExtractFromMapFrom(ctx, ct))
-            .SelectMany(static (arr, _) => arr);
+            .WithTrackingName(TrackingNames.MapFromTransform)
+            .SelectMany(static (arr, _) => arr)
+            .WithTrackingName(TrackingNames.MapFrom);
 
         // MappingProfile subclass pipeline — analyses constructor bodies for CreateMap<,>() chains.
         var fromProfiles = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: ProfileAnalyzer.IsCandidateClass,
                 transform: static (ctx, ct) => ProfileAnalyzer.ExtractFromProfile(ctx, ct))
-            .SelectMany(static (arr, _) => arr);
+            .WithTrackingName(TrackingNames.ProfileTransform)
+            .SelectMany(static (arr, _) => arr)
+            .WithTrackingName(TrackingNames.Profiles);
 
         // Decisions across all mappings: duplicate pairs (IM0007), method name collisions (IM0013/IM0014),
         // hint names and helper scopes. The plan is compared by value, so a mapping's file is re-emitted only
@@ -57,7 +63,8 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         var plan = fromMapTo.Collect()
             .Combine(fromMapFrom.Collect())
             .Combine(fromProfiles.Collect())
-            .Select(static (all, _) => MappingPlanner.Create(all.Left.Left, all.Left.Right, all.Right));
+            .Select(static (all, _) => MappingPlanner.Create(all.Left.Left, all.Left.Right, all.Right))
+            .WithTrackingName(TrackingNames.Plan);
 
         context.RegisterSourceOutput(plan, static (spc, mappingPlan) =>
         {
@@ -78,7 +85,8 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
         // the plan does not generate (IM0007/IM0014) do not count. The final Select yields a string, so the
         // declaration is re-emitted only when the accessibility actually changes.
-        var classAccessibility = plan.Select(static (mappingPlan, _) => GetClassAccessibility(mappingPlan));
+        var classAccessibility = plan.Select(static (mappingPlan, _) => GetClassAccessibility(mappingPlan))
+            .WithTrackingName(TrackingNames.ClassAccessibility);
 
         context.RegisterSourceOutput(classAccessibility, static (spc, accessibility) =>
         {

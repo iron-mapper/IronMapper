@@ -1,0 +1,32 @@
+﻿{
+  Diagnostics: [
+    {
+      Message: Several mappings from 'App.User' have a destination type named 'UserDto', so the mapping to 'App.Admin.UserDto' is generated as 'MapToAdminUserDto' instead of 'MapToUserDto'. Call it as source.MapToAdminUserDto(); the collection methods are MapToAdminUserDtoList and MapToAdminUserDtoArray.,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0013,
+        Title: Mapping method name qualified to avoid a collision,
+        Description: The method name is qualified with the namespace and containing types of the destination (fewest trailing segments that make the names unique), then with its type arguments. Mappings without a collision keep MapTo{Name}. Rename one of the destination types to get the short name back, or suppress the warning with <NoWarn>IM0013</NoWarn>.,
+        MessageFormat: Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.,
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Message: Several mappings from 'App.User' have a destination type named 'UserDto', so the mapping to 'App.Public.UserDto' is generated as 'MapToPublicUserDto' instead of 'MapToUserDto'. Call it as source.MapToPublicUserDto(); the collection methods are MapToPublicUserDtoList and MapToPublicUserDtoArray.,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0013,
+        Title: Mapping method name qualified to avoid a collision,
+        Description: The method name is qualified with the namespace and containing types of the destination (fewest trailing segments that make the names unique), then with its type arguments. Mappings without a collision keep MapTo{Name}. Rename one of the destination types to get the short name back, or suppress the warning with <NoWarn>IM0013</NoWarn>.,
+        MessageFormat: Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.,
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}
