@@ -530,7 +530,7 @@ public class ProfileGeneratorTests
     // ------------------------------------------------------------------
 
     [Fact]
-    public void NestedList_MappedPropertyType_EmitsSelectInGeneratedCode()
+    public void NestedList_MappedPropertyType_EmitsLoopWithoutLinq()
     {
         var source = """
             using IronMapper.Attributes;
@@ -559,9 +559,10 @@ public class ProfileGeneratorTests
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         var code = string.Join("\n", generatedSources);
         Assert.Contains("MapToOrderDto", code);
-        // Nested collection should emit Select call with MapToLineItemDto
-        Assert.Contains("MapToLineItemDto", code);
-        Assert.Contains("Select", code);
+        // Nested List<T> source: a loop with the exact capacity and a direct call of MapToLineItemDto, no LINQ.
+        Assert.Contains("result.Add(source[i].MapToLineItemDto())", code);
+        Assert.Contains("new global::System.Collections.Generic.List<global::LineItemDto>(source.Count)", code);
+        Assert.DoesNotContain("System.Linq", code);
     }
 
     // ------------------------------------------------------------------

@@ -89,7 +89,7 @@ public class GeneratorCachingTests
         TrackingNames.MapToTransform, TrackingNames.MapTo,
         TrackingNames.MapFromTransform, TrackingNames.MapFrom,
         TrackingNames.ProfileTransform, TrackingNames.Profiles,
-        TrackingNames.Plan, TrackingNames.ClassAccessibility,
+        TrackingNames.Plan, TrackingNames.ClassAccessibility, TrackingNames.CodeOptions,
     };
 
     [Fact]

@@ -11,7 +11,7 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.TagDto"/> populated from <paramref name="source"/>.</returns>
         public static global::App.TagDto MapToTagDto(this global::App.Tag source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.TagDto
             {
                 Label = new global::App.Upper().Convert(source.Label),
@@ -23,21 +23,64 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.TagDto"/> instance to populate. Init-only properties are not updated.</param>
         public static void MapToTagDto(this global::App.Tag source, global::App.TagDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
             destination.Label = new global::App.Upper().Convert(source.Label);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.TagDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.TagDto> MapToTagDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Tag>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.TagDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToTagDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.TagDto>();
+            if (source is global::App.Tag[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.TagDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToTagDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Tag> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.TagDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToTagDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Tag> collection
+                    ? new global::System.Collections.Generic.List<global::App.TagDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.TagDto>();
+                foreach (var item in source) result.Add(MapToTagDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.TagDto"/> and returns an array.</summary>
         public static global::App.TagDto[] MapToTagDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Tag>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.TagDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToTagDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.TagDto>();
+            if (source is global::App.Tag[] array)
+            {
+                var result = new global::App.TagDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToTagDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Tag> list)
+            {
+                var result = new global::App.TagDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToTagDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Tag> collection)
+            {
+                var result = new global::App.TagDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToTagDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.TagDto>();
+                foreach (var item in source) result.Add(MapToTagDto(item));
+                return result.ToArray();
+            }
+        }
     }
 }

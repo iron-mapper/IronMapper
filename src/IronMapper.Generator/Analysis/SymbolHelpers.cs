@@ -276,4 +276,112 @@ internal static class SymbolHelpers
 
         return "Enumerable";
     }
+
+    /// <summary>
+    /// How the generated code reads a source collection of type <paramref name="type"/>:
+    /// <c>"Array"</c> (one-dimensional array: <c>Length</c> + <c>for</c>), <c>"List"</c> (<c>List&lt;T&gt;</c>:
+    /// <c>Count</c> + <c>for</c>), <c>"IndexedList"</c> (<c>IList&lt;T&gt;</c>, <c>IReadOnlyList&lt;T&gt;</c>:
+    /// <c>Count</c> + <c>for</c> over the indexer, no enumerator), <c>"Counted"</c> (<c>ICollection&lt;T&gt;</c>,
+    /// <c>IReadOnlyCollection&lt;T&gt;</c>, or a class/struct with a public <c>int Count</c>: <c>Count</c> +
+    /// <c>foreach</c> over the declared type), otherwise <c>"Enumerable"</c> (<c>foreach</c>, size unknown).
+    /// </summary>
+    public static string GetCollectionSourceKind(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol array)
+            return array.IsSZArray ? "Array" : "Enumerable";
+
+        if (type is not INamedTypeSymbol named) return "Enumerable";
+
+        if (named.IsGenericType)
+        {
+            switch (named.OriginalDefinition.ToDisplayString())
+            {
+                case "System.Collections.Generic.List<T>":
+                    return "List";
+                case "System.Collections.Generic.IList<T>":
+                case "System.Collections.Generic.IReadOnlyList<T>":
+                    return "IndexedList";
+                case "System.Collections.Generic.ICollection<T>":
+                case "System.Collections.Generic.IReadOnlyCollection<T>":
+                    return "Counted";
+            }
+        }
+
+        // Other interfaces may inherit Count from both ICollection<T> and IReadOnlyCollection<T> (ambiguous).
+        if (named.TypeKind == TypeKind.Interface) return "Enumerable";
+
+        for (var current = named; current is not null; current = current.BaseType)
+        {
+            foreach (var member in current.GetMembers("Count"))
+            {
+                if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } count
+                    && count.GetMethod is { DeclaredAccessibility: Accessibility.Public }
+                    && count.Type.SpecialType == SpecialType.System_Int32)
+                    return "Counted";
+            }
+        }
+
+        return "Enumerable";
+    }
+
+    private static readonly SymbolDisplayFormat FullyQualifiedNullableFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    /// <summary>
+    /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are collections whose element
+    /// types differ, describes the element mapping; otherwise <see langword="null"/> (same element types: the
+    /// collection is assigned as is).
+    /// </summary>
+    public static CollectionMapping? DetectCollectionMapping(ITypeSymbol sourcePropType, ITypeSymbol destPropType)
+    {
+        if (!TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null) return null;
+        if (!TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null) return null;
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString()) return null;
+
+        // The helper parameter is declared nullable: drop a top-level `?` of the property type first.
+        var sourceType = sourcePropType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            .ToDisplayString(FullyQualifiedNullableFormat);
+
+        return new CollectionMapping(
+            elementMethod: $"MapTo{dstElem.Name}",
+            outputType: GetCollectionOutputType(destPropType),
+            pairKey: $"{GetFullyQualifiedName(srcElem)}->{GetFullyQualifiedName(dstElem)}",
+            sourceKind: GetCollectionSourceKind(sourcePropType),
+            sourceTypeFqn: sourceType,
+            destElementFqn: dstElem.ToDisplayString(FullyQualifiedNullableFormat));
+    }
+}
+
+/// <summary>Result of <see cref="SymbolHelpers.DetectCollectionMapping"/>; copied into <see cref="PropertyMappingDescriptor"/>.</summary>
+internal sealed class CollectionMapping
+{
+    public CollectionMapping(string elementMethod, string outputType, string pairKey, string sourceKind,
+        string sourceTypeFqn, string destElementFqn)
+    {
+        ElementMethod = elementMethod;
+        OutputType = outputType;
+        PairKey = pairKey;
+        SourceKind = sourceKind;
+        SourceTypeFqn = sourceTypeFqn;
+        DestElementFqn = destElementFqn;
+    }
+
+    /// <summary><c>MapTo{DestElement}</c>; the plan may qualify it (IM0013), see <see cref="PairKey"/>.</summary>
+    public string ElementMethod { get; }
+
+    /// <summary>See <see cref="SymbolHelpers.GetCollectionOutputType"/>.</summary>
+    public string OutputType { get; }
+
+    /// <summary>Type pair of the element mapping.</summary>
+    public string PairKey { get; }
+
+    /// <summary>See <see cref="SymbolHelpers.GetCollectionSourceKind"/>.</summary>
+    public string SourceKind { get; }
+
+    /// <summary>Fully qualified source property type, without a top-level <c>?</c>.</summary>
+    public string SourceTypeFqn { get; }
+
+    /// <summary>Fully qualified destination element type (nullable annotations kept).</summary>
+    public string DestElementFqn { get; }
 }

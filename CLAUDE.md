@@ -74,6 +74,12 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   - `MapToX(this Source source)` — new destination object;
   - `MapToX(this Source source, X destination)` — in-place update (skips `init` properties);
   - `MapToXList(this IEnumerable<Source>? source)` and `MapToXArray(...)` — collections.
+- **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` check
+  for `T[]`, `List<T>`, `ICollection<T>` (loops with a known size). A nested collection property is mapped by a
+  private helper `MapCollection_{Prop}{scope}` chosen by the declared source type (`SymbolHelpers.GetCollectionSourceKind`);
+  an `IEnumerable<T>` destination stays lazy (iterator). Null checks: `ArgumentNullException.ThrowIfNull` when the
+  user's compilation has it, otherwise the throw helper in `GeneratedMappers.g.cs` (`[DoesNotReturn]` if available) —
+  `Analysis/Models/GeneratedCodeOptions.cs`. Runtime tests of every collection kind: `tests/IronMapper.Tests/CollectionShapeTests.cs`.
 - **Accessibility:** each method gets the minimum effective accessibility of its source and destination types
   (private/protected nested types → IM0010, not generated). `GeneratedMappers` is `public` if any method is public,
   otherwise `internal`; the modifier is declared once (`EmitClassDeclaration`). Without generated mappings only an

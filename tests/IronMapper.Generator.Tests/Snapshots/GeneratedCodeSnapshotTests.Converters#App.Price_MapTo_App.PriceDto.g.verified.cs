@@ -11,7 +11,7 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.PriceDto"/> populated from <paramref name="source"/>.</returns>
         public static global::App.PriceDto MapToPriceDto(this global::App.Price source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.MoneyConverter().Convert(source);
         }
 
@@ -20,20 +20,63 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.PriceDto"/> instance to populate. Init-only properties are not updated.</param>
         public static void MapToPriceDto(this global::App.Price source, global::App.PriceDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PriceDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.PriceDto> MapToPriceDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Price>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.PriceDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToPriceDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.PriceDto>();
+            if (source is global::App.Price[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PriceDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToPriceDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Price> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PriceDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToPriceDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Price> collection
+                    ? new global::System.Collections.Generic.List<global::App.PriceDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.PriceDto>();
+                foreach (var item in source) result.Add(MapToPriceDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PriceDto"/> and returns an array.</summary>
         public static global::App.PriceDto[] MapToPriceDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Price>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.PriceDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToPriceDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.PriceDto>();
+            if (source is global::App.Price[] array)
+            {
+                var result = new global::App.PriceDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToPriceDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Price> list)
+            {
+                var result = new global::App.PriceDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToPriceDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Price> collection)
+            {
+                var result = new global::App.PriceDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToPriceDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PriceDto>();
+                foreach (var item in source) result.Add(MapToPriceDto(item));
+                return result.ToArray();
+            }
+        }
     }
 }

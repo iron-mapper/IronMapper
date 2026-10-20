@@ -488,8 +488,7 @@ internal static class ProfileAnalyzer
             // Priority 2: direct name-match.
             else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
-                var (collectionMapMethod, collectionOutputType, collectionPairKey) =
-                    DetectCollectionMapping(namedProp.Type, destProp.Type);
+                var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
                 var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
@@ -499,10 +498,8 @@ internal static class ProfileAnalyzer
                     needsNullCheck: namedProp.Type.IsReferenceType,
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
-                    collectionElementMapMethod: collectionMapMethod,
-                    collectionOutputType: collectionOutputType,
                     sourcePropertyTypeFqn: typeFqn,
-                    collectionElementPairKey: collectionPairKey));
+                    collection: collection));
             }
             // Priority 3: IncludeMembers flattening.
             else if (includedResolution.TryGetValue(destProp.Name, out var included))
@@ -537,25 +534,6 @@ internal static class ProfileAnalyzer
             sourceFullName: sourceFullName,
             destFullName: destFullName,
             methodAccessibility: methodAccessibility);
-    }
-
-    /// <summary>
-    /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are
-    /// collection types whose element types differ, returns the mapping method name and output kind.
-    /// </summary>
-    private static (string? mapMethod, string? outputType, string? pairKey) DetectCollectionMapping(
-        ITypeSymbol sourcePropType,
-        ITypeSymbol destPropType)
-    {
-        if (!SymbolHelpers.TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null)
-            return (null, null, null);
-        if (!SymbolHelpers.TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null)
-            return (null, null, null);
-        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
-            return (null, null, null);
-
-        return ($"MapTo{dstElem.Name}", SymbolHelpers.GetCollectionOutputType(destPropType),
-            $"{SymbolHelpers.GetFullyQualifiedName(srcElem)}->{SymbolHelpers.GetFullyQualifiedName(dstElem)}");
     }
 
     // -----------------------------------------------------------------------

@@ -50,6 +50,11 @@ List<UserDto> dtos = entities.MapToUserDtoList();
 UserDto[] arr = entities.MapToUserDtoArray();
 ```
 
+The parameter is `IEnumerable<T>`, but the generated code checks the runtime type first: an array or a `List<T>` is
+read with a `for` loop and the result is created with the exact size; another `ICollection<T>` gives the size through
+`Count` and is read with `foreach`; any other sequence is read with `foreach` into a growing list. No LINQ, no
+delegates: each element is mapped by a direct call of `MapToUserDto`.
+
 ### Nested collection properties
 
 When a source property is a collection and the destination property is a collection with a **different**
@@ -65,18 +70,32 @@ public class BlogEntity
 }
 ```
 
-Generated:
+Generated (a private helper per collection property):
 
 ```csharp
-Comments = source.Comments is null ? null!
-    : global::System.Linq.Enumerable.ToList(
-        global::System.Linq.Enumerable.Select(source.Comments, x => x.MapToCommentDto())),
+Comments = MapCollection_Comments_BlogEntity_BlogDto(source.Comments),
+// ...
+private static List<CommentDto> MapCollection_Comments_BlogEntity_BlogDto(List<CommentEntity>? source)
+{
+    if (source is null) return null!;
+    var result = new List<CommentDto>(source.Count);
+    for (var i = 0; i < source.Count; i++) result.Add(source[i].MapToCommentDto());
+    return result;
+}
 ```
+
+How the source is read depends on its declared type: `T[]`, `List<T>`, `IList<T>` and `IReadOnlyList<T>` with a
+`for` loop over the indexer; `ICollection<T>`, `IReadOnlyCollection<T>` and classes with a public `Count` (e.g.
+`HashSet<T>`) with `foreach` over the declared type and a result of the exact size; anything else with `foreach`. The
+destination may be `List<T>`, `T[]`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`
+(a `List<T>` is assigned) or `IEnumerable<T>`.
 
 Notes:
 - A mapping for the element types (`CommentEntity → CommentDto`) must exist; otherwise the generated call does not compile.
 - A `null` source collection becomes `null`, not an empty collection.
-- Only `List<T> → List<TDto>` is covered by tests. The generator also has code paths for arrays and other collection types, but they are not tested.
+- An `IEnumerable<T>` destination is a **lazy** sequence (as in 1.1): the elements are mapped when it is enumerated,
+  on every enumeration, and changes to the source collection made after the mapping are visible.
+- Every combination of the source and destination kinds above is covered by runtime tests (`CollectionShapeTests`).
 - Collections with the same element type are assigned as-is (the reference is copied).
 
 ---
@@ -136,6 +155,9 @@ The in-place overload only assigns the mapped properties. It:
   mapping declared for its base type.
 - `IMapper.Map<List<TDto>>(list)` is not supported and throws `MappingException`
   ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); use `MapCollection<TSource, TDest>` or `list.MapToDtoList()`.
+- `IMapper.MapCollection<TSource, TDest>` maps the whole source during the call and returns a `List<TDest>` (typed
+  as `IEnumerable<TDest>`); enumerating the result again does not map again. Up to 1.1.4 it returned a lazy sequence
+  that mapped on every enumeration and threw for a `null` source only when enumerated.
 
 ### Performance
 
@@ -152,8 +174,14 @@ method and the other libraries: [`benchmarks/results/RESULTS.md`](../benchmarks/
 - `IMapper` adds the reflection call (`MethodInfo.Invoke`) on every call and the assembly scan on the first call
   for a type pair.
 - In the Nested scenario IronMapper maps the nested objects through `ForMember(... MapFrom(...))` (see
-  [Nested objects](#nested-objects)); the generated collection code uses `Enumerable.Select` + `ToList`. Mapperly
-  is at ×1.00 there.
+  [Nested objects](#nested-objects)); the generated collection code of 1.1.3 uses `Enumerable.Select` + `ToList`.
+  Mapperly is at ×1.00 there.
+- Unreleased (1.2.0): the generated code has no LINQ and no delegates (loops of a known size, see
+  [Nested collection properties](#nested-collection-properties)). A preliminary run of the local sources on the same
+  machine (not a full run; the table above is updated by the full run of the release): Nested ×1.09, Collection of 10
+  orders ×0.97 (Mapperly ×1.18), in-place update ×0.90. The remaining Nested gap is the null checks of the generated
+  methods: they keep the JIT from inlining `MapToAddressDto` into `MapToCustomerDto`; without them the same run gives
+  ×1.02.
 - Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +73.5 ms, Mapster +99.1 ms).
 - Only .NET 10 was measured. CI only checks that the benchmark suite builds and that every scenario runs one
   iteration on .NET 10 and .NET 8; it does not publish numbers. How to run the suite:
@@ -168,8 +196,9 @@ against the packed package with `PublishAot=true` for .NET 8 and .NET 10 (linux-
 - **Generated extension methods: compatible.** No trim/AOT warnings (the CI check fails on any); the executable runs
   and produces the correct result. In the benchmark suite (win-x64, .NET 10,
   [`benchmarks/results/aot.md`](../benchmarks/results/aot.md)) startup is the same as without a mapper, and the
-  executable is 255.5 KB larger than the app without a mapper (Mapperly: +23.6 KB), mostly because the generated
-  collection code (`Enumerable.Select` + `ToList`) pulls in the NativeAOT type loader.
+  executable of 1.1.3 is 255.5 KB larger than the app without a mapper (Mapperly: +23.6 KB), mostly because the
+  generated collection code (`Enumerable.Select` + `ToList`) pulls in the NativeAOT type loader. Unreleased (1.2.0,
+  no LINQ in the generated code): +2.6 KB, preliminary, measured with the local sources.
 - **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): not compatible yet** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
   `RuntimeMapper` finds the generated methods by name through reflection (`AppDomain` assembly scan,
   `Assembly.GetType`, `GetMethods`), which the trimmer cannot see, so their metadata is not kept, and the executable

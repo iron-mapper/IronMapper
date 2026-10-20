@@ -282,6 +282,47 @@ public class DiIntegrationTests
             mapper.MapCollection<OrderEntity, OrderDto>(null!).ToList());
     }
 
+    // MapCollection materializes a List<TDest> (1.2.0): the source is enumerated and mapped once, at the call.
+
+    [Fact]
+    public void RuntimeMapper_MapCollection_ReturnsMaterializedList_EnumeratingTwiceDoesNotMapAgain()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+        var entities = new List<OrderEntity> { new() { Id = 1, Product = "A", Price = 1.0m } };
+
+        var dtos = mapper.MapCollection<OrderEntity, OrderDto>(entities);
+        entities.Add(new OrderEntity { Id = 2, Product = "B", Price = 2.0m });
+
+        var list = Assert.IsType<List<OrderDto>>(dtos);
+        Assert.Single(list);
+        Assert.Same(dtos.First(), dtos.First());
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapCollection_NullSource_ThrowsAtTheCall()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        Assert.Throws<ArgumentNullException>(() => mapper.MapCollection<OrderEntity, OrderDto>(null!));
+    }
+
+    [Fact]
+    public void RuntimeMapper_MapCollection_NullElement_ThrowsAtTheCall()
+    {
+        var services = new ServiceCollection();
+        services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
+        using var sp = services.BuildServiceProvider();
+        var mapper = sp.GetRequiredService<IMapper>();
+
+        Assert.Throws<ArgumentNullException>(() => mapper.MapCollection<OrderEntity, OrderDto>(new OrderEntity[] { null! }));
+    }
+
     // ------------------------------------------------------------------
     // RuntimeMapper — constructor guard
     // ------------------------------------------------------------------

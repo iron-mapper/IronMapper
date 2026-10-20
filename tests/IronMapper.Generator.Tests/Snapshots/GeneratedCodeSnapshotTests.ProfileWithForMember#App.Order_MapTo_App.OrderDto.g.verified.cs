@@ -11,7 +11,7 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.OrderDto"/> populated from <paramref name="source"/>.</returns>
         public static global::App.OrderDto MapToOrderDto(this global::App.Order source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.OrderDto
             {
                 Id = source.Id,
@@ -24,22 +24,65 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.OrderDto"/> instance to populate. Init-only properties are not updated.</param>
         public static void MapToOrderDto(this global::App.Order source, global::App.OrderDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
             destination.Id = source.Id;
             destination.Address = global::App.OrderProfile.Join(source.Street, source.City);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.OrderDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.OrderDto> MapToOrderDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Order>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.OrderDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToOrderDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.OrderDto>();
+            if (source is global::App.Order[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.OrderDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToOrderDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Order> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.OrderDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToOrderDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Order> collection
+                    ? new global::System.Collections.Generic.List<global::App.OrderDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.OrderDto>();
+                foreach (var item in source) result.Add(MapToOrderDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.OrderDto"/> and returns an array.</summary>
         public static global::App.OrderDto[] MapToOrderDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Order>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.OrderDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToOrderDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.OrderDto>();
+            if (source is global::App.Order[] array)
+            {
+                var result = new global::App.OrderDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToOrderDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Order> list)
+            {
+                var result = new global::App.OrderDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToOrderDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Order> collection)
+            {
+                var result = new global::App.OrderDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToOrderDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.OrderDto>();
+                foreach (var item in source) result.Add(MapToOrderDto(item));
+                return result.ToArray();
+            }
+        }
     }
 }

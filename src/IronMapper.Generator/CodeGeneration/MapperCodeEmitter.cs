@@ -13,7 +13,7 @@ namespace IronMapper.Generator.CodeGeneration;
 /// <list type="bullet">
 ///   <item><c>MapToDestType(this SourceType source) → DestType</c> — creates a new instance.</item>
 ///   <item><c>MapToDestType(this SourceType source, DestType destination) → void</c> — in-place update (skips init-only properties).</item>
-///   <item><c>MapToDestTypeList(this IEnumerable&lt;SourceType&gt;? source) → List&lt;DestType&gt;</c> — collection shorthand.</item>
+///   <item><c>MapToDestTypeList(this IEnumerable&lt;SourceType&gt;? source) → List&lt;DestType&gt;</c> — collection shorthand (no LINQ).</item>
 ///   <item><c>MapToDestTypeArray(this IEnumerable&lt;SourceType&gt;? source) → DestType[]</c> — collection shorthand.</item>
 /// </list>
 /// </remarks>
@@ -26,8 +26,9 @@ internal static class MapperCodeEmitter
     /// <param name="descriptor">The mapping to emit.</param>
     /// <param name="entry">The plan entry of <paramref name="descriptor"/>.</param>
     /// <param name="plan">The whole plan, used to resolve the method names of collection element mappings.</param>
+    /// <param name="options">APIs available in the user's compilation (null checks).</param>
     /// <returns>The full C# text of the generated file; add it under <see cref="MappingPlanEntry.HintName"/>.</returns>
-    public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan)
+    public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan, GeneratedCodeOptions options)
     {
         var sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
         var destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
@@ -59,7 +60,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
         sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
         sb.AppendLine("        {");
-        sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
+        sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
 
         if (descriptor.WhenConditionBody is not null)
             sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;"); // safe: `default!` is part of the emitted C# text, not a local operator
@@ -87,7 +88,7 @@ internal static class MapperCodeEmitter
             foreach (var prop in descriptor.PropertyMappings)
             {
                 if (prop.IsIgnored || prop.IsInitOnly) continue;
-                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, plan)};");
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
             }
 
             if (descriptor.AfterMapLambdaBody is not null)
@@ -103,7 +104,7 @@ internal static class MapperCodeEmitter
             {
                 if (prop.IsIgnored) continue;
                 sb.Append("                ");
-                sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers, plan) + ",");
+                sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers, scope) + ",");
             }
             sb.AppendLine("            };");
         }
@@ -119,36 +120,89 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
         sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
         sb.AppendLine("        {");
-        sb.AppendLine("            if (source is null) throw new global::System.ArgumentNullException(nameof(source));");
-        sb.AppendLine("            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));");
+        sb.AppendLine($"            {options.NullCheck("source", "return;")}");
+        sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
         foreach (var prop in descriptor.PropertyMappings)
         {
             if (prop.IsIgnored || prop.IsInitOnly) continue;
-            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, plan)};");
+            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
         }
         sb.AppendLine("        }");
 
         // ------------------------------------------------------------------
-        // Method 3: MapToDestTypeList(this IEnumerable<SourceType>? source) → List<DestType>
+        // Methods 3 and 4: MapToDestTypeList / MapToDestTypeArray(this IEnumerable<SourceType>? source)
         // ------------------------------------------------------------------
-        // Methods 3 and 4 call Method 1 by simple name, not as an extension method: a referenced assembly
-        // may expose the same MapToDestType(this SourceType) in IronMapper.Generated (CS0121 otherwise).
+        // They call Method 1 by simple name, not as an extension method: a referenced assembly may expose the same
+        // MapToDestType(this SourceType) in IronMapper.Generated (CS0121 otherwise). The parameter stays
+        // IEnumerable<T>; arrays, List<T> and ICollection<T> get loops over the concrete type with a known size.
+        var list = $"global::System.Collections.Generic.List<{destFullName}>";
+        var src = sourceFullName;
         sb.AppendLine();
         sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns a <see cref=\"global::System.Collections.Generic.List{{T}}\"/>.</summary>");
-        sb.AppendLine($"        {accessibility} static global::System.Collections.Generic.List<{destFullName}> {methodName}List(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
-        sb.AppendLine($"            => source is null");
-        sb.AppendLine($"                ? new global::System.Collections.Generic.List<{destFullName}>()");
-        sb.AppendLine($"                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => {methodName}(x)));");
+        sb.AppendLine($"        {accessibility} static {list} {methodName}List(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            if (source is null) return new {list}();");
+        sb.AppendLine($"            if (source is {src}[] array)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {list}(array.Length);");
+        sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result.Add({methodName}(array[i]));");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {list}(list.Count);");
+        sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result.Add({methodName}(list[i]));");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = source is global::System.Collections.Generic.ICollection<{src}> collection");
+        sb.AppendLine($"                    ? new {list}(collection.Count)");
+        sb.AppendLine($"                    : new {list}();");
+        sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
 
-        // ------------------------------------------------------------------
-        // Method 4: MapToDestTypeArray(this IEnumerable<SourceType>? source) → DestType[]
-        // ------------------------------------------------------------------
         sb.AppendLine();
         sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns an array.</summary>");
-        sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{sourceFullName}>? source)");
-        sb.AppendLine($"            => source is null");
-        sb.AppendLine($"                ? global::System.Array.Empty<{destFullName}>()");
-        sb.AppendLine($"                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => {methodName}(x)));");
+        sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            if (source is null) return global::System.Array.Empty<{destFullName}>();");
+        sb.AppendLine($"            if (source is {src}[] array)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "array.Length")};");
+        sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result[i] = {methodName}(array[i]);");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "list.Count")};");
+        sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result[i] = {methodName}(list[i]);");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine($"            if (source is global::System.Collections.Generic.ICollection<{src}> collection)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "collection.Count")};");
+        sb.AppendLine("                var i = 0;");
+        sb.AppendLine($"                foreach (var item in collection) result[i++] = {methodName}(item);");
+        sb.AppendLine("                return result;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var result = new {list}();");
+        sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
+        sb.AppendLine("                return result.ToArray();");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+
+        // ------------------------------------------------------------------
+        // Private collection helpers of nested collection properties
+        // ------------------------------------------------------------------
+        foreach (var prop in descriptor.PropertyMappings)
+        {
+            if (!UsesCollectionHelper(prop)) continue;
+            sb.AppendLine();
+            EmitCollectionHelper(sb, prop, scope, plan);
+        }
 
         // ------------------------------------------------------------------
         // Private hook helpers (only emitted when BeforeMap/AfterMap are set)
@@ -207,7 +261,9 @@ internal static class MapperCodeEmitter
     /// <c>"public"</c> when at least one generated method is public, otherwise <c>"internal"</c>.
     /// An internal class is invisible to referencing assemblies (unless they see the internals).
     /// </param>
-    public static (string hintName, string source) EmitClassDeclaration(string accessibility)
+    /// <param name="options">When <c>ArgumentNullException.ThrowIfNull</c> is not available, the class also declares
+    /// the throw helper used by the null checks of the generated methods.</param>
+    public static (string hintName, string source) EmitClassDeclaration(string accessibility, GeneratedCodeOptions options)
     {
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -218,6 +274,14 @@ internal static class MapperCodeEmitter
         sb.AppendLine("    /// <summary>Mapping extension methods generated by IronMapper for this assembly.</summary>");
         sb.AppendLine($"    {accessibility} static partial class GeneratedMappers");
         sb.AppendLine("    {");
+        if (!options.UseThrowIfNull)
+        {
+            // One throw site for every null check: the mapping methods stay small enough to be inlined.
+            if (options.HasDoesNotReturn)
+                sb.AppendLine("        [global::System.Diagnostics.CodeAnalysis.DoesNotReturn]");
+            sb.AppendLine($"        private static void {GeneratedCodeOptions.ThrowHelperName}(string paramName)");
+            sb.AppendLine("            => throw new global::System.ArgumentNullException(paramName);");
+        }
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
@@ -251,14 +315,14 @@ internal static class MapperCodeEmitter
     /// Builds an object-initializer line: <c>PropName = &lt;rhs&gt;</c>.
     /// </summary>
     private static string BuildPropertyInitializer(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers, MappingPlan plan)
-        => $"{prop.DestPropertyName} = {BuildRhs(prop, transformers, plan)}";
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
+        => $"{prop.DestPropertyName} = {BuildRhs(prop, transformers, scope)}";
 
     /// <summary>
     /// Builds the right-hand side expression for a property mapping.
     /// </summary>
     private static string BuildRhs(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers, MappingPlan plan)
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
     {
         string raw;
         if (prop.LambdaBody is not null)
@@ -266,7 +330,7 @@ internal static class MapperCodeEmitter
         else if (prop.ConverterType is not null)
             raw = $"new {prop.ConverterType}().Convert(source.{prop.SourcePropertyName})";
         else if (prop.CollectionElementMapMethod is not null)
-            raw = BuildCollectionRhs(prop, plan);
+            raw = $"{CollectionHelperName(prop, scope)}(source.{prop.SourcePropertyName})";
         else
             raw = $"source.{prop.SourcePropertyName}";
 
@@ -289,25 +353,109 @@ internal static class MapperCodeEmitter
     }
 
     /// <summary>
-    /// Builds the RHS for a nested collection property, emitting a null-guard and a LINQ Select.
+    /// A nested collection property is mapped by a private helper of its mapping (see <see cref="EmitCollectionHelper"/>),
+    /// unless a <c>MapFrom</c> lambda or a converter is set for it (those take precedence in <see cref="BuildRhs"/>).
     /// </summary>
-    private static string BuildCollectionRhs(PropertyMappingDescriptor prop, MappingPlan plan)
+    private static bool UsesCollectionHelper(PropertyMappingDescriptor prop)
+        => !prop.IsIgnored && prop.LambdaBody is null && prop.ConverterType is null && prop.CollectionElementMapMethod is not null;
+
+    /// <summary>Name of the collection helper of <paramref name="prop"/>, unique within the class through the helper scope.</summary>
+    private static string CollectionHelperName(PropertyMappingDescriptor prop, string scope)
+        => $"MapCollection_{prop.DestPropertyName}{scope}";
+
+    /// <summary>
+    /// Emits the helper that maps a nested collection property: <c>null</c> stays <c>null</c>; the source is read by
+    /// its declared type (<see cref="PropertyMappingDescriptor.CollectionSourceKind"/>): arrays and lists with
+    /// <c>for</c> over a known size, other collections with a known <c>Count</c> with <c>foreach</c> over the declared
+    /// type, anything else with <c>foreach</c>. A <c>List&lt;T&gt;</c> or array destination is materialized with the
+    /// exact capacity when the size is known; an <c>IEnumerable&lt;T&gt;</c> destination stays a lazy sequence (an
+    /// iterator; the elements are mapped on each enumeration), as in 1.1. Elements are mapped by a direct call of the
+    /// element mapping (extension syntax: it may be declared in a referenced assembly).
+    /// </summary>
+    private static void EmitCollectionHelper(StringBuilder sb, PropertyMappingDescriptor prop, string scope, MappingPlan plan)
     {
         // The element mapping may have a qualified name (IM0013); mappings not in this compilation keep MapTo{Name}.
-        var elementMethod = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
-                            ?? prop.CollectionElementMapMethod;
-        var srcExpr    = $"source.{prop.SourcePropertyName}";
-        var selectExpr = $"global::System.Linq.Enumerable.Select({srcExpr}, x => x.{elementMethod}())";
+        var element = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
+                      ?? prop.CollectionElementMapMethod;
+        var name = CollectionHelperName(prop, scope);
+        var sourceType = prop.CollectionSourceTypeFqn;
+        var destElement = prop.CollectionDestElementFqn!;
+        var list = $"global::System.Collections.Generic.List<{destElement}>";
+        var kind = prop.CollectionSourceKind;
 
-        return prop.CollectionOutputType switch
+        if (prop.CollectionOutputType == "Enumerable")
         {
-            "Array" =>
-                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToArray({selectExpr})", // safe: `null!` is part of the emitted C# text
-            "List" =>
-                $"{srcExpr} is null ? null! : global::System.Linq.Enumerable.ToList({selectExpr})", // safe: `null!` is part of the emitted C# text
-            _ =>
-                $"{srcExpr} is null ? null! : {selectExpr}", // safe: `null!` is part of the emitted C# text
-        };
+            var sequence = $"global::System.Collections.Generic.IEnumerable<{destElement}>";
+            sb.AppendLine($"        private static {sequence} {name}({sourceType}? source)");
+            sb.AppendLine($"            => source is null ? null! : Enumerate{name}(source);");
+            sb.AppendLine();
+            sb.AppendLine($"        private static {sequence} Enumerate{name}({sourceType} source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            foreach (var item in source) yield return item.{element}();");
+            sb.AppendLine("        }");
+            return;
+        }
+
+        var toArray = prop.CollectionOutputType == "Array";
+        var returnType = toArray ? $"{destElement}[]" : list;
+        sb.AppendLine($"        private static {returnType} {name}({sourceType}? source)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (source is null) return null!;");
+
+        if (kind is "Array" or "List" or "IndexedList")
+        {
+            var length = kind == "Array" ? "source.Length" : "source.Count";
+            sb.AppendLine(toArray
+                ? $"            var result = new {ArrayOf(destElement, length)};"
+                : $"            var result = new {list}({length});");
+            sb.AppendLine(toArray
+                ? $"            for (var i = 0; i < {length}; i++) result[i] = source[i].{element}();"
+                : $"            for (var i = 0; i < {length}; i++) result.Add(source[i].{element}());");
+            sb.AppendLine("            return result;");
+        }
+        else if (kind == "Counted")
+        {
+            if (toArray)
+            {
+                sb.AppendLine($"            var result = new {ArrayOf(destElement, "source.Count")};");
+                sb.AppendLine("            var i = 0;");
+                sb.AppendLine($"            foreach (var item in source) result[i++] = item.{element}();");
+            }
+            else
+            {
+                sb.AppendLine($"            var result = new {list}(source.Count);");
+                sb.AppendLine($"            foreach (var item in source) result.Add(item.{element}());");
+            }
+            sb.AppendLine("            return result;");
+        }
+        else
+        {
+            sb.AppendLine($"            var result = new {list}();");
+            sb.AppendLine($"            foreach (var item in source) result.Add(item.{element}());");
+            sb.AppendLine(toArray ? "            return result.ToArray();" : "            return result;");
+        }
+
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>
+    /// Array creation expression (without <c>new</c>) for <paramref name="length"/> elements of
+    /// <paramref name="elementType"/>: the length goes into the first top-level rank specifier
+    /// (<c>X[n]</c>, <c>X[n][]</c> for an element type <c>X[]</c>).
+    /// </summary>
+    private static string ArrayOf(string elementType, string length)
+    {
+        var depth = 0;
+        for (var i = 0; i < elementType.Length; i++)
+        {
+            var c = elementType[i];
+            if (c == '<') depth++;
+            else if (c == '>') depth--;
+            else if (c == '[' && depth == 0)
+                return $"{elementType.Substring(0, i)}[{length}]{elementType.Substring(i)}";
+        }
+
+        return $"{elementType}[{length}]";
     }
 
     // -----------------------------------------------------------------------
