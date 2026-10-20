@@ -11,7 +11,7 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.AccountDto"/> populated from <paramref name="source"/>.</returns>
         public static global::App.AccountDto MapToAccountDto(this global::App.Account source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             if (!(source.Active)) return default!;
             var destination = new global::App.AccountDto();
             BeforeMap_Account_AccountDto(source, destination);
@@ -25,22 +25,65 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.AccountDto"/> instance to populate. Init-only properties are not updated.</param>
         public static void MapToAccountDto(this global::App.Account source, global::App.AccountDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
             destination.Name = TransformValue_String_Account_AccountDto(source.Name);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.AccountDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.AccountDto> MapToAccountDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Account>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.AccountDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToAccountDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.AccountDto>();
+            if (source is global::App.Account[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.AccountDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToAccountDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Account> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.AccountDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToAccountDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Account> collection
+                    ? new global::System.Collections.Generic.List<global::App.AccountDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.AccountDto>();
+                foreach (var item in source) result.Add(MapToAccountDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.AccountDto"/> and returns an array.</summary>
         public static global::App.AccountDto[] MapToAccountDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Account>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.AccountDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToAccountDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.AccountDto>();
+            if (source is global::App.Account[] array)
+            {
+                var result = new global::App.AccountDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToAccountDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Account> list)
+            {
+                var result = new global::App.AccountDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToAccountDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Account> collection)
+            {
+                var result = new global::App.AccountDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToAccountDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.AccountDto>();
+                foreach (var item in source) result.Add(MapToAccountDto(item));
+                return result.ToArray();
+            }
+        }
 
         private static void BeforeMap_Account_AccountDto(global::App.Account source, global::App.AccountDto destination)
         {

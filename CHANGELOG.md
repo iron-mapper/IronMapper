@@ -32,6 +32,24 @@
 - `MappingValidator` is marked `[RequiresUnreferencedCode]` (it reads properties and constructors through
   reflection): calling it in a trimmed or NativeAOT app reports `IL2026`. On .NET 8 and other targets that get the
   `netstandard` assemblies, the attributes are internal copies with the same full names, which the trimmer recognizes.
+- **Shape of the generated code: no LINQ, no delegates.** Public signatures, the `null` semantics and the exceptions
+  are the same (pinned by new tests before the change).
+  - `MapToXList`/`MapToXArray` still take `IEnumerable<T>?`, but check the runtime type first: `T[]` and `List<T>` are
+    read with `for` into a result of the exact size, another `ICollection<T>` gives the size through `Count`, any
+    other sequence is read with `foreach` (an array result through a `List<T>` and `ToArray`). Elements are mapped by
+    a direct call. A `null` source still gives an empty list / `Array.Empty`.
+  - A nested collection property is mapped by a private helper `MapCollection_{Property}{scope}` instead of
+    `Enumerable.ToList(Enumerable.Select(...))` / `ToArray`. The read loop depends on the declared source type (`for`
+    over the indexer for `T[]`, `List<T>`, `IList<T>`, `IReadOnlyList<T>`; `foreach` with a known count for
+    `ICollection<T>`, `IReadOnlyCollection<T>` and types with a public `Count`; `foreach` otherwise). A `null` source
+    collection is still `null`. An `IEnumerable<T>` destination stays lazy, as in 1.1 (a generated iterator).
+  - Null checks of the generated methods use `ArgumentNullException.ThrowIfNull` when the project's target has it
+    (.NET 6+); otherwise one private throw helper in `GeneratedMappers.g.cs` (with `[DoesNotReturn]` when available).
+    The exception and its `ParamName` are the same.
+- **`IMapper.MapCollection` returns a materialized `List<TDest>`** (typed as `IEnumerable<TDest>`, the signature is
+  the same). The elements are mapped during the call: a `null` source throws `ArgumentNullException` and a `null`
+  element or a missing mapping throws at the call, not when the result is enumerated; enumerating the result again
+  does not map again. Up to 1.1.4 it was a lazy sequence that mapped on every enumeration.
 
 ### Fixed
 
@@ -40,6 +58,26 @@
   profile lambda made `internal`, `IM0011`) kept the old diagnostics until the generator was restarted: the mapping
   model ignored its diagnostics when compared with the previous run. Command-line builds were not affected. The
   generated code does not change.
+
+### Performance
+
+Preliminary numbers: the comparison benchmarks with the local sources (`-p:UseLocalIronMapper=true`) against the
+published 1.1.3 in the same session, .NET 10.0.12, Intel Core i7-12650H, 3 launches; ratio to hand-written code
+(`Manual`). The published report is updated by the full run of the release.
+
+| Scenario | 1.1.3 | Unreleased | Mapperly |
+|---|---:|---:|---:|
+| Nested | ×1.19 | ×1.09 | ×0.99 |
+| Collection, 10 orders | ×1.20 | ×0.97 | ×1.18 |
+| Collection, 1 000 orders | ×1.00 | ×1.01 | ×1.05 |
+| In-place update | ×1.08 | ×0.90 | ×1.01 |
+| NativeAOT executable, Δ vs an app without a mapper | +255.5 KB | +2.6 KB | +23.6 KB |
+
+- Collections allocate the same as `Manual` (1.1.3: +6 %, the `Select` iterator and list growth).
+- .NET 8: Nested ×1.26 → ×1.06, Collection of 10 ×1.14 → ×1.05, Collection of 1 000 ×1.11 → ×1.03.
+- The remaining Nested gap is the generated null checks: they keep the JIT from inlining `MapToAddressDto` into
+  `MapToCustomerDto` (checked with `DisassemblyDiagnoser`; without the checks the same benchmark gives ×1.02). The
+  checks stay: they are the documented behavior.
 
 ### Build
 
@@ -53,11 +91,18 @@
   the packed packages: `tests/IronMapper.AotProbe` (attribute and profile mappings, collections, in-place update, a
   converter) must have no trim/AOT warnings and its executable must check the mapped values;
   `tests/IronMapper.AotProbe.DI` must report `IL2026` on its `AddIronMapper` line and nothing else.
-- `eng/verify-package.ps1` builds and runs `tests/IronMapper.PackageConsumer.ImplicitUsings` in nine variants against
+- `eng/verify-package.ps1` builds `tests/IronMapper.PackageConsumer.ImplicitUsings` in eleven variants against
   the packed package: no using with implicit usings, only `IronMapper.Extensions.DI` referenced, no mappings, the
   Quick Start extracted from `README.md` and `README.ru.md` (between `<!-- quickstart:begin -->` and
   `<!-- quickstart:end -->` comments), an explicit using next to the global one, implicit usings
-  off, `LangVersion` 9, `IronMapperImplicitUsings=false` (each also checks whether the global using was generated).
+  off, `LangVersion` 9, `IronMapperImplicitUsings=false` (each also checks whether the global using was generated),
+  and netstandard2.0 / netstandard2.1 libraries (the generated throw helper instead of `ThrowIfNull`, with and
+  without `[DoesNotReturn]`; built only). The executable variants are also run.
+- Tests: `tests/IronMapper.Tests/CollectionShapeTests.cs` maps every pair of `List<T>`, `T[]`, `IEnumerable<T>`,
+  `ICollection<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `IList<T>` as a nested property (new object and
+  in place: values, order, `null`, empty, `null` element) and `MapToXList`/`MapToXArray` over several runtime source
+  types; a new snapshot scenario `CollectionShapes`; snapshot tests also fail on compiler warnings in the generated
+  files.
   `tests/IronMapper.PackageConsumer` calls its own and a referenced library's mappings from a file without the using.
 - CI runs on push only for `main`; other branches are checked through their pull requests (all jobs run there).
 

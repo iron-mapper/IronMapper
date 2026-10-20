@@ -90,6 +90,39 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    // How each declared kind of source collection is read (indexer, Count + foreach over the declared type, foreach),
+    // an array destination from a counted and from an unknown-size source, and a lazy IEnumerable<T> destination.
+    [Fact]
+    public Task CollectionShapes() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        [MapTo(typeof(LineDto))]
+        public class Line { public int Id { get; set; } }
+        public class LineDto { public int Id { get; set; } }
+
+        [MapTo(typeof(OrderDto))]
+        public class Order
+        {
+            public IList<Line>? Indexed { get; set; }
+            public ICollection<Line>? Counted { get; set; }
+            public HashSet<Line>? Set { get; set; }
+            public IEnumerable<Line>? Unknown { get; set; }
+            public IReadOnlyCollection<Line>? Lazy { get; set; }
+        }
+
+        public class OrderDto
+        {
+            public IReadOnlyList<LineDto>? Indexed { get; set; }
+            public LineDto[]? Counted { get; set; }
+            public List<LineDto?>? Set { get; set; }
+            public LineDto[]? Unknown { get; set; }
+            public IEnumerable<LineDto>? Lazy { get; set; }
+        }
+        """);
+
     [Fact]
     public Task Converters() => Verify("""
         using IronMapper.Attributes;
@@ -203,6 +236,12 @@ public class GeneratedCodeSnapshotTests
 
         var errors = output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         Assert.True(errors.Count == 0, "Generated code does not compile:\n" + string.Join("\n", errors));
+
+        // No compiler warnings inside the generated files (an error with TreatWarningsAsErrors the user cannot fix).
+        var generatedWarnings = output.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Warning && d.Location.SourceTree?.FilePath.EndsWith(".g.cs") == true)
+            .ToList();
+        Assert.True(generatedWarnings.Count == 0, "Warnings in generated code:\n" + string.Join("\n", generatedWarnings));
 
         return Verifier.Verify(driver).UseDirectory("Snapshots");
     }

@@ -85,7 +85,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
 | 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30). PR 3 (`global using`) — `feature/implicit-using` |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30), PR 3 — `global using` (#31). PR 4 (форма кода) — `perf/generated-code-shape` |
 
 **Ветки (сверено 20.10.2026, после #28):**
 
@@ -93,8 +93,9 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - `docs/readme-refresh` — слита (#28, `f95e31d`), выпуск 1.1.4. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable).
 - `fix/generator-equatable` — слита (#29, `533b927`), PR 1 релиза 1.2.0.
 - `fix/aot-honesty` — слита (#30, `da401f4`), PR 2 релиза 1.2.0.
-- `feature/implicit-using` — PR 3 релиза 1.2.0 (п.1.7), от `main` `da401f4`; не слита.
-- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty` — уже в `main`. Удалить.
+- `feature/implicit-using` — слита (#31, `b4f84c6`), PR 3 релиза 1.2.0.
+- `perf/generated-code-shape` — PR 4 релиза 1.2.0 (п.2.11), от `main` `b4f84c6`; не слита.
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty`, `feature/implicit-using` — уже в `main`. Удалить.
 
 ---
 
@@ -127,7 +128,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### Цели (сравнение с базовой линией 1.1.3, тот же набор и компьютер)
 
-- Nested: ×1,26 → не хуже ×1,05.
+- Nested: ×1,26 → не хуже ×1,05. **Перенесено в 1.3.0** (п.2.3): в 1.2.0 принято ×1,09 (net10) / ×1,06 (net8), см. п.2.11.
 - InPlace: ×1,12 → не хуже ×1,03.
 - Collection (10): не хуже Mapperly. Collection (1000, 100k): не хуже текущего.
 - AOT, прирост к Baseline: +255 КБ → не больше +40 КБ.
@@ -139,8 +140,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 8.
 1. **EquatableArray** (п.2.9). Сделано (#29): данные пайплайна сравниваются по значению, включая диагностики; строгие тесты кэширования без Skip.
 2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26). Сделано в `fix/aot-honesty` (не слита): только `[RequiresUnreferencedCode]` — динамической генерации кода в DI-пути нет (`MethodInfo.Invoke` в NativeAOT работает, ломает его trimming), `[RequiresDynamicCode]` был бы неправдой; IL2026 на вызове `AddIronMapper`. Job `aot` (`eng/verify-aot.ps1`), см. п.1.4.
-3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством. Сделано в `feature/implicit-using` (не слита), см. п.1.7.
-4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
+3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством. Сделано (#31), см. п.1.7.
+4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT. Сделано в `perf/generated-code-shape` (не слита): Collection(10), InPlace, AOT — цели достигнуты; Nested ×1,26 → ×1,09 (net10) / ×1,06 (net8) — цель ×1,05 не достигнута, причина — проверки на `null`, см. п.2.11; ×1,09 принято для 1.2.0, цель перенесена в 1.3.0 (п.2.3).
 5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26).
 6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22).
 7. **Объём кода и покрытие** (п.2.13): перемерить; опции отключения перегрузок (на сборку и на карту); `[GeneratedCode]` на сгенерированном классе и `IronMapperExcludeFromCodeCoverage`.
@@ -185,7 +186,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### 1.4a. Размер AOT-бинарника (аудит п.23a)
 
 - [x] Причина установлена (mstat): не код IronMapper (~1,4 КБ, runtime-сборки в бинарнике нет), а `Enumerable.Select`+`ToList` → `System.Private.TypeLoader` (+~100 КБ) и generic-код CoreLib. Фиксированная цена на приложение.
-- [ ] Исправляется в 2.11. Цель: не больше +40 КБ.
+- [x] Исправлено в 2.11 (`perf/generated-code-shape`): +2,6 КБ к Baseline (1 230 336 → 1 232 896 Б; Mapperly +23,6 КБ), без предупреждений, контрольная сумма совпадает. Замер — пробы `StartupProbe.Baseline/IronMapper/Mapperly` из копии `benchmarks/` на локально упакованном пакете `1.2.0-local.1`: `run-aot.ps1` с `UseLocalIronMapper=true` не публикуется (NETSDK1207: глобальное `PublishAot=true` доходит до `ProjectReference` на netstandard2.0-проекты `src/`) — починить в скриптах набора до шага 8.
 - [ ] В AOT-пробу `IMapper` добавить базовую линию «ручной код + тот же DI-контейнер», чтобы отделить вклад IronMapper от Microsoft.Extensions.DependencyInjection.
 
 ### 1.5. Конвертеры (аудит п.3, п.18)
@@ -242,6 +243,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Карты нет — IM0002 (или вариант Mapperly: автоматический приватный маппинг; решить).
 - [ ] Только вместе с IM0004 (иначе StackOverflow на `Order.Customer.Orders`).
 - [ ] Тесты на вложенные массивы, `IEnumerable<T>`, `IReadOnlyList<T>`.
+- [ ] **Внутренний `…Core` без проверки `null`** (перенесено из п.2.11): публичный `MapToX(source)` проверяет `null` (поведение как сейчас) и вызывает внутренний `MapToXCore(source)` без проверки; сгенерированный код для вложенных объектов и элементов коллекций вызывает `…Core` после своей проверки по nullable-аннотациям. Цель: JIT встраивает вложенные маппинги (в 1.2.0 проверка в `MapToAddressDto` мешала встроить его в `MapToCustomerDto`; без проверок — ×1,02). **Цель Nested ≤ ×1,05** (перенесена из 1.2.0); проверить `DisassemblyDiagnoser`, снимки обновятся.
 - [ ] **Конструкторы и позиционные records** (перенесено из 3.4, аудит п.10, issue **#24**): `[MapperConstructor]` → наибольшее число сопоставленных параметров → диагностика при неоднозначности; остальное — инициализатор; `required`. В 1.3.0 вместе с вложенными объектами: оба меняют способ создания приёмника.
 
 ### 2.4. Коллизии имён и полные имена — ✅ 1.1.3
@@ -289,11 +291,13 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 **Проблема (подтверждено).** `MapToXList`, `MapToXArray` и вложенные коллекции — `Enumerable.ToList/ToArray(Enumerable.Select(...))`; `null`-коллекция → `null!`. Mapperly — `new List<T>(count)` + цикл.
 
-- [ ] `List<T>` → `new List<TDest>(count)` + `for`; `T[]` → `new TDest[len]` + `for`; `ICollection<T>`/`IReadOnlyCollection<T>` → ёмкость из `Count` + `foreach` по конкретному типу; `IEnumerable<T>` → `foreach`.
-- [ ] Не перебирать через интерфейс (упакованный энумератор — +40 Б у Mapperly).
-- [ ] Throw helper вместо `throw new ArgumentNullException` в теле (встраивание; вероятная причина InPlace ×1,12); проверить `DisassemblyDiagnoser`.
-- [ ] `IMapper.MapCollection`: в 1.2.0 сигнатуру не менять, внутри материализовать `List<TDest>` (повторный перебор не маппит заново, исключения — при вызове); в 2.0 — `IReadOnlyList<TDest>`.
-- [ ] Готово, когда: цели Nested, InPlace, Collection(10), AOT-размер из раздела 1.2.0.
+- [x] `List<T>` → `new List<TDest>(count)` + `for`; `T[]` → `new TDest[len]` + `for`; `ICollection<T>`/`IReadOnlyCollection<T>` → ёмкость из `Count` + `foreach` по объявленному типу; `IEnumerable<T>` → `foreach` (`perf/generated-code-shape`). Вложенное свойство — закрытый helper `MapCollection_{Prop}{scope}`, способ чтения по объявленному типу источника (`SymbolHelpers.GetCollectionSourceKind`); приёмник-массив при неизвестной длине — `List` + `ToArray`. `MapToXList`/`MapToXArray` сохранили параметр `IEnumerable<T>?` и проверяют `T[]`, `List<T>`, `ICollection<T>` во время выполнения. Поведение закреплено тестами до изменения (`CollectionShapeTests`: 7×7 видов источника/приёмника, новый объект и in-place, значения, порядок, `null`, пустая, `null`-элемент; runtime-типы для `MapToXList/Array`).
+- [x] Не перебирать через интерфейс: `IList<T>`/`IReadOnlyList<T>` — `for` по индексатору (интерфейсный вызов на элемент, но без упакованного энумератора); `ICollection<T>`/`IReadOnlyCollection<T>` — `foreach` через интерфейс (энумератор упаковывается — другого способа перебора у этих интерфейсов нет).
+- [x] Throw helper: `ArgumentNullException.ThrowIfNull`, если есть в компиляции пользователя, иначе один `private static` метод в `GeneratedMappers.g.cs` (`[DoesNotReturn]`, если доступен; без него после вызова — недостижимый `return`, иначе CS8602 в `.g.cs`). `Analysis/Models/GeneratedCodeOptions.cs`, шаг `CodeOptions` в пайплайне; варианты netstandard2.0/2.1 в `verify-package.ps1`. InPlace ×1,08 → ×0,90 (net10) / ×1,00 (net8).
+- [x] `IMapper.MapCollection`: сигнатура та же, внутри `List<TDest>` (ёмкость из `ICollection<T>.Count`), исключения — при вызове; CHANGELOG (Changed), docs/advanced. В 2.0 — `IReadOnlyList<TDest>`.
+- [x] Решение: приёмник `IEnumerable<T>` остаётся ленивым (сгенерированный итератор), как в 1.1 — материализация меняла бы семантику (повторный перебор, видимость изменений источника); тест закрепляет ленивость.
+- [x] Готово, когда: цели Nested, InPlace, Collection(10), AOT-размер из раздела 1.2.0. Предварительный прогон (локальные исходники против 1.1.3 в одной сессии, 3 запуска, net10 / net8, отношение к `Manual`): Collection(10) ×1,20 → **×0,97** / ×1,14 → ×1,05 (Mapperly ×1,18 / ×1,15) — достигнута; InPlace — достигнута (выше); AOT — достигнута (п.1.4a); Collection(1000) ×1,00 → ×1,01 / ×1,11 → ×1,03, 100k ×1,04 → ×1,01 / ×1,11 → ×1,00, аллокации как у `Manual` (было +4–6 %); Flat, CustomConfig без изменений. **Nested ×1,19 → ×1,09 / ×1,26 → ×1,06 — не достигнута.** Причина (`DisassemblyDiagnoser`, net10): цикл по строкам такой же, как у `Manual` (`MapToOrderLineDto` и `MapToProductDto` встроены), но проверки на `null` в начале каждого сгенерированного метода не дают JIT встроить `MapToAddressDto` в `MapToCustomerDto` (у `Manual` встроено всё, у Mapperly — Address в Customer). Эксперимент без проверок (не в ветке): ×1,02, Address встраивается. Проверки — документированное поведение (`ArgumentNullException` для `null`-источника), в 1.x не меняются; закрыть цель можно только вместе с правилом «проверки на `null` только там, где тип допускает `null`» (смена поведения — 2.0, или опция в 1.x).
+- [x] **Решение (21.10.2026): Nested ×1,09 для 1.2.0 принято.** Приём «публичный метод с проверкой `null` + внутренний `…Core` без проверки, который вызывает сгенерированный код для вложенных объектов» реализуется в 1.3.0 вместе с автоматическим маппингом вложенных объектов (п.2.3); цель Nested ≤ ×1,05 перенесена туда же.
 
 ### 2.12. Политика копирования коллекций (аудит п.5)
 
@@ -433,6 +437,6 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ## Релизы после 1.2.0
 
 - **1.3.0:** 2.3 + IM0004 + IM0002, затем 2.6; 3.5 по возможности.
-- **2.0.0:** смена умолчаний (IM0001 для профилей, `null`→`null`, `MapCollection` → `IReadOnlyList`, опционально перегрузки), явное имя метода, решение по «класс-мапперу», переименование.
+- **2.0.0:** смена умолчаний (IM0001 для профилей, `null`→`null`, `MapCollection` → `IReadOnlyList`, вложенное свойство типа `IEnumerable<T>` материализуется, а не остаётся ленивым (п.2.11), опционально перегрузки), явное имя метода, решение по «класс-мапперу», переименование.
 - **Далее:** ProjectTo, паритет с Mapperly (3.4), инструмент миграции.
 

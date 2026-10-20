@@ -11,7 +11,7 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.EntryDto"/> populated from <paramref name="source"/>.</returns>
         internal static global::App.EntryDto MapToEntryDto(this global::App.Outer.Entry source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.EntryDto
             {
                 Amount = source.Amount,
@@ -23,21 +23,64 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.EntryDto"/> instance to populate. Init-only properties are not updated.</param>
         internal static void MapToEntryDto(this global::App.Outer.Entry source, global::App.EntryDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
             destination.Amount = source.Amount;
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.EntryDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         internal static global::System.Collections.Generic.List<global::App.EntryDto> MapToEntryDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Outer.Entry>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.EntryDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToEntryDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.EntryDto>();
+            if (source is global::App.Outer.Entry[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.EntryDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToEntryDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Outer.Entry> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.EntryDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToEntryDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Outer.Entry> collection
+                    ? new global::System.Collections.Generic.List<global::App.EntryDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.EntryDto>();
+                foreach (var item in source) result.Add(MapToEntryDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.EntryDto"/> and returns an array.</summary>
         internal static global::App.EntryDto[] MapToEntryDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Outer.Entry>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.EntryDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToEntryDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.EntryDto>();
+            if (source is global::App.Outer.Entry[] array)
+            {
+                var result = new global::App.EntryDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToEntryDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Outer.Entry> list)
+            {
+                var result = new global::App.EntryDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToEntryDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Outer.Entry> collection)
+            {
+                var result = new global::App.EntryDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToEntryDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.EntryDto>();
+                foreach (var item in source) result.Add(MapToEntryDto(item));
+                return result.ToArray();
+            }
+        }
     }
 }

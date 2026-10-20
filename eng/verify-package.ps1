@@ -16,7 +16,8 @@
        package referenced; a project without mappings; the Quick Start of README.md and README.ru.md, marked with
        <!-- quickstart:begin --> / <!-- quickstart:end -->) and the cases
        where it must not be added or must not get in the way (ImplicitUsings off, LangVersion 9,
-       IronMapperImplicitUsings=false, an explicit using next to the global one). Each variant is also run.
+       IronMapperImplicitUsings=false, an explicit using next to the global one), and netstandard2.0/2.1 libraries
+       (the generated throw helper instead of ArgumentNullException.ThrowIfNull). Each executable variant is also run.
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
@@ -203,6 +204,12 @@ try {
            Output = 'ExplicitUsing: OK'; Properties = @('-p:ImplicitUsings=disable', '-p:LangVersion=9') }
         @{ Name = 'IronMapperImplicitUsings=false'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
            Output = 'ExplicitUsing: OK'; Properties = @('-p:IronMapperImplicitUsings=false') }
+        # Libraries on targets without ArgumentNullException.ThrowIfNull: the generated code uses its own throw helper,
+        # with [DoesNotReturn] on netstandard2.1 and without it on netstandard2.0. Built only (a library is not run).
+        @{ Name = 'netstandard2.0 library (throw helper)'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
+           Run = $false; Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library') }
+        @{ Name = 'netstandard2.1 library (throw helper, DoesNotReturn)'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
+           Run = $false; Properties = @('-p:TargetFramework=netstandard2.1', '-p:OutputType=Library') }
     )
 
     $index = 0
@@ -228,6 +235,7 @@ try {
         $dll = Get-ChildItem -Path (Join-Path $artifacts 'bin') -Recurse -Filter 'IronMapper.PackageConsumer.ImplicitUsings.dll' |
             Select-Object -First 1
         if (-not $dll) { throw "Variant '$($variant.Name)': no built assembly under $artifacts" }
+        if ($variant.ContainsKey('Run') -and -not $variant.Run) { continue }
         $output = & dotnet $dll.FullName
         if ($LASTEXITCODE -ne 0 -or -not ($output -match [regex]::Escape($variant.Output))) {
             throw "Variant '$($variant.Name)': expected exit code 0 and '$($variant.Output)', got $LASTEXITCODE and '$output'"

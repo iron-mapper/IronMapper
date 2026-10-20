@@ -50,6 +50,11 @@ List<UserDto> dtos = entities.MapToUserDtoList();
 UserDto[] arr = entities.MapToUserDtoArray();
 ```
 
+Параметр — `IEnumerable<T>`, но сгенерированный код сначала проверяет тип во время выполнения: массив или `List<T>`
+читается циклом `for`, и результат создаётся сразу нужного размера; другой `ICollection<T>` даёт размер через `Count`
+и читается `foreach`; любая другая последовательность читается `foreach` в растущий список. Без LINQ и делегатов:
+каждый элемент маппится прямым вызовом `MapToUserDto`.
+
 ### Вложенные collection-свойства
 
 Если source-свойство — коллекция, а destination-свойство — коллекция с **другим** типом элементов,
@@ -65,18 +70,32 @@ public class BlogEntity
 }
 ```
 
-Сгенерированный код:
+Сгенерированный код (закрытый вспомогательный метод на каждое свойство-коллекцию):
 
 ```csharp
-Comments = source.Comments is null ? null!
-    : global::System.Linq.Enumerable.ToList(
-        global::System.Linq.Enumerable.Select(source.Comments, x => x.MapToCommentDto())),
+Comments = MapCollection_Comments_BlogEntity_BlogDto(source.Comments),
+// ...
+private static List<CommentDto> MapCollection_Comments_BlogEntity_BlogDto(List<CommentEntity>? source)
+{
+    if (source is null) return null!;
+    var result = new List<CommentDto>(source.Count);
+    for (var i = 0; i < source.Count; i++) result.Add(source[i].MapToCommentDto());
+    return result;
+}
 ```
+
+Как читается источник, зависит от его объявленного типа: `T[]`, `List<T>`, `IList<T>` и `IReadOnlyList<T>` — циклом
+`for` по индексатору; `ICollection<T>`, `IReadOnlyCollection<T>` и классы с открытым `Count` (например,
+`HashSet<T>`) — `foreach` по объявленному типу, результат сразу нужного размера; остальное — `foreach`. Приёмником
+может быть `List<T>`, `T[]`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`
+(присваивается `List<T>`) или `IEnumerable<T>`.
 
 Замечания:
 - Должен существовать маппинг для типов элементов (`CommentEntity → CommentDto`), иначе сгенерированный вызов не скомпилируется.
 - Если source-коллекция равна `null`, результат тоже `null`, а не пустая коллекция.
-- Тестами покрыт только случай `List<T> → List<TDto>`. В генераторе есть ветки для массивов и других типов коллекций, но они не протестированы.
+- Приёмник `IEnumerable<T>` — **ленивая** последовательность (как в 1.1): элементы маппятся при перечислении, при
+  каждом перечислении заново, и изменения исходной коллекции после маппинга видны.
+- Все сочетания перечисленных видов источника и приёмника покрыты runtime-тестами (`CollectionShapeTests`).
 - Коллекции с одинаковым типом элементов присваиваются как есть (копируется ссылка).
 
 ---
@@ -136,6 +155,10 @@ In-place перегрузка только присваивает замапле
   объявленным для базового типа.
 - `IMapper.Map<List<TDto>>(list)` не поддерживается и бросает `MappingException`
   ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); используйте `MapCollection<TSource, TDest>` или `list.MapToDtoList()`.
+- `IMapper.MapCollection<TSource, TDest>` маппит весь источник во время вызова и возвращает `List<TDest>` (с типом
+  `IEnumerable<TDest>`); повторное перечисление результата не маппит заново. До 1.1.4 включительно метод возвращал
+  ленивую последовательность, которая маппила при каждом перечислении и бросала исключение для `null`-источника
+  только при перечислении.
 
 ### Производительность
 
@@ -152,8 +175,13 @@ IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; среднее время 
 - `IMapper` добавляет вызов через reflection (`MethodInfo.Invoke`) на каждый вызов и сканирование сборок при первом
   вызове для пары типов.
 - В сценарии Nested IronMapper маппит вложенные объекты через `ForMember(... MapFrom(...))` (см.
-  [Вложенные объекты](#вложенные-объекты)); сгенерированный код коллекций использует `Enumerable.Select` + `ToList`.
-  У Mapperly там ×1,00.
+  [Вложенные объекты](#вложенные-объекты)); сгенерированный код коллекций 1.1.3 использует `Enumerable.Select` +
+  `ToList`. У Mapperly там ×1,00.
+- Не выпущено (1.2.0): в сгенерированном коде нет LINQ и делегатов (циклы с известным размером, см.
+  [Вложенные collection-свойства](#вложенные-collection-свойства)). Предварительный прогон локальных исходников на той же
+  машине (не полный; таблицу выше обновит полный прогон к релизу): Nested ×1,09, коллекция из 10 заказов ×0,97
+  (Mapperly ×1,18), обновление на месте ×0,90. Оставшийся разрыв в Nested — проверки на null в сгенерированных
+  методах: из-за них JIT не встраивает `MapToAddressDto` в `MapToCustomerDto`; без них тот же прогон даёт ×1,02.
 - Холодный старт чувствителен к шуму, смотрите на порядок величины (AutoMapper +73,5 мс, Mapster +99,1 мс).
 - Измерялся только .NET 10. CI лишь проверяет, что набор бенчмарков собирается и каждый сценарий проходит одну
   итерацию на .NET 10 и .NET 8; цифры он не публикует. Как запустить набор:
@@ -168,8 +196,9 @@ IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; среднее время 
 - **Сгенерированные extension-методы: совместимы.** Предупреждений trimming/AOT нет (проверка в CI падает на любом);
   исполняемый файл запускается и выдаёт правильный результат. В наборе бенчмарков (win-x64, .NET 10,
   [`benchmarks/results/aot.md`](../benchmarks/results/aot.md)) время старта такое же, как без маппера, а файл на
-  255,5 КБ больше приложения без маппера (у Mapperly +23,6 КБ), в основном потому, что сгенерированный код коллекций
-  (`Enumerable.Select` + `ToList`) подтягивает загрузчик типов NativeAOT.
+  255,5 КБ больше приложения без маппера (у Mapperly +23,6 КБ) в 1.1.3, в основном потому, что сгенерированный код
+  коллекций (`Enumerable.Select` + `ToList`) подтягивает загрузчик типов NativeAOT. Не выпущено (1.2.0, без LINQ в
+  сгенерированном коде): +2,6 КБ, предварительно, замерено на локальных исходниках.
 - **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): пока несовместимы** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
   `RuntimeMapper` находит сгенерированные методы по имени через reflection (сканирование сборок `AppDomain`,
   `Assembly.GetType`, `GetMethods`), чего trimmer не видит, их метаданные не сохраняются, и исполняемый файл падает

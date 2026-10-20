@@ -85,11 +85,15 @@ public sealed class RuntimeMapper : IMapper
     }
 
     /// <inheritdoc/>
+    /// <remarks>Returns a <see cref="List{T}"/>; the elements are mapped during the call.</remarks>
     public IEnumerable<TDest> MapCollection<TSource, TDest>(IEnumerable<TSource> source)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
+
+        var result = source is ICollection<TSource> collection ? new List<TDest>(collection.Count) : new List<TDest>();
         foreach (var item in source)
-            yield return Map<TSource, TDest>(item);
+            result.Add(Map<TSource, TDest>(item));
+        return result;
     }
 
     // -----------------------------------------------------------------------

@@ -39,9 +39,12 @@ public interface IMapper
     void Map<TSource, TDest>(TSource source, TDest destination);
 
     /// <summary>
-    /// Maps each element of <paramref name="source"/> to <typeparamref name="TDest"/>,
-    /// returning the results as a lazily evaluated sequence.
+    /// Maps each element of <paramref name="source"/> to <typeparamref name="TDest"/> and returns the results.
     /// </summary>
+    /// <remarks>
+    /// The source is enumerated and mapped once, during the call (the built-in implementation returns a
+    /// <see cref="List{T}"/>), so enumerating the result again does not map again and exceptions are thrown by the call.
+    /// </remarks>
     /// <typeparam name="TSource">The element source type.</typeparam>
     /// <typeparam name="TDest">The element destination type.</typeparam>
     /// <param name="source">The source collection to map.</param>

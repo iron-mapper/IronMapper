@@ -11,12 +11,12 @@ namespace IronMapper.Generated
         /// <returns>A new <see cref="global::App.PostDto"/> populated from <paramref name="source"/>.</returns>
         public static global::App.PostDto MapToPostDto(this global::App.Post source)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.PostDto
             {
-                Comments = source.Comments is null ? null! : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source.Comments, x => x.MapToCommentDto())),
-                Pinned = source.Pinned is null ? null! : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source.Pinned, x => x.MapToCommentDto())),
-                Archived = source.Archived is null ? null! : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source.Archived, x => x.MapToCommentDto())),
+                Comments = MapCollection_Comments_Post_PostDto(source.Comments),
+                Pinned = MapCollection_Pinned_Post_PostDto(source.Pinned),
+                Archived = MapCollection_Archived_Post_PostDto(source.Archived),
                 Tags = source.Tags,
             };
         }
@@ -26,24 +26,91 @@ namespace IronMapper.Generated
         /// <param name="destination">The <see cref="global::App.PostDto"/> instance to populate. Init-only properties are not updated.</param>
         public static void MapToPostDto(this global::App.Post source, global::App.PostDto destination)
         {
-            if (source is null) throw new global::System.ArgumentNullException(nameof(source));
-            if (destination is null) throw new global::System.ArgumentNullException(nameof(destination));
-            destination.Comments = source.Comments is null ? null! : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source.Comments, x => x.MapToCommentDto()));
-            destination.Pinned = source.Pinned is null ? null! : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source.Pinned, x => x.MapToCommentDto()));
-            destination.Archived = source.Archived is null ? null! : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source.Archived, x => x.MapToCommentDto()));
+            global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            destination.Comments = MapCollection_Comments_Post_PostDto(source.Comments);
+            destination.Pinned = MapCollection_Pinned_Post_PostDto(source.Pinned);
+            destination.Archived = MapCollection_Archived_Post_PostDto(source.Archived);
             destination.Tags = source.Tags;
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PostDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.PostDto> MapToPostDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Post>? source)
-            => source is null
-                ? new global::System.Collections.Generic.List<global::App.PostDto>()
-                : global::System.Linq.Enumerable.ToList(global::System.Linq.Enumerable.Select(source, x => MapToPostDto(x)));
+        {
+            if (source is null) return new global::System.Collections.Generic.List<global::App.PostDto>();
+            if (source is global::App.Post[] array)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PostDto>(array.Length);
+                for (var i = 0; i < array.Length; i++) result.Add(MapToPostDto(array[i]));
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Post> list)
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PostDto>(list.Count);
+                for (var i = 0; i < list.Count; i++) result.Add(MapToPostDto(list[i]));
+                return result;
+            }
+            {
+                var result = source is global::System.Collections.Generic.ICollection<global::App.Post> collection
+                    ? new global::System.Collections.Generic.List<global::App.PostDto>(collection.Count)
+                    : new global::System.Collections.Generic.List<global::App.PostDto>();
+                foreach (var item in source) result.Add(MapToPostDto(item));
+                return result;
+            }
+        }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PostDto"/> and returns an array.</summary>
         public static global::App.PostDto[] MapToPostDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Post>? source)
-            => source is null
-                ? global::System.Array.Empty<global::App.PostDto>()
-                : global::System.Linq.Enumerable.ToArray(global::System.Linq.Enumerable.Select(source, x => MapToPostDto(x)));
+        {
+            if (source is null) return global::System.Array.Empty<global::App.PostDto>();
+            if (source is global::App.Post[] array)
+            {
+                var result = new global::App.PostDto[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = MapToPostDto(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<global::App.Post> list)
+            {
+                var result = new global::App.PostDto[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = MapToPostDto(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<global::App.Post> collection)
+            {
+                var result = new global::App.PostDto[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = MapToPostDto(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<global::App.PostDto>();
+                foreach (var item in source) result.Add(MapToPostDto(item));
+                return result.ToArray();
+            }
+        }
+
+        private static global::System.Collections.Generic.List<global::App.CommentDto> MapCollection_Comments_Post_PostDto(global::System.Collections.Generic.List<global::App.Comment>? source)
+        {
+            if (source is null) return null!;
+            var result = new global::System.Collections.Generic.List<global::App.CommentDto>(source.Count);
+            for (var i = 0; i < source.Count; i++) result.Add(source[i].MapToCommentDto());
+            return result;
+        }
+
+        private static global::App.CommentDto[] MapCollection_Pinned_Post_PostDto(global::App.Comment[]? source)
+        {
+            if (source is null) return null!;
+            var result = new global::App.CommentDto[source.Length];
+            for (var i = 0; i < source.Length; i++) result[i] = source[i].MapToCommentDto();
+            return result;
+        }
+
+        private static global::System.Collections.Generic.List<global::App.CommentDto> MapCollection_Archived_Post_PostDto(global::System.Collections.Generic.IEnumerable<global::App.Comment>? source)
+        {
+            if (source is null) return null!;
+            var result = new global::System.Collections.Generic.List<global::App.CommentDto>();
+            foreach (var item in source) result.Add(item.MapToCommentDto());
+            return result;
+        }
     }
 }
