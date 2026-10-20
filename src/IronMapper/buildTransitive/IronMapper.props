@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Adds `global using IronMapper.Generated;` (the namespace of the generated MapTo* methods) to C# projects with
+    implicit usings, so a missing using no longer fails with CS1061. Opt out with
+    <IronMapperImplicitUsings>false</IronMapperImplicitUsings>.
+    This file is imported before the project file, but item conditions are evaluated after all properties, so
+    ImplicitUsings, LangVersion and IronMapperImplicitUsings set in the project (or Directory.Build.props) are seen.
+    buildTransitive/ also applies to projects that reference only IronMapper.Extensions.DI.
+  -->
+  <ItemGroup Condition="'$(Language)' == 'C#'
+                        and ('$(ImplicitUsings)' == 'enable' or '$(ImplicitUsings)' == 'true')
+                        and '$(IronMapperImplicitUsings)' != 'false'">
+    <Using Include="IronMapper.Generated" />
+  </ItemGroup>
+
+</Project>

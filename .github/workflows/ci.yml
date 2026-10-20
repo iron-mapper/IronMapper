@@ -1,8 +1,10 @@
 name: CI
 
+# Push runs only on main (after a merge); every other branch is checked through its pull request, so a branch with
+# an open PR is not built twice. All jobs run on both events (no job-level conditions).
 on:
   push:
-    branches: [ main, dev, 'feature/**', 'fix/**' ]
+    branches: [ main ]
   pull_request:
     branches: [ main, dev ]
 

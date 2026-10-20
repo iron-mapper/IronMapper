@@ -81,6 +81,32 @@ second destination type with the same simple name later does rename the existing
 are used instead (`TransformValue_String_Shop_Item_Shop_ItemDto`). These helpers are `private`. Generated files are
 named after the full names of both types (`Shop.Item_MapTo_Shop.ItemDto.g.cs`).
 
+## Global using of `IronMapper.Generated`
+
+The generated `MapTo*` methods live in the namespace `IronMapper.Generated`. The `IronMapper` package (also when it
+comes through `IronMapper.Extensions.DI`) adds `global using IronMapper.Generated;` to C# projects with implicit
+usings (`<ImplicitUsings>enable</ImplicitUsings>` or `true`, the default in the .NET 6+ templates); the file is
+`buildTransitive/IronMapper.props` in the package.
+
+- **Without implicit usings** nothing is added: write `using IronMapper.Generated;` in the files that call `MapTo*`
+  methods (C# 9 and earlier have no global usings at all).
+- An explicit `using IronMapper.Generated;` next to the global one compiles without warnings.
+- A project without mappings gets an empty `IronMapper.Generated` namespace from the generator, so the global using
+  compiles there too.
+- **Turn it off** for a project (or for all projects in `Directory.Build.props`):
+
+  ```xml
+  <PropertyGroup>
+    <IronMapperImplicitUsings>false</IronMapperImplicitUsings>
+  </PropertyGroup>
+  ```
+
+The global using has the same effect as writing `using IronMapper.Generated;` in every file. In a file that did not
+import the namespace before, a call `x.MapToY()` becomes ambiguous (`CS0121`) only if the file also imports, through
+a `using` directive, another extension method with the same name and parameter type (for example a hand-written mapper
+from the code you migrate): remove or rename it, or turn the global using off. For the same type pair mapped in two
+projects see [Multi-project solutions](#multi-project-solutions).
+
 ## Multi-project solutions
 
 Every project that references the `IronMapper` package gets its own class `IronMapper.Generated.GeneratedMappers`
@@ -90,10 +116,11 @@ with the mappings of that project. The name is the same in every assembly.
 and `internal` otherwise. A project with only internal mappings therefore exposes nothing: projects that reference it
 do not see its class at all (unless it grants `[InternalsVisibleTo]`).
 
-**Calling mappings of a referenced project.** Use the extension method syntax with `using IronMapper.Generated;`:
+**Calling mappings of a referenced project.** Use the extension method syntax; the namespace is imported by the
+[global using](#global-using-of-ironmappergenerated) or by `using IronMapper.Generated;`:
 
 ```csharp
-using IronMapper.Generated;
+using IronMapper.Generated;               // only without implicit usings
 
 var dto = product.MapToProductDto();      // public mapping declared in a referenced project
 var order = entity.MapToOrderDto();       // mapping declared in this project

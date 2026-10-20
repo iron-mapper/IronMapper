@@ -104,9 +104,10 @@ The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource
 
 AutoMapper requires `IMapper` injection everywhere. IronMapper generates strongly-typed extension methods on the source type, so you can replace DI-injected calls with direct calls where the types are known at compile time:
 
-```diff
-+ using IronMapper.Generated;   // the generated MapTo* methods live here
+With implicit usings the package imports the namespace of the generated methods (`IronMapper.Generated`) itself;
+without them, add `using IronMapper.Generated;` to the file.
 
+```diff
 - var dto = _mapper.Map<OrderDto>(entity);
 + var dto = entity.MapToOrderDto();
 ```

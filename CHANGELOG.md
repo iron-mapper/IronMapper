@@ -2,8 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`global using IronMapper.Generated;` from the package.** C# projects with implicit usings
+  (`<ImplicitUsings>enable</ImplicitUsings>`, the default in the .NET 6+ templates) no longer need
+  `using IronMapper.Generated;` to call the generated `MapTo*` methods; a forgotten using failed with `CS1061` and no
+  hint (the README Quick Start of 1.1.3 had this bug). Added by `buildTransitive/IronMapper.props`, so it also
+  applies when the package comes through `IronMapper.Extensions.DI`. Turn it off with
+  `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`. Projects without implicit usings (and C# 9 and
+  earlier) are not affected and still need the explicit using; an explicit using next to the global one compiles
+  without warnings. See [Global using](docs/configuration.md#global-using-of-ironmappergenerated).
+
 ### Changed
 
+- With implicit usings every file imports `IronMapper.Generated`. A file that imports another extension method with
+  the same name and parameter type as a generated one (e.g. a hand-written `MapToUserDto`) now gets `CS0121` at
+  that call; remove or rename the method, or set `IronMapperImplicitUsings` to `false`.
+- A project that references the package but has no generated mappings gets an empty `IronMapper.Generated`
+  namespace (file `GeneratedMappers.g.cs`), so the global using compiles there (otherwise `CS0246`). Generated code
+  of projects with mappings does not change.
 - **Publishing an app that uses `IMapper` with trimming or NativeAOT now warns at your call (expected).**
   `AddIronMapper` (both overloads) and `RuntimeMapper` are marked `[RequiresUnreferencedCode]`, so the publish reports
   `IL2026` on the `AddIronMapper` line (and when `RuntimeMapper` is created directly) with what to use instead: the
@@ -36,6 +53,13 @@
   the packed packages: `tests/IronMapper.AotProbe` (attribute and profile mappings, collections, in-place update, a
   converter) must have no trim/AOT warnings and its executable must check the mapped values;
   `tests/IronMapper.AotProbe.DI` must report `IL2026` on its `AddIronMapper` line and nothing else.
+- `eng/verify-package.ps1` builds and runs `tests/IronMapper.PackageConsumer.ImplicitUsings` in nine variants against
+  the packed package: no using with implicit usings, only `IronMapper.Extensions.DI` referenced, no mappings, the
+  Quick Start extracted from `README.md` and `README.ru.md` (between `<!-- quickstart:begin -->` and
+  `<!-- quickstart:end -->` comments), an explicit using next to the global one, implicit usings
+  off, `LangVersion` 9, `IronMapperImplicitUsings=false` (each also checks whether the global using was generated).
+  `tests/IronMapper.PackageConsumer` calls its own and a referenced library's mappings from a file without the using.
+- CI runs on push only for `main`; other branches are checked through their pull requests (all jobs run there).
 
 ## [1.1.4] - 2026-10-20
 

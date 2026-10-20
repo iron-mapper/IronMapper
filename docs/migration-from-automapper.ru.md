@@ -104,9 +104,10 @@ dotnet add package IronMapper.Extensions.DI
 
 AutoMapper требует внедрения `IMapper` везде. IronMapper генерирует строго типизированные extension methods на source-типе, поэтому там, где типы известны во время компиляции, можно убрать DI-зависимость:
 
-```diff
-+ using IronMapper.Generated;   // здесь лежат сгенерированные методы MapTo*
+При неявных using пакет сам импортирует пространство имён сгенерированных методов (`IronMapper.Generated`); без
+них добавьте в файл `using IronMapper.Generated;`.
 
+```diff
 - var dto = _mapper.Map<OrderDto>(entity);
 + var dto = entity.MapToOrderDto();
 ```

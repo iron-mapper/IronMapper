@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The global using IronMapper.Generated added by the packed IronMapper package (buildTransitive/IronMapper.props).
+    eng/verify-package.ps1 builds this project several times from the local feed, each time with one source file
+    (ConsumerSource) and different properties: ImplicitUsings on/off, LangVersion 9, IronMapperImplicitUsings=false,
+    a reference to IronMapper.Extensions.DI only (IronMapperPackage), the Quick Start of README.md / README.ru.md.
+    Intentionally NOT part of IronMapper.slnx.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
+    <IronMapperPackage Condition="'$(IronMapperPackage)' == ''">IronMapper</IronMapperPackage>
+    <ConsumerSource Condition="'$(ConsumerSource)' == ''">Sources/NoUsing.cs</ConsumerSource>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(ConsumerSource)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="$(IronMapperPackage)" Version="[$(IronMapperVersion)]" />
+  </ItemGroup>
+
+</Project>

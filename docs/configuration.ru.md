@@ -82,6 +82,32 @@ source-типа):
 полные (`TransformValue_String_Shop_Item_Shop_ItemDto`). Эти методы `private`. Сгенерированные файлы называются по
 полным именам обоих типов (`Shop.Item_MapTo_Shop.ItemDto.g.cs`).
 
+## Global using для `IronMapper.Generated`
+
+Сгенерированные методы `MapTo*` лежат в пространстве имён `IronMapper.Generated`. Пакет `IronMapper` (и когда он
+приходит через `IronMapper.Extensions.DI`) добавляет `global using IronMapper.Generated;` в проекты C# с неявными using
+(`<ImplicitUsings>enable</ImplicitUsings>` или `true`, по умолчанию в шаблонах .NET 6+); файл пакета —
+`buildTransitive/IronMapper.props`.
+
+- **Без неявных using** ничего не добавляется: пишите `using IronMapper.Generated;` в файлах, где вызываются методы
+  `MapTo*` (в C# 9 и раньше global using нет вообще).
+- Явный `using IronMapper.Generated;` рядом с глобальным компилируется без предупреждений.
+- Проект без маппингов получает от генератора пустое пространство имён `IronMapper.Generated`, поэтому global using
+  компилируется и там.
+- **Отключить** для проекта (или для всех проектов в `Directory.Build.props`):
+
+  ```xml
+  <PropertyGroup>
+    <IronMapperImplicitUsings>false</IronMapperImplicitUsings>
+  </PropertyGroup>
+  ```
+
+Global using действует так же, как `using IronMapper.Generated;` в каждом файле. В файле, который раньше не
+импортировал это пространство имён, вызов `x.MapToY()` становится неоднозначным (`CS0121`), только если файл через
+директиву `using` импортирует и другой метод расширения с тем же именем и типом параметра (например, написанный
+вручную маппер из переносимого кода): удалите или переименуйте его либо отключите global using. Про одну пару типов,
+смапленную в двух проектах, — см. [Решения из нескольких проектов](#решения-из-нескольких-проектов).
+
 ## Решения из нескольких проектов
 
 Каждый проект, который ссылается на пакет `IronMapper`, получает собственный класс
@@ -91,10 +117,11 @@ source-типа):
 Поэтому проект только с internal-маппингами ничего не публикует: проекты, которые на него ссылаются, вообще не видят
 его класс (если он не открывает внутренности через `[InternalsVisibleTo]`).
 
-**Вызов маппингов проекта-зависимости.** Используйте синтаксис метода расширения с `using IronMapper.Generated;`:
+**Вызов маппингов проекта-зависимости.** Используйте синтаксис метода расширения; пространство имён импортирует
+[global using](#global-using-для-ironmappergenerated) или `using IronMapper.Generated;`:
 
 ```csharp
-using IronMapper.Generated;
+using IronMapper.Generated;               // только без неявных using
 
 var dto = product.MapToProductDto();      // public-маппинг из проекта, на который ссылается текущий
 var order = entity.MapToOrderDto();       // маппинг текущего проекта

@@ -44,9 +44,10 @@ dotnet add package IronMapper
 
 `Program.cs` of a console app (`dotnet new console`):
 
+<!-- quickstart:begin -->
+
 ```csharp
 using IronMapper.Attributes;
-using IronMapper.Generated;   // required: the generated MapTo* methods live in this namespace
 
 var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
 UserDto dto = entity.MapToUserDto();   // generated at build time
@@ -68,10 +69,16 @@ public class UserDto
 }
 ```
 
+<!-- quickstart:end -->
+
 No `IMapper` and no service registration are needed.
 
-**`using IronMapper.Generated;` is required** in every file that calls `MapTo*` methods. Without it the call fails
-with `CS1061` ("does not contain a definition for 'MapToUserDto'").
+The generated `MapTo*` methods live in the namespace `IronMapper.Generated`. **With implicit usings**
+(`<ImplicitUsings>enable</ImplicitUsings>`, the default in the .NET 6+ templates) the package adds
+`global using IronMapper.Generated;` for you. **Without implicit usings, add `using IronMapper.Generated;`** to every
+file that calls `MapTo*` methods; otherwise the call fails with `CS1061` ("does not contain a definition for
+'MapToUserDto'"). To turn the global using off, set `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`
+([Configuration](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md#global-using-of-ironmappergenerated)).
 
 **Requirements.** The generator needs the C# compiler from **.NET SDK 8.0.400 or later** (Roslyn 4.11; Visual
 Studio 2022 17.11+). On an older SDK the compiler reports warning `CS9057`, the generator does not run, and every
@@ -115,7 +122,8 @@ How to read it:
 
 ## Key features
 
-All examples below assume `using IronMapper.Attributes;` and `using IronMapper.Generated;`. Full reference:
+All examples below assume `using IronMapper.Attributes;` (and `using IronMapper.Generated;` without implicit
+usings). Full reference:
 [Configuration](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md).
 
 **Attributes on the source or the destination type**
@@ -237,7 +245,8 @@ cannot be mapped (`IM0010`); several projects in one solution have their own `Ge
   and `net10.0`. The generator needs .NET SDK 8.0.400+.
 - The library tests run on .NET 10 (Ubuntu and Windows in CI). The equivalence tests of the benchmark suite also run
   on .NET 8. .NET 9 is not tested in CI ([#10](https://github.com/iron-mapper/IronMapper/issues/10)). The Quick Start
-  above was checked by hand on .NET 8, 9 and 10.
+  above is compiled and run against the packed package in CI (.NET 10); 1.1.4 was checked by hand on .NET 8, 9
+  and 10.
 
 ---
 
