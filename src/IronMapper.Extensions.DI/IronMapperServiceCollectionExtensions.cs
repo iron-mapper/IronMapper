@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IronMapper.Configuration;
 using IronMapper.Interfaces;
@@ -10,6 +11,11 @@ namespace IronMapper.Extensions.DI;
 /// <summary>
 /// Extension methods that register IronMapper services with an <see cref="IServiceCollection"/>.
 /// </summary>
+/// <remarks>
+/// Not compatible with trimming and NativeAOT yet: <c>AddIronMapper</c> scans assemblies and the registered
+/// <see cref="IMapper"/> calls the generated methods through reflection, so publishing with trimming or NativeAOT
+/// reports IL2026 at the call. The generated <c>MapTo*</c> extension methods are compatible.
+/// </remarks>
 public static class IronMapperServiceCollectionExtensions
 {
     /// <summary>
@@ -21,6 +27,7 @@ public static class IronMapperServiceCollectionExtensions
     /// One or more assemblies to scan.  Typically <c>typeof(Program).Assembly</c>.
     /// </param>
     /// <returns><paramref name="services"/> for chaining.</returns>
+    [RequiresUnreferencedCode(TrimMessages.IMapper, Url = TrimMessages.IMapperUrl)]
     public static IServiceCollection AddIronMapper(
         this IServiceCollection services,
         params Assembly[] assemblies)
@@ -38,6 +45,7 @@ public static class IronMapperServiceCollectionExtensions
     /// <param name="services">The service collection to configure.</param>
     /// <param name="configure">A delegate that populates an <see cref="IronMapperOptions"/> instance.</param>
     /// <returns><paramref name="services"/> for chaining.</returns>
+    [RequiresUnreferencedCode(TrimMessages.IMapper, Url = TrimMessages.IMapperUrl)]
     public static IServiceCollection AddIronMapper(
         this IServiceCollection services,
         Action<IronMapperOptions> configure)
@@ -54,6 +62,7 @@ public static class IronMapperServiceCollectionExtensions
     // Internal
     // -----------------------------------------------------------------------
 
+    [RequiresUnreferencedCode(TrimMessages.IMapper, Url = TrimMessages.IMapperUrl)]
     private static IServiceCollection RegisterServices(
         IServiceCollection services,
         IronMapperOptions options)

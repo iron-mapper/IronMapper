@@ -24,8 +24,9 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
   the generated file.
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.6 ns per object. Nested objects are slower
   (×1.26), see [Performance](https://github.com/iron-mapper/IronMapper#performance).
-- **NativeAOT verified for the generated methods.** They publish with no trim/AOT warnings and run correctly.
-  The optional `IMapper` service does not work under NativeAOT yet ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
+- **NativeAOT checked in CI for the generated methods** (.NET 8 and .NET 10): they publish with no trim/AOT warnings
+  and run correctly. The optional `IMapper` service does not work under NativeAOT yet and says so on publish: IL2026
+  at your `AddIronMapper` call ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Cold start of about 2 ms** (process start plus the first mapping, over a console app without a mapper), the
   same order as hand-written code. AutoMapper and Mapster need tens of milliseconds there to build their mapping
   configuration ([results](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
@@ -194,8 +195,8 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
 ```
 
 `IMapper` finds and calls the generated methods through reflection. It is slower than the extension methods (see
-the table above) and does not work under NativeAOT; prefer the extension methods when the types are known at
-compile time.
+the table above) and does not work under NativeAOT (publishing reports IL2026 at `AddIronMapper`); prefer the
+extension methods when the types are known at compile time.
 
 ---
 
@@ -211,8 +212,9 @@ compile time.
   `MapFrom`.
 - **`IM0001` is not reported for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
   mapping keeps its default value without a warning.
-- **`IMapper` (IronMapper.Extensions.DI) uses reflection and does not work under NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): trim warnings
-  IL2026/IL2062/IL2072/IL2075 on publish, `MappingException` at run time. It also has no collection overload of `Map`
+- **`IMapper` (IronMapper.Extensions.DI) uses reflection and does not work under NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): publishing with
+  trimming or NativeAOT reports IL2026 at your `AddIronMapper` call, and the app fails with `MappingException` at run
+  time. It also has no collection overload of `Map`
   ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) and no per-call context
   ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 - **A `null` source throws `ArgumentNullException`**, also when it is declared nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).

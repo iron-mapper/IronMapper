@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IronMapper.Exceptions;
 using IronMapper.Interfaces;
@@ -16,14 +17,15 @@ namespace IronMapper.Extensions.DI;
 /// On the first mapping call the mapper scans every loaded assembly for the generated
 /// <c>IronMapper.Generated.GeneratedMappers</c> static class and caches a <see cref="MethodInfo"/>
 /// per <c>(sourceType, destType)</c> pair.  Every call then invokes the cached method via
-/// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and has not
-/// been verified with NativeAOT or trimming. Methods are matched by signature: a <c>MapTo*</c> method whose
+/// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and does not work with trimming or NativeAOT
+/// (the trimmer removes the generated methods; creating the mapper reports IL2026). Methods are matched by signature: a <c>MapTo*</c> method whose
 /// parameter is the exact source type and whose return type is the destination type (or, for the in-place
 /// overload, whose parameters are both types), so qualified method names (IM0013) are found too;
 /// public and internal generated methods are both found;
 /// assemblies whose names start with <c>System.</c> or
 /// <c>Microsoft.</c> are not scanned.
 /// </remarks>
+[RequiresUnreferencedCode(TrimMessages.IMapper, Url = TrimMessages.IMapperUrl)]
 public sealed class RuntimeMapper : IMapper
 {
     // null value = mapping was looked up and not found (negative cache).

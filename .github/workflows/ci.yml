@@ -94,6 +94,35 @@ jobs:
           name: nuget-packages
           path: artifacts/packages/
 
+  aot:
+    # NativeAOT probes against the packed packages (eng/verify-aot.ps1), net8.0 and net10.0: the generated extension
+    # methods (tests/IronMapper.AotProbe) publish with PublishAot without trim/AOT warnings and the executable checks
+    # the mapped values; IMapper (tests/IronMapper.AotProbe.DI) must report IL2026 on the AddIronMapper call and
+    # nothing else.
+    name: NativeAOT probes (ubuntu-latest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: NativeAOT prerequisites
+        shell: bash
+        run: |
+          missing=""
+          command -v clang >/dev/null || missing="$missing clang"
+          dpkg -s zlib1g-dev >/dev/null 2>&1 || missing="$missing zlib1g-dev"
+          if [ -n "$missing" ]; then sudo apt-get update && sudo apt-get install -y $missing; fi
+
+      - name: NativeAOT probes
+        shell: pwsh
+        run: ./eng/verify-aot.ps1 -PackageDir ./artifacts/packages
+
   benchmarks:
     # Smoke check of the comparison suite in benchmarks/ against the local sources: it builds, the equivalence
     # tests pass, and every runtime scenario runs one iteration (BenchmarkDotNet Dry job) on .NET 10 and .NET 8.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IronMapper.Exceptions;
 
@@ -18,6 +19,9 @@ namespace IronMapper.Validation;
 ///   <item>Situations where the generator was not run (e.g. reflection-only runtime mapping).</item>
 /// </list>
 /// </summary>
+[RequiresUnreferencedCode("MappingValidator reads the properties and constructors of the given types through reflection; " +
+    "trimming may remove them, and the result is then wrong. The source generator reports these problems at compile time " +
+    "(IM0001, IM0008).")]
 public static class MappingValidator
 {
     /// <summary>
