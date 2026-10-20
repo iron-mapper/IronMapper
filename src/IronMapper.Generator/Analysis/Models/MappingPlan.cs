@@ -15,13 +15,13 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     private Dictionary<string, string>? _methodByPair;
 
     /// <summary>One entry per mapping definition, sorted by <see cref="MappingPlanEntry.Origin"/>.</summary>
-    public ImmutableArray<MappingPlanEntry> Entries { get; }
+    public EquatableArray<MappingPlanEntry> Entries { get; }
 
     /// <summary>IM0007, IM0013 and IM0014, reported once per compilation.</summary>
-    public ImmutableArray<DiagnosticInfo> Diagnostics { get; }
+    public EquatableArray<DiagnosticInfo> Diagnostics { get; }
 
     /// <summary>Initialises a new <see cref="MappingPlan"/>.</summary>
-    public MappingPlan(ImmutableArray<MappingPlanEntry> entries, ImmutableArray<DiagnosticInfo> diagnostics)
+    public MappingPlan(EquatableArray<MappingPlanEntry> entries, EquatableArray<DiagnosticInfo> diagnostics)
     {
         Entries = entries;
         Diagnostics = diagnostics;
@@ -59,12 +59,7 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     {
         if (other is null) return false;
         if (ReferenceEquals(this, other)) return true;
-        if (Entries.Length != other.Entries.Length || Diagnostics.Length != other.Diagnostics.Length) return false;
-        for (var i = 0; i < Entries.Length; i++)
-            if (!Entries[i].Equals(other.Entries[i])) return false;
-        for (var i = 0; i < Diagnostics.Length; i++)
-            if (!Diagnostics[i].Equals(other.Diagnostics[i])) return false;
-        return true;
+        return Entries.Equals(other.Entries) && Diagnostics.Equals(other.Diagnostics);
     }
 
     /// <inheritdoc/>
@@ -73,10 +68,7 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = 17;
-        foreach (var entry in Entries) hash = hash * 31 + entry.GetHashCode();
-        foreach (var diagnostic in Diagnostics) hash = hash * 31 + diagnostic.GetHashCode();
-        return hash;
+        return Entries.GetHashCode() * 31 + Diagnostics.GetHashCode();
     }
 }
 
@@ -136,6 +128,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     {
         var hash = 17;
         hash = hash * 31 + Origin.GetHashCode();
+        hash = hash * 31 + PairKey.GetHashCode();
         hash = hash * 31 + Emit.GetHashCode();
         hash = hash * 31 + MethodName.GetHashCode();
         hash = hash * 31 + HintName.GetHashCode();

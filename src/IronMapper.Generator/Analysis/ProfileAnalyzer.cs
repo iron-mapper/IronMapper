@@ -45,7 +45,7 @@ internal static class ProfileAnalyzer
     /// declared inside the profile constructor.  Returns an empty array when
     /// the class is not a MappingProfile subclass.
     /// </summary>
-    public static ImmutableArray<MappingDescriptor> ExtractFromProfile(
+    public static EquatableArray<MappingDescriptor> ExtractFromProfile(
         GeneratorSyntaxContext ctx,
         CancellationToken ct)
     {

@@ -35,7 +35,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 predicate: static (node, _) => IsEligibleTypeDeclaration(node),
                 transform: static (ctx, ct) => MappingAnalyzer.ExtractFromMapTo(ctx, ct))
             .WithTrackingName(TrackingNames.MapToTransform)
-            .SelectMany(static (arr, _) => arr)
+            .SelectMany(static (arr, _) => arr.AsImmutableArray())
             .WithTrackingName(TrackingNames.MapTo);
 
         // [MapFrom(typeof(TSource))] on dest class → extract descriptors (one per attribute).
@@ -45,7 +45,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 predicate: static (node, _) => IsEligibleTypeDeclaration(node),
                 transform: static (ctx, ct) => MappingAnalyzer.ExtractFromMapFrom(ctx, ct))
             .WithTrackingName(TrackingNames.MapFromTransform)
-            .SelectMany(static (arr, _) => arr)
+            .SelectMany(static (arr, _) => arr.AsImmutableArray())
             .WithTrackingName(TrackingNames.MapFrom);
 
         // MappingProfile subclass pipeline — analyses constructor bodies for CreateMap<,>() chains.
@@ -54,7 +54,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 predicate: ProfileAnalyzer.IsCandidateClass,
                 transform: static (ctx, ct) => ProfileAnalyzer.ExtractFromProfile(ctx, ct))
             .WithTrackingName(TrackingNames.ProfileTransform)
-            .SelectMany(static (arr, _) => arr)
+            .SelectMany(static (arr, _) => arr.AsImmutableArray())
             .WithTrackingName(TrackingNames.Profiles);
 
         // Decisions across all mappings: duplicate pairs (IM0007), method name collisions (IM0013/IM0014),
@@ -69,7 +69,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(plan, static (spc, mappingPlan) =>
         {
             foreach (var diag in mappingPlan.Diagnostics)
-                spc.ReportDiagnostic(Diagnostic.Create(diag.Descriptor, Location.None, diag.MessageArgs));
+                spc.ReportDiagnostic(diag.ToDiagnostic());
         });
 
         context.RegisterSourceOutput(fromMapTo.Combine(plan), static (spc, item) =>
@@ -150,10 +150,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // Report any diagnostics collected during analysis.
         foreach (var diag in descriptor.Diagnostics)
-        {
-            spc.ReportDiagnostic(
-                Diagnostic.Create(diag.Descriptor, Location.None, diag.MessageArgs));
-        }
+            spc.ReportDiagnostic(diag.ToDiagnostic());
 
         // Sentinel descriptors (e.g. empty MappingProfile) carry diagnostics only.
         if (entry is null) return;

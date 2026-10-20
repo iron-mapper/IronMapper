@@ -23,7 +23,7 @@ internal static class MappingAnalyzer
     /// <c>[MapTo(typeof(TDest))]</c> attributes.
     /// Returns one descriptor per attribute.
     /// </summary>
-    public static ImmutableArray<MappingDescriptor> ExtractFromMapTo(
+    public static EquatableArray<MappingDescriptor> ExtractFromMapTo(
         GeneratorAttributeSyntaxContext ctx,
         CancellationToken ct)
     {
@@ -55,7 +55,7 @@ internal static class MappingAnalyzer
     /// <c>[MapFrom(typeof(TSource))]</c> attributes.
     /// Returns one descriptor per attribute.
     /// </summary>
-    public static ImmutableArray<MappingDescriptor> ExtractFromMapFrom(
+    public static EquatableArray<MappingDescriptor> ExtractFromMapFrom(
         GeneratorAttributeSyntaxContext ctx,
         CancellationToken ct)
     {
@@ -272,7 +272,7 @@ internal static class MappingAnalyzer
     /// Builds a descriptor that only reports <paramref name="diagnostics"/> and emits no source
     /// (empty <see cref="MappingDescriptor.SourceTypeName"/>).
     /// </summary>
-    internal static MappingDescriptor CreateDiagnosticOnlyDescriptor(ImmutableArray<DiagnosticInfo> diagnostics)
+    internal static MappingDescriptor CreateDiagnosticOnlyDescriptor(EquatableArray<DiagnosticInfo> diagnostics)
         => new(
             sourceTypeName: string.Empty,
             sourceNamespace: null,

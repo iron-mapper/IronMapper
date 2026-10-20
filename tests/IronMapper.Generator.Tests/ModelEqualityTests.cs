@@ -240,6 +240,46 @@ public class ModelEqualityTests
         Assert.False(a.Equals(b));
     }
 
+    [Fact]
+    public void MappingDescriptor_DifferentDiagnostics_ReturnsFalse()
+    {
+        var a = new MappingDescriptor("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            ImmutableArray.Create(new DiagnosticInfo(DiagnosticDescriptors.UnmappedDestinationProperty, "X", "Dst", "Src")), false);
+        var b = new MappingDescriptor("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            ImmutableArray<DiagnosticInfo>.Empty, false);
+        Assert.False(a.Equals(b));
+    }
+
+    // -----------------------------------------------------------------------
+    // EquatableArray
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void EquatableArray_SameElementsInDifferentArrays_AreEqual()
+    {
+        EquatableArray<string> a = ImmutableArray.Create("x", "y");
+        EquatableArray<string> b = ImmutableArray.Create("x", "y");
+        Assert.True(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void EquatableArray_DifferentElements_AreNotEqual()
+    {
+        EquatableArray<string> a = ImmutableArray.Create("x", "y");
+        EquatableArray<string> b = ImmutableArray.Create("x", "z");
+        Assert.False(a.Equals(b));
+        Assert.False(a.Equals((EquatableArray<string>)ImmutableArray.Create("x")));
+    }
+
+    [Fact]
+    public void EquatableArray_DefaultEqualsEmpty()
+    {
+        Assert.True(default(EquatableArray<string>).Equals(EquatableArray<string>.Empty));
+        Assert.Equal(0, default(EquatableArray<string>).Length);
+        Assert.Empty(default(EquatableArray<string>));
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

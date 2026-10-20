@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Diagnostics are updated after an edit in the IDE.** An edit that changed only the diagnostics of a mapping (for
+  example `[Ignore]` added to the destination property reported in `IM0001`, or one of two `private` members used in a
+  profile lambda made `internal`, `IM0011`) kept the old diagnostics until the generator was restarted: the mapping
+  model ignored its diagnostics when compared with the previous run. Command-line builds were not affected. The
+  generated code does not change.
+
+### Build
+
+- Generator pipeline data is compared by value (`EquatableArray<T>` for every collection, diagnostics included). The
+  result of each analysis step was an `ImmutableArray` (compared by reference), so it counted as modified on every
+  edit; now an equal result is `Unchanged`. The strict incremental caching tests are enabled (no `Skip`); new tests
+  check that diagnostics appear and disappear after an edit.
+
 ## [1.1.4] - 2026-10-20
 
 The generated code and the public API are the same as in 1.1.3 (the generator only got pipeline tracking names, see

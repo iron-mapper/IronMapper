@@ -12,8 +12,12 @@ namespace IronMapper.Generator.Tests;
 /// run after editing a file without mappings, leave every step of the generator <c>Cached</c> or <c>Unchanged</c>.
 /// A <c>Modified</c> step means pipeline data that is not compared by value (ISymbol, SyntaxNode, Location,
 /// ImmutableArray, a model without value equality), which makes the generator re-run on every keystroke in the IDE.
-/// Roslyn's own steps (<c>Compilation</c>, <c>compilationAndGroupedNodes_ForAttributeWithMetadataName</c>, …) hold
-/// the new compilation and are always <c>Modified</c>; only the generator's named steps and the outputs are checked.
+/// The transforms (<c>*Transform</c>) use the semantic model, so Roslyn runs them again for every new compilation;
+/// they return <c>EquatableArray&lt;MappingDescriptor&gt;</c>, so an equal result is reported <c>Unchanged</c> and the
+/// steps after them are <c>Cached</c>. Roslyn's own steps (<c>Compilation</c>,
+/// <c>compilationAndGroupedNodes_ForAttributeWithMetadataName</c>, …) hold the new compilation and are always
+/// <c>Modified</c>; only the generator's named steps and the outputs are checked. That an edit which changes only a
+/// diagnostic is not cached is checked in <see cref="IncrementalDiagnosticsTests"/>.
 /// </summary>
 public class GeneratorCachingTests
 {
@@ -88,34 +92,13 @@ public class GeneratorCachingTests
         TrackingNames.Plan, TrackingNames.ClassAccessibility,
     };
 
-    /// <summary>
-    /// The transforms re-run on every new compilation (they use the semantic model) and return
-    /// <c>ImmutableArray&lt;MappingDescriptor&gt;</c>, which compares by reference, so these steps are always
-    /// <c>Modified</c>. <c>SelectMany</c> right after them compares the descriptors by value and stops the change.
-    /// </summary>
-    private static readonly string[] TransformSteps =
-        { TrackingNames.MapToTransform, TrackingNames.MapFromTransform, TrackingNames.ProfileTransform };
-
-    private const string TransformSkipReason =
-        "Plan 2.9: transforms return ImmutableArray<MappingDescriptor> (reference equality), so MapToTransform/" +
-        "ProfileTransform are Modified on every run. Fix: an equatable array type. Steps after SelectMany are cached " +
-        "(see the *_StepsAfterTransformsCached tests).";
-
-    [Fact(Skip = TransformSkipReason)]
+    [Fact]
     public void SecondRunWithoutChanges_AllStepsCached()
         => AssertCached(RunTwice(edit: false), GeneratorSteps);
 
-    [Fact(Skip = TransformSkipReason)]
+    [Fact]
     public void EditOfUnrelatedFile_AllStepsCached()
         => AssertCached(RunTwice(edit: true), GeneratorSteps);
-
-    [Fact]
-    public void SecondRunWithoutChanges_StepsAfterTransformsCached()
-        => AssertCached(RunTwice(edit: false), GeneratorSteps.Except(TransformSteps));
-
-    [Fact]
-    public void EditOfUnrelatedFile_StepsAfterTransformsCached()
-        => AssertCached(RunTwice(edit: true), GeneratorSteps.Except(TransformSteps));
 
     private static GeneratorRunResult RunTwice(bool edit)
     {
