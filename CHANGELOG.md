@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-10-20
+
+The generated code and the public API are the same as in 1.1.3 (the generator only got pipeline tracking names, see
+Build). This release updates the README shown on nuget.org.
+
+### Fixed
+
+- **The Quick Start in the README did not compile.** It was missing `using IronMapper.Generated;` (the namespace of the
+  generated `MapTo*` methods), so `entity.MapToUserDto()` failed with `CS1061`. The README (also the nuget.org page) and
+  Getting started now include the `using` and say that it is required in every file that calls `MapTo*` methods.
+
+### Documentation
+
+- README: minimum .NET SDK for the source generator (8.0.400+, Roslyn 4.11) and what happens on an older SDK
+  (`CS9057`, the generator does not run); Known limitations list the property type conversions that currently fail or
+  warn inside the generated file. `IMapper` is described as matching methods by signature (true since 1.1.3).
+- README rewritten (also the NuGet package page): the Quick Start compiles as shown (see Fixed); "Why IronMapper"
+  with measured facts; a performance table from `benchmarks/results/RESULTS.md`
+  (IronMapper, Mapperly, Mapster, AutoMapper vs hand-written code, including the scenarios where IronMapper is slower);
+  Known limitations with links to issues #22–#27 (flattening by convention and `null` input with nullable declarations
+  added); Roadmap from the open issues; absolute links for nuget.org. Same structure in README.ru.md.
+- NativeAOT is documented as verified for the generated extension methods and not supported for `IMapper`
+  (previously "not verified"), with the measured warnings and sizes (`docs/advanced.md`, migration guide).
+  `docs/advanced.md` (Performance) and the migration guide have numbers from the benchmarks instead of "no results
+  published yet"; the migration guide lists flattening, nested single objects and constructor mapping as not
+  supported and adds `using IronMapper.Generated;` to the extension-method step. `docs/diagnostics.md`: status table
+  labeled 1.1.3.
+
 ### Build
 
 - Comparison benchmarks (`benchmarks/`): the suite also targets `net8.0`; the runtime scenarios run on .NET 8 with
@@ -14,15 +42,6 @@
   hand-written code only, superseded by `benchmarks/`). README and `docs/advanced.md` point to `benchmarks/` and its
   results instead.
 - CI and publish workflows use the released .NET SDK (`dotnet-quality: 'preview'` removed).
-
-### Documentation
-
-- README: minimum .NET SDK for the source generator (8.0.400+, Roslyn 4.11) and what happens on an older SDK
-  (`CS9057`, the generator does not run); Known limitations list the property type conversions that currently fail or
-  warn inside the generated file. `IMapper` is described as matching methods by signature (true since 1.1.3).
-
-### Build
-
 - Snapshot tests of the generated code (Verify.SourceGenerators, `tests/IronMapper.Generator.Tests/Snapshots`) and
   incremental caching tests of the generator (`trackIncrementalGeneratorSteps`). Generator pipeline steps have
   tracking names (no behavior change).

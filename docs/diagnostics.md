@@ -5,7 +5,7 @@
 IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0012`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Current status** (`main`, after 1.1.1):
+**Current status** (1.1.3):
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|

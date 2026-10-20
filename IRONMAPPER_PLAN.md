@@ -82,14 +82,14 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.1        | Генератор в пакете, проверка упаковки в CI                                                                                      |
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
-| 1.2.0        | В работе. В `main` — набор бенчмарков (#18). Шаг 0 (базовая линия, net8.0, smoke-проверка в CI) — в `chore/benchmarks-baseline` |
+| 1.1.4        | Готовится в `docs/readme-refresh` (`<Version>` и CHANGELOG): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21). Документация по 1.1.3 и бенчмаркам — `docs/readme-refresh` |
 
-**Ветки (сверено 18.10.2026):**
+**Ветки (сверено 20.10.2026):**
 
-- `feature/benchmarks` — **слита** в `main` squash-коммитом `f6e55f0` (#18); содержимое ветки и `main` совпадает. Ветку можно удалить.
-- `chore/test-infrastructure` — **не слита**: один коммит `d05f6fe` (snapshot-тесты, тесты кэширования, `TrackingNames`, README про SDK, CHANGELOG, `.gitattributes`, CLAUDE.md), отстаёт от `main` на #18; сливается без конфликтов (#18 трогал только `benchmarks/`). PR ещё не открыт или не слит.
-- `chore/benchmarks-baseline` — шаг 0 релиза 1.2.0, от `main` `d6fce68`; не слита. Трогает `CLAUDE.md`, `CHANGELOG.md`, `README*.md` — при слиянии второй из веток с `chore/test-infrastructure` разрешить конфликт: в новом CLAUDE.md убрать `tests/IronMapper.Benchmarks` (проект удалён) и описать smoke-проверку CI.
-- `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map` — уже в `main` (#13, #16, #17, #6). Удалить.
+- `chore/test-infrastructure` — слита в `main` (#20, `eec934a`). `chore/benchmarks-baseline` — слита (#21, `f70f3d2`); конфликт в CLAUDE.md при слиянии разрешён не до конца (остались `tests/IronMapper.Benchmarks` и второй раздел `benchmarks/`) — исправлено в `docs/readme-refresh`.
+- `docs/readme-refresh` — от `main` `f70f3d2`: README (EN/RU) переписан, docs по фактам 1.1.3 и бенчмаркам, CLAUDE.md, CHANGELOG. Не слита. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable); README и migration guide ссылаются на них. Здесь же подготовлен выпуск 1.1.4 (`<Version>`, CHANGELOG).
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline` — уже в `main`. Удалить.
 
 ---
 
@@ -106,7 +106,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | Collection, 100k     | ×1,07 (большой разброс) | ×1,04         | ×1,12    | ×1,01    | ×1,14      |
 | CustomConfig         | ×1,01                   | ×1,48         | ×0,95    | ×1,17    | ×1,67      |
 | InPlace              | **×1,12**               | ×3,70 (+40 Б) | ×1,00    | ×1,59    | ×3,31      |
-| Холодный старт, Δ мс | 1,4                     | **19,5**      | −0,1     | 94,1     | 69,6       |
+| Холодный старт, Δ мс | 2,2                     | **23,1**      | −1,1     | 99,1     | 73,5       |
 | NativeAOT            | да                      | **нет**       | да       | нет      | нет        |
 | AOT, Δ размера       | **+255 КБ**             | +1,47 МБ      | +24 КБ   | +3,99 МБ | +5,16 МБ   |
 | Сборка N=200, Δ с    | **+0,55**               | —             | +0,26    | +0,02    | +0,03      |
@@ -114,7 +114,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 Граничные случаи (1.1.3): позиционный record — CS7036; flattening по имени — не поддерживается (свойства молча `null`); `UserEntity?` → `UserDto?` с `null` — `ArgumentNullException` (остальные возвращают `null`); вложенный `null` через `IMapper` — `TargetInvocationException`; `List<string>` → ссылка (как Mapperly).
 
-Оговорки для публикации: только .NET 10 (net8.0 не прогонялся); Mapster.Tool не измерялся; вложенные объекты в IronMapper настроены вручную через `ForMember`.
+Холодный старт — по `RESULTS.md` после отдельного перезамера 18.10 17:18 (ручной код +1,1 мс); метрика шумная, в README — «около 2 мс» и порядок величины. Оговорки для публикации: только .NET 10 (net8.0 не прогонялся); Mapster.Tool не измерялся; вложенные объекты в IronMapper настроены вручную через `ForMember`.
 
 ---
 
@@ -131,8 +131,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### Порядок PR
 
-0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано в `chore/benchmarks-baseline` (не слита): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 7.
-1. **EquatableArray** (п.2.9). Сначала слить `chore/test-infrastructure` (не слит): обновить от `main`, в его CLAUDE.md убрать «on the `feature/benchmarks` branch until merged».
+0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 7.
+1. **EquatableArray** (п.2.9). `chore/test-infrastructure` слит (#20).
 2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет».
 3. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
 4. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе.
@@ -149,16 +149,16 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### 1.1. Генератор в NuGet-пакете — ✅ 1.1.1
 
 - [x] Генератор и CodeFixes в `analyzers/dotnet/cs`, Roslyn не в зависимостях; `dotnet pack` на чистом дереве.
-- [x] README: минимальный SDK 8.0.400, CS9057 на старом SDK — в `chore/test-infrastructure`, **не в `main`**.
-- [ ] Проект-потребитель использует код из Quick Start README.
+- [x] README: минимальный SDK 8.0.400, CS9057 на старом SDK (#20).
 
 ### 1.2. Проверка потребления пакета — ✅ 1.1.1
 
 - [x] `eng/verify-package.ps1`, `tests/IronMapper.PackageConsumer` (+ InternalLib, PublicLib), job `Pack & verify` в CI, `publish.yml` сверяет тег с `<Version>`.
+- [ ] PackageConsumer компилирует код Quick Start из README против упакованного пакета: блок кода извлекается из `README.md` автоматически (первый блок `csharp` после заголовка «Quick Start» — это целый `Program.cs`), а не копируется вручную. Так README не сломается незаметно: Quick Start 1.1.3 без `using IronMapper.Generated;` падал с CS1061, и ни одна проверка этого не заметила (найдено и исправлено в `docs/readme-refresh`).
 
-### 1.3. `IMapper` без рефлексии (аудит п.1, п.19)
+### 1.3. `IMapper` без рефлексии (аудит п.1, п.19) — issue **#26**
 
-**Проблема (подтверждено бенчмарками).** `RuntimeMapper` сканирует сборки, ищет `assembly.GetType("IronMapper.Generated.GeneratedMappers")` по строке, вызывает `MethodInfo.Invoke`. Следствия: ×2,66 на Flat и +32–40 Б на вызов; холодный старт +19,5 мс; в NativeAOT триммер вырезает методы — `MappingException: No mapping registered` при запуске; исключения оборачиваются в `TargetInvocationException`.
+**Проблема (подтверждено бенчмарками).** `RuntimeMapper` сканирует сборки, ищет `assembly.GetType("IronMapper.Generated.GeneratedMappers")` по строке, вызывает `MethodInfo.Invoke`. Следствия: ×2,66 на Flat и +32–40 Б на вызов; холодный старт +23,1 мс; в NativeAOT триммер вырезает методы — `MappingException: No mapping registered` при запуске; исключения оборачиваются в `TargetInvocationException`.
 
 - [ ] Генератор выпускает регистрацию: `MapperCache<TSource, TDest>.Map` / `.MapInPlace` (статические поля-делегаты), заполняемые через `[ModuleInitializer]`; для `Map<TDest>(object)` — словарь `(Type, Type) → Delegate` из того же инициализатора.
 - [ ] Учесть платформы без `ModuleInitializerAttribute` и сборки, к которым ещё не обращались (`AddIronMapper(assembly)` явно запускает инициализатор).
@@ -193,10 +193,19 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### 1.6. Гигиена
 
 - [x] Ссылки на `github.com/iron-mapper/IronMapper`; `coverage/` вне git; `<Version>` = тег; `CHANGELOG.md`; `LICENSE`; `.gitattributes`.
-- [x] Заголовки CHANGELOG исправлены — в `chore/test-infrastructure`, **не в `main`** (в `main` заголовок `## [Unreleased] → ## [1.1.3] - 2026-10-18`).
-- [ ] CLAUDE.md по фактическому состоянию. Сейчас в `main` неверно: «Emits strongly-typed `Mapper` partial classes» и строка соглашений `{Type}Mapper` / `UserMapper` (генерируются extension-методы в `IronMapper.Generated.GeneratedMappers`); бенчмарки — «IronMapper vs AutoMapper vs manual» в `tests/IronMapper.Benchmarks` (сравнительный набор теперь в `benchmarks/`); в структуре нет `IronMapper.CodeFixes`, `IronMapper.Extensions.DI`, `IronMapper.Integration.Tests`, `benchmarks/`. Полная версия — в `chore/test-infrastructure`. Старый `tests/IronMapper.Benchmarks` удалён (`chore/benchmarks-baseline`), строки о нём в CLAUDE.md `main` заменены на `benchmarks/`.
-- [x] Убрать `dotnet-quality: 'preview'` из `ci.yml` (3 места) и `publish.yml` — `chore/benchmarks-baseline`.
+- [x] Заголовки CHANGELOG исправлены (#20).
+- [x] CLAUDE.md по фактическому состоянию (#20, #21); остатки старого проекта бенчмарков после слияния убраны в `docs/readme-refresh`.
+- [x] Убрать `dotnet-quality: 'preview'` из `ci.yml` (3 места) и `publish.yml` (#21).
 - [ ] Unlist 1.0.0 и 1.1.0 на nuget.org (на 18.10 обе `listed`).
+
+### 1.7. `global using IronMapper.Generated` из пакета
+
+**Проблема.** Сгенерированные методы лежат в `IronMapper.Generated`; без `using IronMapper.Generated;` вызов `MapTo*` даёт CS1061 — частая ошибка новичка (в README 1.1.3 её содержал сам Quick Start).
+
+- [ ] Сначала оценить риск: в решениях из нескольких проектов, где одна пара типов смаплена в двух проектах, глобальный `using` делает `source.MapToX()` неоднозначным (CS0121) во всех файлах, а не только там, где `using` написан руками. Проверить на PackageConsumer + InternalLib/PublicLib и на сценариях из `docs/configuration.md` («Multi-project solutions»); решить, включать ли по умолчанию.
+- [ ] Пакет добавляет `<Using Include="IronMapper.Generated" />` через `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`; MSBuild-свойство для отключения (например `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`).
+- [ ] Проверка упаковки: файл в `buildTransitive/`, PackageConsumer компилируется без явного `using`; тест с отключением.
+- [ ] README и getting-started: строка про обязательный `using` меняется на «добавляется автоматически при ImplicitUsings».
 
 ---
 
@@ -216,7 +225,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Указывать на атрибут, `CreateMap`, `ForMember` или свойство.
 - [ ] Code fix'ы IM0001 и IM0006 срабатывают в IDE, покрыты тестами.
 
-### 2.3. Вложенные объекты (аудит п.4) — 1.3.0
+### 2.3. Вложенные объекты (аудит п.4) — 1.3.0, issue **#23**
 
 **Проблема.** `Address = source.Address` → CS0029 в `.g.cs`. Обходной путь через `MapFrom` не спасает от `null` (`?.` запрещён в дереве выражений).
 
@@ -260,7 +269,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Runtime-тесты вместо текстовых для «Partial» в таблице миграции: `[MapFrom]`, `UseConverter`, `ConvertUsing<T>`, `ConvertUsing(lambda)`, массивы и др. коллекции.
 - [ ] Тесты code fix'ов (сейчас нет).
 
-### 2.10. IM0001 для профилей (аудит п.6) — 1.2.0 за флагом
+### 2.10. IM0001 для профилей (аудит п.6) — 1.2.0 за флагом, issue **#22**
 
 - [ ] В профилях несопоставленные свойства назначения пропускаются молча. Выдавать IM0001 (`ForMember`, `Ignore`, `IncludeMembers` — сопоставлены).
 - [ ] 1.x: включается MSBuild-свойством; строгий режим `<IronMapperStrictMapping>true</IronMapperStrictMapping>` делает ошибкой. 2.0: по умолчанию.
@@ -291,7 +300,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Общий цикл в generic-хелпер без делегатов, если объём вырос.
 - [ ] Группировка файлов — только если замер покажет выигрыш.
 
-### 2.14. Nullable-аннотации источника — 2.0
+### 2.14. Nullable-аннотации источника — 2.0, issue **#27**
 
 - [ ] `UserEntity?` → `UserDto?` с `null` сейчас бросает `ArgumentNullException`; Mapperly, Mapster, AutoMapper возвращают `null`.
 - [ ] 2.0: `null` → `null`, `[return: NotNullIfNotNull(nameof(source))]`. 1.x: MSBuild-опция. Migration guide: отличие.
@@ -321,8 +330,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### 3.4. Пробелы в конфигурации
 
-- [ ] **Конструкторы и позиционные records** (аудит п.10): `[MapperConstructor]` → наибольшее число сопоставленных параметров → диагностика при неоднозначности; остальное — инициализатор; `required`.
-- [ ] **Flattening по соглашению** (аудит п.11): `Customer.Address.City` → `CustomerAddressCity`, проверки `null` по пути.
+- [ ] **Конструкторы и позиционные records** (аудит п.10, issue **#24**): `[MapperConstructor]` → наибольшее число сопоставленных параметров → диагностика при неоднозначности; остальное — инициализатор; `required`.
+- [ ] **Flattening по соглашению** (аудит п.11, issue **#25**): `Customer.Address.City` → `CustomerAddressCity`, проверки `null` по пути.
 - [ ] **Наследование** (аудит п.14): `switch` по типу источника; `Include`/`IncludeBase`.
 - [ ] `Condition`/`PreCondition` на члене (аудит п.15); `NullSubstitute` (п.17); `ForPath`; `UseDestinationValue` (п.20).
 - [ ] **ReverseMap и ForMember** (аудит п.16): разворачивать простые переименования, остальное — предупреждение.
@@ -355,8 +364,11 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### 5.1. Документация
 
-- [x] Честная документация, Known limitations, лицензия AutoMapper, AOT «не проверено».
-- [ ] Первый экран README: сценарий миграции «было — стало» и подтверждённые строки бенчмарков (Flat на уровне ручного кода, холодный старт, AOT для extension-методов, размер пакета) со ссылкой на `RESULTS.md`; рядом с Nested — пометка о ручной настройке вложенных объектов.
+- [x] Честная документация, Known limitations, лицензия AutoMapper.
+- [x] README переписан по фактам 1.1.3 (`docs/readme-refresh`): Quick Start компилируется (проверено против NuGet 1.1.3 на net8/9/10), «Why IronMapper» с цифрами, таблица производительности из `RESULTS.md` с Nested и оговорками, Known limitations, Roadmap по issues, абсолютные ссылки для nuget.org. AOT: extension-методы — проверено (бенчмарки), `IMapper` — нет. docs (advanced, migration) — цифры и AOT.
+- [x] Первый экран README: подтверждённые строки бенчмарков (Flat на уровне ручного кода, холодный старт, AOT для extension-методов, размер) со ссылкой на `RESULTS.md`; рядом с Nested — пометка о ручной настройке.
+- [ ] Сценарий миграции «было — стало» на первом экране README (пока только в migration guide).
+- [x] Ограничения без issue заведены (#22–#27), README (EN/RU) и migration guide ссылаются на них.
 - [ ] Known limitations актуальны с каждым PR.
 
 ### 5.2. Бенчмарки
@@ -368,6 +380,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Полный прогон на `net8.0`: цифры (нужны для 1.5 — кэш конвертеров) и раздел .NET 8 в `RESULTS.md`.
 - [x] Версии конкурентов закреплены точно (`benchmarks/Directory.Packages.props`); в `RESULTS.md` — железо, ОС, SDK и runtime, версии пакетов, хеш коммита.
 - [x] В CI — только проверка сборки, тестов эквивалентности и одной итерации (`--job Dry`), без публикации цифр — `chore/benchmarks-baseline`.
+- [ ] `scripts/generate-report.ps1`: в шаблоне Findings раздела NativeAOT строка «`docs/advanced.md` lists it as "Not verified"» устарела (docs теперь пишут «проверено») — поправить шаблон скрипта отдельно и перегенерировать отчёт при следующем прогоне; `RESULTS.md` руками не править.
 - [ ] Mapster.Tool: не измеряется, оговорено в `benchmarks/README.md` (Caveats) и `aot.md`; измерить — по желанию.
 
 ### 5.3. Платформы — issue **#10**

@@ -5,7 +5,7 @@
 Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0012`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Текущее состояние** (`main`, после 1.1.1):
+**Текущее состояние** (1.1.3):
 
 | ID | Уровень | Название | Выдаётся? |
 |---|---|---|---|

@@ -1,89 +1,275 @@
 # IronMapper
 
+Маппер объектов для .NET, работающий во время компиляции: генератор исходного кода (Roslyn source generator) пишет
+код маппинга на обычном C# при сборке проекта.
+
+English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main/README.md)
+
 [![NuGet](https://img.shields.io/nuget/v/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
-[![Build](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
-> 🌐 **[English documentation](README.md)**
-
-**Compile-time object mapper для .NET.**
-
-IronMapper с помощью Roslyn source generator генерирует код маппинга во время сборки. Сгенерированные extension-методы `MapTo*` — это обычные присваивания свойств на C#: без reflection, без IL emit, без динамических прокси, их можно пройти отладчиком.
-
-Необязательный пакет `IronMapper.Extensions.DI` добавляет сервис `IMapper`. Он **не** свободен от reflection: находит сгенерированные методы через reflection и вызывает их через `MethodInfo.Invoke` (см. [Известные ограничения](#известные-ограничения)).
+[![Downloads](https://img.shields.io/nuget/dt/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
+[![CI](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/iron-mapper/IronMapper/blob/main/LICENSE)
+[![Targets](https://img.shields.io/badge/targets-netstandard2.0%20%7C%20net10.0-512BD4.svg)](https://www.nuget.org/packages/IronMapper)
 
 ---
 
-## IronMapper vs AutoMapper
+## Почему IronMapper
 
-| | AutoMapper | IronMapper |
-|---|---|---|
-| Стратегия маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
-| Ошибки конфигурации | Сообщаются при вызове `AssertConfigurationIsValid()`, обычно в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке (диагностики IM00xx или ошибки C# в сгенерированном коде); см. [Известные ограничения](#известные-ограничения) |
-| Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, есть бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
-| Стиль API | Fluent API на профилях, атрибут `[AutoMap]` | Атрибуты **или** fluent API на профилях |
-| `ProjectTo` для `IQueryable` | Есть | Пока не поддерживается (запланировано, [#9](https://github.com/iron-mapper/IronMapper/issues/9)) |
-
-Сравнительные бенчмарки с ручным кодом, Mapperly, Mapster и AutoMapper — в [`benchmarks/`](benchmarks/README.md); результаты версии 1.1.3 (.NET 10, один компьютер) — в [`benchmarks/results/RESULTS.md`](benchmarks/results/RESULTS.md).
+- **Код маппинга можно прочитать и отладить.** Для каждой пары типов генератор создаёт extension-методы `MapTo*`
+  с явными присваиваниями свойств; их можно открыть и пройти отладчиком в IDE. Reflection в сгенерированном коде
+  нет.
+- **Ошибки конфигурации — при сборке, но не все.** Для `[MapTo]`/`[MapFrom]` несопоставленное свойство приёмника
+  даёт предупреждение `IM0001`, неверное имя в `[MapProperty]` — ошибку `IM0006`, недоступный тип — `IM0010`
+  ([диагностики](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)). Для профилей проверок
+  меньше (`IM0001` для них не выдаётся, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
+- **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,6 нс на объект. Вложенные объекты медленнее
+  (×1,26), см. [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
+- **Работа в NativeAOT проверена для сгенерированных методов.** Они публикуются без предупреждений trimming/AOT и
+  работают корректно. Необязательный сервис `IMapper` в NativeAOT пока не работает ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
+- **Холодный старт — около 2 мс** (запуск процесса и первый маппинг сверх консольного приложения без маппера), тот же
+  порядок, что у ручного кода. AutoMapper и Mapster тратят на этом десятки миллисекунд — строят конфигурацию маппинга
+  ([результаты](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
+- **Нет зависимостей во время выполнения.** У пакета `IronMapper` нет NuGet-зависимостей, в приложение добавляется
+  одна сборка (+28,2 КБ к framework-dependent publish). Необязательный пакет `IronMapper.Extensions.DI` зависит от
+  `Microsoft.Extensions.DependencyInjection.Abstractions`.
 
 ---
 
-## Quick Start (5 минут)
-
-### 1. Установка
+## Быстрый старт
 
 ```bash
 dotnet add package IronMapper
 ```
 
-**Требования:** генератору нужен компилятор C# из **.NET SDK 8.0.400 или новее** (Roslyn 4.11; Visual Studio 2022 17.11+, Rider с этим SDK). Runtime-пакет собран под `netstandard2.0`, поэтому сам проект может быть на .NET 8, 9, 10 или любой платформе с поддержкой `netstandard2.0`. На более старом SDK компилятор выдаёт предупреждение `CS9057` (*сборка анализатора ссылается на версию компилятора 4.11.0.0, более новую, чем запущенная*), генератор не запускается, и каждый вызов `MapTo*` падает с `CS1061`.
-
-### 2. Аннотируй source-тип
+`Program.cs` консольного приложения (`dotnet new console`):
 
 ```csharp
 using IronMapper.Attributes;
+using IronMapper.Generated;   // обязательно: сгенерированные методы MapTo* лежат в этом пространстве имён
+
+var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
+UserDto dto = entity.MapToUserDto();   // создан при сборке
+Console.WriteLine(dto.Name);           // Alice
 
 [MapTo(typeof(UserDto))]
 public class UserEntity
 {
-    public int    Id    { get; set; }
-    public string Name  { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 }
 
 public class UserDto
 {
-    public int    Id    { get; set; }
-    public string Name  { get; set; } = string.Empty;
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 }
 ```
 
-### 3. Маппинг
+Ни `IMapper`, ни регистрация сервисов не нужны.
 
-```csharp
-var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
-UserDto dto = entity.MapToUserDto();  // сгенерированный extension method
-```
+**`using IronMapper.Generated;` обязателен** в каждом файле, где вызываются методы `MapTo*`. Без него вызов
+падает с `CS1061` («не содержит определения "MapToUserDto"»).
 
-Всё. Ни `IMapper`, ни регистрация сервисов не нужны.
+**Требования.** Генератору нужен компилятор C# из **.NET SDK 8.0.400 или новее** (Roslyn 4.11; Visual Studio 2022
+17.11+). На более старом SDK компилятор выдаёт предупреждение `CS9057`, генератор не запускается, и каждый вызов
+`MapTo*` тоже падает с `CS1061`. Пакет `IronMapper` собран под `netstandard2.0` и `net10.0`, см.
+[Платформы](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#платформы).
 
 ---
 
-## Demo Application
+## Производительность
 
-Демонстрационное консольное приложение показывает основные возможности IronMapper,
-используя реальное Open Library API (API-ключ не нужен).
+IronMapper 1.1.3 (1.1.4 генерирует тот же код) против ручного кода (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 и AutoMapper 16.2.0.
+BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полный отчёт, методика и исходные данные:
+[benchmarks/results/RESULTS.md](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md)
+(на английском).
 
-**Что демонстрирует пример:**
-- Простой attribute-based mapping (`[MapTo]`)
-- Fluent API с `MappingProfile`
-- Collection mapping (`List<BookDoc>` → `List<BookSummary>`)
-- Вложенные объекты (книга и автор маппятся отдельно, затем объединяются в коде)
-- Кастомные type converters (очистка HTML из биографии)
-- Условный mapping (только живые авторы)
+| Библиотека | Flat | Nested | Коллекция, 1 000 | Холодный старт, Δ мс | NativeAOT | Δ publish (JIT) | Δ AOT-файла |
+|---|---:|---:|---:|---:|---|---:|---:|
+| Manual | 11,6 нс | 165,9 нс | 255,0 мкс | 1,1 | работает | +4,6 КБ | +2,0 КБ |
+| IronMapper | 11,4 нс (×0,98) | 209,8 нс (×1,26) | 258,1 мкс (×1,01) | 2,2 | работает | +28,2 КБ | +255,5 КБ |
+| IronMapper `IMapper` | 31,0 нс (×2,66) | 227,6 нс (×1,37) | 282,4 мкс (×1,11) | 23,1 | падает | +205,8 КБ | +1,47 МБ |
+| Mapperly | 11,6 нс (×0,99) | 165,5 нс (×1,00) | 267,3 мкс (×1,05) | −1,1 | работает | +38,5 КБ | +23,6 КБ |
+| Mapster | 15,6 нс (×1,34) | 192,3 нс (×1,16) | 263,5 мкс (×1,03) | 99,1 | падает | +244,8 КБ | +3,99 МБ |
+| AutoMapper | 34,6 нс (×2,97) | 270,7 нс (×1,63) | 344,6 мкс (×1,35) | 73,5 | падает | +1,17 МБ | +5,16 МБ |
 
-**Запуск:**
+Как читать таблицу:
+
+- Flat — один объект с 15 свойствами. Nested — заказ с покупателем, адресом и 5–20 строками. Коллекция —
+  `List<Order>` → `List<OrderDto>` из 1 000 таких заказов. Время — среднее; ×N — отношение к `Manual`.
+- **Вложенные объекты в IronMapper настроены вручную** (`ForMember(... MapFrom(s => s.Customer.MapToCustomerDto()))`),
+  потому что вложенные одиночные объекты он автоматически не маппит (см.
+  [Известные ограничения](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#известные-ограничения)).
+  Остальные библиотеки маппят их автоматически.
+- Холодный старт — медиана времени от запуска процесса до выхода с одним маппингом, минус то же консольное
+  приложение без маппера (30 запусков). Метрика чувствительна к шуму, смотрите на порядок величины.
+- NativeAOT: «работает» — опубликованный файл запустился и вывел правильный результат. Файл с `IMapper` из IronMapper
+  падает с `MappingException`. Mapster и AutoMapper строят мапперы во время выполнения и тоже падают.
+- Размеры — прирост к тому же консольному приложению без маппера.
+- Разница в коллекциях в несколько процентов (здесь ×1,01–×1,05; 100 000 элементов — в полном отчёте) в пределах
+  разброса между запусками и не означает, что одна библиотека быстрее.
+- Замеры только на .NET 10 и на одном компьютере. Mapster.Tool (генератор кода Mapster) не измерялся.
+
+---
+
+## Ключевые возможности
+
+Во всех примерах подразумеваются `using IronMapper.Attributes;` и `using IronMapper.Generated;`. Полный справочник:
+[Конфигурация](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md).
+
+**Атрибуты на типе-источнике или типе-приёмнике**
+
+```csharp
+[MapTo(typeof(ProductDto))]        // на источнике
+public class Product { /* ... */ }
+
+[MapFrom(typeof(Order))]           // на приёмнике, результат тот же
+public class OrderDto { /* ... */ }
+```
+
+**Переименование, пропуск и преобразование свойства**
+
+```csharp
+[MapTo(typeof(InvoiceDto))]
+public class Invoice
+{
+    [MapProperty("CustomerName")]              // попадёт в InvoiceDto.CustomerName
+    public string Customer { get; set; } = "";
+
+    [Ignore]                                   // не маппится
+    public string InternalNote { get; set; } = "";
+
+    [MapConverter(typeof(PriceConverter))]     // decimal → string через конвертер
+    public decimal Total { get; set; }
+}
+
+public class PriceConverter : ITypeConverter<decimal, string>   // IronMapper.Interfaces
+{
+    public string Convert(decimal source) => source.ToString("F2");
+}
+```
+
+**Профили (fluent API, похожий на AutoMapper)** — для типов, которые нельзя пометить атрибутами. Генератор читает
+профиль при сборке; для маппинга профиль не выполняется.
+
+```csharp
+public class OrderProfile : MappingProfile   // IronMapper.Configuration
+{
+    public OrderProfile()
+    {
+        CreateMap<Order, OrderSummary>()
+            .ForMember(d => d.Address, o => o.MapFrom(s => s.Street + ", " + s.City))
+            .ForMember(d => d.InternalId, o => o.Ignore());
+    }
+}
+```
+
+В профилях также есть `ReverseMap`, `BeforeMap`/`AfterMap`, `When`, `ConvertUsing`, `IncludeMembers` и
+`AddTransformer`; см. [Миграция с AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.ru.md).
+
+**Коллекции и обновление существующего объекта**
+
+```csharp
+List<UserDto> list  = users.MapToUserDtoList();    // из любого IEnumerable<UserEntity>
+UserDto[]     array = users.MapToUserDtoArray();
+entity.MapToUserDto(existingDto);                  // обновляет существующий объект
+```
+
+Свойства `List<T>` (`List<Comment>` → `List<CommentDto>`) маппятся автоматически, если есть маппинг для типов
+элементов.
+
+**Внедрение зависимостей (необязательно)**
+
+```bash
+dotnet add package IronMapper.Extensions.DI
+```
+
+```csharp
+using IronMapper.Extensions.DI;
+using IronMapper.Interfaces;
+
+builder.Services.AddIronMapper(typeof(Program).Assembly);   // регистрирует IMapper и профили
+
+app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUser(id)));
+```
+
+`IMapper` находит и вызывает сгенерированные методы через reflection. Он медленнее extension-методов (см. таблицу
+выше) и не работает в NativeAOT; если типы известны при компиляции, вызывайте extension-методы напрямую.
+
+---
+
+## Известные ограничения
+
+- **Вложенные одиночные объекты не маппятся автоматически** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)). Для `Customer.Address` → `CustomerDto.Address`
+  генератор пишет `Address = source.Address`, и сборка падает с `CS0029` в сгенерированном файле. Обходной путь:
+  `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Вложенные коллекции маппятся.
+- **Позиционные record в качестве приёмника не компилируются** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): генератор всегда использует
+  инициализатор объекта. Record и классы со свойствами `init` работают.
+- **Нет flattening по соглашению** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` не заполняется из `Customer.Address.City`.
+  Используйте `MapFrom`.
+- **`IM0001` не выдаётся для маппингов из профилей** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
+  остаётся со значением по умолчанию без предупреждения.
+- **`IMapper` (IronMapper.Extensions.DI) использует reflection и не работает в NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): предупреждения
+  IL2026/IL2062/IL2072/IL2075 при публикации, `MappingException` при запуске. В нём также нет перегрузки `Map` для
+  коллекций ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) и передачи контекста в вызов
+  ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
+- **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
+  Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
+- **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
+  `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` дают ошибку C# в сгенерированном файле;
+  используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002`–`IM0004` пока не выдаются.
+- **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
+
+Кроме того: у диагностик нет места в исходном коде; in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
+`ReverseMap()` сопоставляет только по именам; конвертерам нужен публичный конструктор без параметров; private- и
+protected-вложенные типы маппить нельзя (`IM0010`); у каждого проекта решения свой класс `GeneratedMappers`.
+Подробности: [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md),
+[Конфигурация](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md),
+[Диагностики](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md).
+
+### Платформы
+
+- Пакеты: `IronMapper` — `netstandard2.0` и `net10.0`; `IronMapper.Extensions.DI` — `netstandard2.1` и `net10.0`.
+  Генератору нужен .NET SDK 8.0.400+.
+- Тесты библиотеки запускаются на .NET 10 (Ubuntu и Windows в CI). Тесты эквивалентности набора бенчмарков также
+  запускаются на .NET 8. .NET 9 в CI не проверяется ([#10](https://github.com/iron-mapper/IronMapper/issues/10)).
+  Быстрый старт выше проверен вручную на .NET 8, 9 и 10.
+
+---
+
+## Планы
+
+Открытые issues:
+
+- `ProjectTo<TDestination>()` для `IQueryable` — [#9](https://github.com/iron-mapper/IronMapper/issues/9)
+- `Map<List<T>>(source)` через `IMapper` — [#8](https://github.com/iron-mapper/IronMapper/issues/8)
+- Передача контекста в вызов `Map` (аналог `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
+- Целевой фреймворк `net9.0` — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
+
+Следующий релиз, 1.2.0: более быстрый сгенерированный код для вложенных объектов и коллекций, `IMapper` без
+reflection (NativeAOT, [#26](https://github.com/iron-mapper/IronMapper/issues/26)), `IM0001` для профилей с включением по флагу ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), диагностики с местом в
+исходном коде. Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
+он может меняться.
+
+---
+
+## Документация
+
+- [Начало работы](https://github.com/iron-mapper/IronMapper/blob/main/docs/getting-started.ru.md)
+- [Справочник по конфигурации](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md)
+- [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md)
+- [Миграция с AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.ru.md)
+- [Диагностики компилятора](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)
+- [Бенчмарки](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md) (на английском)
+- [Список изменений](https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md) (на английском)
+
+**Демо.** [samples/IronMapper.Demo](https://github.com/iron-mapper/IronMapper/tree/main/samples/IronMapper.Demo) —
+консольное приложение с восемью сценариями, большинство — на данных Open Library API (ключ не нужен): атрибуты,
+профили, коллекции, вложенные объекты, смапленные по отдельности, свой конвертер, условный маппинг (`When`), хуки с
+`ReverseMap` и `IncludeMembers`.
+
 ```bash
 git clone https://github.com/iron-mapper/IronMapper
 cd IronMapper
@@ -92,148 +278,17 @@ dotnet run --project samples/IronMapper.Demo
 
 ---
 
-## Ключевые возможности
+## Участие в разработке
 
-### Attribute-based mapping
+1. Сделайте fork репозитория и создайте ветку от `main`.
+2. Внесите изменение вместе с тестами.
+3. `dotnet build IronMapper.slnx` и `dotnet test IronMapper.slnx` должны проходить без предупреждений.
+4. Откройте pull request в `main`; добавьте строку в `CHANGELOG.md` в раздел `[Unreleased]`.
 
-```csharp
-[MapTo(typeof(ProductDto))]      // source → dest
-[MapFrom(typeof(ProductEntity))] // dest ← source (эквивалентно)
-```
-
-### Переименование свойств
-
-```csharp
-[MapProperty("FullName")]
-public string Name { get; set; } = "";  // маппится в FullName на destination
-```
-
-### Игнорирование свойств
-
-```csharp
-[Ignore]
-public string InternalSecret { get; set; } = "";
-```
-
-### Кастомные type converters
-
-```csharp
-public class PriceConverter : ITypeConverter<decimal, string>
-{
-    public string Convert(decimal source) => source.ToString("F2");
-}
-
-[MapTo(typeof(InvoiceDto))]
-public class Invoice
-{
-    [MapConverter(typeof(PriceConverter))]
-    public decimal Total { get; set; }
-}
-```
-
-### Profile-based fluent API
-
-```csharp
-public class OrderProfile : MappingProfile
-{
-    public OrderProfile()
-    {
-        CreateMap<OrderEntity, OrderDto>()
-            .ForMember(d => d.FullAddress, o => o.MapFrom(s => s.Street + ", " + s.City))
-            .ForMember(d => d.InternalId,  o => o.Ignore());
-    }
-}
-```
-
-### Вспомогательные методы для коллекций
-
-```csharp
-List<UserEntity> entities = ...;
-List<UserDto>    dtos = entities.MapToUserDtoList();
-UserDto[]        arr  = entities.MapToUserDtoArray();
-```
-
-### In-place (void) mapping
-
-```csharp
-entity.MapToUserDto(existingDto);  // обновляет существующий объект без создания нового
-```
-
-### Вложенные коллекции
-
-```csharp
-[MapTo(typeof(BlogDto))]
-public class BlogEntity
-{
-    public List<CommentEntity> Comments { get; set; } = new();
-}
-// генератор выдаёт: Comments = source.Comments is null ? null! : Enumerable.ToList(Enumerable.Select(source.Comments, x => x.MapToCommentDto()))
-```
-
-Нужен маппинг `CommentEntity → CommentDto`. Тестами покрыт только случай `List<T> → List<TDto>`. Вложенные *одиночные* объекты автоматически не маппятся, см. [Известные ограничения](#известные-ограничения).
-
-### Интеграция с ASP.NET Core
-
-```csharp
-// Program.cs — регистрирует IMapper и типы MappingProfile из сборки
-builder.Services.AddIronMapper(typeof(Program).Assembly);
-
-// В контроллере / сервисе
-public class OrdersController(IMapper mapper) : ControllerBase
-{
-    public OrderDto Get(int id) => mapper.Map<OrderDto>(_repo.GetById(id));
-}
-```
-
----
-
-## Известные ограничения
-
-Текущие пробелы, подтверждённые чтением кода. Каждый из них запланирован или отслеживается в issue.
-
-- **Вложенные одиночные объекты не маппятся автоматически.** Для `Customer.Address → CustomerDto.Address` с разными типами генератор выдаёт `Address = source.Address`, и сборка падает с `CS0029` в сгенерированном файле. Обходной путь: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Вложенные *коллекции* поддерживаются (см. выше).
-- **Private и protected вложенные типы маппить нельзя.** Сгенерированные методы находятся в классе верхнего уровня `IronMapper.Generated.GeneratedMappers`, которому не видны вложенные типы с доступом `private`, `protected` и `private protected`. Такой маппинг сообщается как `IM0010` и пропускается; остальные маппинги генерируются. Internal-типы поддерживаются: сгенерированные методы тогда `internal` (см. [Доступность сгенерированных методов](docs/configuration.ru.md#доступность-сгенерированных-методов)).
-- **Решения из нескольких проектов:** каждый проект объявляет свой `IronMapper.Generated.GeneratedMappers` (`internal`, если все его маппинги internal). Маппинги других проектов вызывайте как методы расширения (`source.MapToX()`); явное имя класса даёт `CS0436`, если виден класс проекта-зависимости, а маппинг одной пары типов в двух проектах делает `source.MapToX()` неоднозначным (`CS0121`). См. [Решения из нескольких проектов](docs/configuration.ru.md#решения-из-нескольких-проектов).
-- **Позиционные record как destination не компилируются** (`CS7036`): генератор всегда использует object initializer. Record и классы со свойствами `init` работают.
-- **Несовместимые типы свойств не диагностируются.** `IM0002`, `IM0003` и `IM0004` объявлены, но нигде не выдаются; сборка падает позже с ошибкой C# в сгенерированном файле. См. [диагностики](docs/diagnostics.ru.md).
-- **Преобразования типов между свойствами.** Работают только преобразования, которые C# выполняет неявно: `int` → `long`, `float` → `double`, `int` → `int?`, `DateTime` → `DateTimeOffset`, `string` → `string?`. Следующие падают внутри сгенерированного файла, диагностики IronMapper пока нет ([`IM0002`](docs/diagnostics.ru.md#im0002--несовместимые-типы-свойств) запланирована): `int?` → `int` (`CS0266` и предупреждение `CS8629`), `long` → `int` и enum → другой enum (`CS0266`), enum ↔ `string`, `DateTimeOffset` → `DateTime`, `Guid` ↔ `string` (`CS0029`). `string?` → `string` компилируется, но даёт предупреждение `CS8601` в сгенерированном файле (ошибка при `TreatWarningsAsErrors`) и во время выполнения копирует `null`. Обходной путь: `ForMember(... MapFrom(...))` или конвертер.
-- **Destination-типы с одинаковым именем получают уточнённые имена методов.** Маппинг одного source-типа на два destination-типа с одинаковым простым именем (например, `Admin.UserDto` и `Public.UserDto`) генерирует `MapToAdminUserDto`/`MapToPublicUserDto` вместо `MapToUserDto` (`IM0013`); если такой второй тип добавить позже, существующий метод переименовывается. Пара типов, заданная дважды, генерируется один раз (`IM0007`, побеждает профиль). См. [Имена методов и коллизии](docs/configuration.ru.md#имена-методов-и-коллизии).
-- **Для профилей диагностик меньше.** `IM0001` и `IM0009` выдаются только для `[MapTo]`/`[MapFrom]`; несопоставленные свойства destination в профилях молча пропускаются. Все диагностики выдаются без указания места в исходном коде.
-- **In-place перегрузка** `source.MapToX(existing)` игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` и пропускает свойства `init`.
-- **`ReverseMap()`** сопоставляет только по именам свойств; `ForMember`, `When`, хуки и `IncludeMembers` в обратную сторону не переносятся.
-- **Лямбды из профилей** переписываются в сгенерированный класс с полными именами (методы расширения — в статические вызовы). В них нельзя использовать члены экземпляра профиля, `this` и локальные переменные конструктора (`IM0012`), а также `private`/`protected` члены — сделайте их `internal` (`IM0011`). Методы расширения после `?.` выводятся без изменений. См. [Лямбды в профилях](docs/configuration.ru.md#лямбды-в-профилях).
-- **Конвертеры** создаются через `new TConverter()` (нужен публичный конструктор без параметров). `IronMapperOptions.AddConverter<T>()` только регистрирует тип в DI; сгенерированный код его не использует.
-- **`IMapper` (IronMapper.Extensions.DI) использует reflection**: сканирует загруженные сборки, ищет сгенерированный метод по сигнатуре (точный runtime-тип source, destination-тип) и вызывает его через `MethodInfo.Invoke`. `Map<List<TDto>>(list)` бросает `MappingException` ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); передачи контекста в вызов нет ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
-- **`ProjectTo` / проекция `IQueryable`** пока не поддерживается (запланировано, [#9](https://github.com/iron-mapper/IronMapper/issues/9)).
-- **Совместимость с NativeAOT / trimming не проверялась.** Сгенерированные extension-методы не используют reflection; `IMapper` использует reflection, его следует считать несовместимым.
-- **Платформы.** Пакеты собираются под `netstandard2.0` + `net10.0` (IronMapper) и `netstandard2.1` + `net10.0` (IronMapper.Extensions.DI). Тесты запускаются только на .NET 10 (Ubuntu и Windows в CI); другие среды выполнения не тестируются. Генератор собран против Microsoft.CodeAnalysis 4.11, ему нужен .NET SDK 8.0.400+ (см. [Установка](#1-установка)).
-- **Code fix для IM0001/IM0006 не покрыты тестами.**
-
----
-
-## Документация
-
-- [Getting Started](docs/getting-started.ru.md)
-- [Configuration Reference](docs/configuration.ru.md)
-- [Advanced Topics](docs/advanced.ru.md)
-- [Migrating from AutoMapper](docs/migration-from-automapper.ru.md)
-- [Compiler Diagnostics](docs/diagnostics.ru.md)
-
----
-
-## Contributing
-
-Мы рады участию! Пожалуйста:
-
-1. Сделай fork репозитория и создай feature-ветку (`feature/my-feature`).
-2. Внеси изменения с тестами.
-3. Запусти `dotnet build` и `dotnet test` — оба должны завершиться без ошибок.
-4. Открой pull request в `main`.
-
-Придерживайся существующего стиля кода (см. [.editorconfig](.editorconfig)).
+Стиль кода: [.editorconfig](https://github.com/iron-mapper/IronMapper/blob/main/.editorconfig).
 
 ---
 
 ## Лицензия
 
-[MIT](LICENSE) © 2026 Aleksey Mironov
+[MIT](https://github.com/iron-mapper/IronMapper/blob/main/LICENSE) © 2026 Aleksey Mironov
