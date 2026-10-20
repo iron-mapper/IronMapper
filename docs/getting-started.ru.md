@@ -50,9 +50,15 @@ Source generator генерирует extension method `MapToUserDto()` прям
 ### Шаг 3 — Вызови сгенерированный extension
 
 ```csharp
+using IronMapper.Generated;   // сгенерированные методы MapTo* лежат в этом пространстве имён
+
 var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
 UserDto dto = entity.MapToUserDto();
 ```
+
+**`using IronMapper.Generated;` обязателен** в каждом файле, где вызываются методы `MapTo*`. Без него вызов падает
+с `CS1061` («не содержит определения "MapToUserDto"»). Та же ошибка появляется, если генератор вообще не запустился,
+например на .NET SDK старше 8.0.400 (тогда сборка ещё выдаёт предупреждение `CS9057`).
 
 ---
 
@@ -98,8 +104,13 @@ using IronMapper.Interfaces;
 public class UsersController : ControllerBase
 {
     private readonly IMapper _mapper;
+    private readonly IUserRepository _repository;   // ваш доступ к данным
 
-    public UsersController(IMapper mapper) => _mapper = mapper;
+    public UsersController(IMapper mapper, IUserRepository repository)
+    {
+        _mapper = mapper;
+        _repository = repository;
+    }
 
     [HttpGet("{id}")]
     public UserDto Get(int id)

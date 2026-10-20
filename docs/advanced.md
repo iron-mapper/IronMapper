@@ -139,13 +139,39 @@ The in-place overload only assigns the mapped properties. It:
 
 ### Performance
 
-The comparison benchmarks (hand-written code, Mapperly, Mapster, AutoMapper; speed, allocations, cold start,
-NativeAOT, size, build time) are in [`benchmarks/`](../benchmarks/README.md). Results of version 1.1.3 (.NET 10,
-one machine): [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md). CI only checks that the suite
-builds and that every scenario runs one iteration on .NET 10 and .NET 8; it does not publish numbers.
+IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; mean time and the ratio to hand-written code. Full report,
+method and the other libraries: [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
+
+| Scenario | Extension method | `IMapper` |
+|---|---:|---:|
+| Flat (15 properties) | 11.4 ns (×0.98), 168 B | 31.0 ns (×2.66), 200 B |
+| Nested (order, customer, address, 5–20 lines) | 209.8 ns (×1.26) | 227.6 ns (×1.37) |
+| Collection, 1 000 orders | 258.1 µs (×1.01) | 282.4 µs (×1.11) |
+| Cold start, Δ ms over a console app without a mapper | 2.2 | 23.1 |
+
+- `IMapper` adds the reflection call (`MethodInfo.Invoke`) on every call and the assembly scan on the first call
+  for a type pair.
+- In the Nested scenario IronMapper maps the nested objects through `ForMember(... MapFrom(...))` (see
+  [Nested objects](#nested-objects)); the generated collection code uses `Enumerable.Select` + `ToList`. Mapperly
+  is at ×1.00 there.
+- Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +73.5 ms, Mapster +99.1 ms).
+- Only .NET 10 was measured. CI only checks that the benchmark suite builds and that every scenario runs one
+  iteration on .NET 10 and .NET 8; it does not publish numbers. How to run the suite:
+  [`benchmarks/README.md`](../benchmarks/README.md).
 
 ### NativeAOT and trimming
 
-**Not verified.** The generated extension methods contain no reflection, but no NativeAOT or trimmed publish
-is tested. `IMapper` / `AddIronMapper` use reflection (`AppDomain` assembly scan, `Assembly.GetTypes()`,
-`MethodInfo.Invoke`) without trimming annotations and should be treated as incompatible.
+Checked with a NativeAOT publish (`PublishAot=true`, win-x64, .NET 10) of a console app that maps an order
+([`benchmarks/results/aot.md`](../benchmarks/results/aot.md)):
+
+- **Generated extension methods: compatible.** No trim/AOT warnings; the executable runs and produces the correct
+  result; startup is the same as without a mapper. The executable is 255.5 KB larger than the app without a mapper
+  (Mapperly: +23.6 KB), mostly because the generated collection code (`Enumerable.Select` + `ToList`) pulls in the
+  NativeAOT type loader.
+- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): not compatible.** The publish reports IL2026 ×2,
+  IL2062, IL2072 and IL2075, and the executable fails at the first call with `MappingException: No mapping
+  registered`: `RuntimeMapper` finds the generated methods by name through reflection (`AppDomain` assembly scan,
+  `Assembly.GetType`, `GetMethods`), which the trimmer cannot see, so their metadata is not kept.
+  The warnings point to the IronMapper assembly, not to your call. Use the extension methods in NativeAOT and trimmed apps.
+
+Only win-x64 and the scenario of the benchmark suite were checked; NativeAOT is not part of CI yet.

@@ -13,10 +13,14 @@ IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not 
 | Where mapping code comes from | Mapping plans built at runtime and compiled from expression trees ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C# generated at compile time |
 | Configuration errors | Reported by `AssertConfigurationIsValid()`, typically called in a unit test ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Some at build time: IM00xx diagnostics, or C# errors in the generated code. Several declared diagnostics are not reported yet, see [diagnostics](diagnostics.md) |
 | `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods via reflection |
-| NativeAOT / trimming | — | Not verified. Generated extension methods use no reflection; `IMapper` does |
+| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: warnings, fails at run time ([details](advanced.md#nativeaot-and-trimming)) |
 | License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
 
-No performance or package-size comparison is published yet.
+Performance and size, IronMapper 1.1.3 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
+flat object 11.4 ns (×0.98) vs 34.6 ns (×2.97); nested order 209.8 ns (×1.26) vs 270.7 ns (×1.63); cold start
++2.2 ms vs +73.5 ms over a console app without a mapper; framework-dependent publish +28.2 KB vs +1.17 MB (AutoMapper
+adds 9 assemblies, IronMapper one). Through `IMapper` IronMapper is slower than its extension methods (flat object 31.0 ns,
+×2.66). Full results, including Mapperly and Mapster: [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
 
 ---
 
@@ -50,6 +54,9 @@ limitations, or only the emitted code text is tested; **Not supported**.
 | `Include<,>()` / `IncludeBase<,>()` | **Not supported** | — | Declare each mapping separately |
 | `ResolutionContext.Items` / `opts.Items[...]` | **Not supported** | — | [#7](https://github.com/iron-mapper/IronMapper/issues/7) |
 | `ProjectTo<Dest>(queryable)` | **Not supported yet** | Planned | [#9](https://github.com/iron-mapper/IronMapper/issues/9) |
+| Flattening by convention (`CustomerAddressCity` from `Customer.Address.City`) | **Not supported** | — | Use `MapFrom` or `IncludeMembers`; the property is silently left unset in profile mappings ([#25](https://github.com/iron-mapper/IronMapper/issues/25)) |
+| Nested single objects mapped by the configured map | **Not supported** | Workaround | `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`, see [Nested objects](advanced.md#nested-objects) ([#23](https://github.com/iron-mapper/IronMapper/issues/23)) |
+| Mapping to a constructor (positional records) | **Not supported** | — | `CS7036` in the generated file; use `init` properties ([#24](https://github.com/iron-mapper/IronMapper/issues/24)) |
 | `AssertConfigurationIsValid()` | No direct equivalent | — | Part of the checks happen at build time, see [diagnostics](diagnostics.md) |
 
 ---
@@ -98,6 +105,8 @@ The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource
 AutoMapper requires `IMapper` injection everywhere. IronMapper generates strongly-typed extension methods on the source type, so you can replace DI-injected calls with direct calls where the types are known at compile time:
 
 ```diff
++ using IronMapper.Generated;   // the generated MapTo* methods live here
+
 - var dto = _mapper.Map<OrderDto>(entity);
 + var dto = entity.MapToOrderDto();
 ```

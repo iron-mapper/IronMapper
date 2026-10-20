@@ -13,10 +13,14 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | Откуда берётся код маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
 | Ошибки конфигурации | Сообщает `AssertConfigurationIsValid()`, обычно вызываемый в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке: диагностики IM00xx или ошибки C# в сгенерированном коде. Несколько объявленных диагностик пока не выдаются, см. [диагностики](diagnostics.ru.md) |
 | Сервис `IMapper` | Основной API | Необязательный (`IronMapper.Extensions.DI`); вызывает сгенерированные методы через reflection |
-| NativeAOT / trimming | — | Не проверялось. Сгенерированные extension-методы не используют reflection; `IMapper` использует |
+| NativeAOT / trimming | Не поддерживается: предупреждения при публикации, падает при запуске ([результаты](../benchmarks/results/aot.md)) | Сгенерированные extension-методы: без предупреждений, работают. `IMapper`: предупреждения, падает при запуске ([подробнее](advanced.ru.md#nativeaot-и-trimming)) |
 | Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
 
-Сравнение производительности и размера пакета пока не публикуется.
+Производительность и размер, IronMapper 1.1.3 против AutoMapper 16.2.0 (.NET 10, один компьютер; отношение к ручному
+коду): плоский объект 11,4 нс (×0,98) против 34,6 нс (×2,97); вложенный заказ 209,8 нс (×1,26) против 270,7 нс
+(×1,63); холодный старт +2,2 мс против +73,5 мс к консольному приложению без маппера; framework-dependent publish
++28,2 КБ против +1,17 МБ (AutoMapper добавляет 9 сборок, IronMapper — одну). Через `IMapper` IronMapper медленнее своих
+extension-методов (плоский объект 31,0 нс, ×2,66). Полные результаты, включая Mapperly и Mapster: [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md) (на английском).
 
 ---
 
@@ -50,6 +54,9 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | `Include<,>()` / `IncludeBase<,>()` | **Не поддерживается** | — | Объявляйте каждый маппинг отдельно |
 | `ResolutionContext.Items` / `opts.Items[...]` | **Не поддерживается** | — | [#7](https://github.com/iron-mapper/IronMapper/issues/7) |
 | `ProjectTo<Dest>(queryable)` | **Пока не поддерживается** | Запланировано | [#9](https://github.com/iron-mapper/IronMapper/issues/9) |
+| Flattening по соглашению (`CustomerAddressCity` из `Customer.Address.City`) | **Не поддерживается** | — | Используйте `MapFrom` или `IncludeMembers`; в маппингах из профилей свойство молча остаётся незаполненным ([#25](https://github.com/iron-mapper/IronMapper/issues/25)) |
+| Вложенные одиночные объекты по настроенному маппингу | **Не поддерживается** | Обходной путь | `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`, см. [Вложенные объекты](advanced.ru.md#вложенные-объекты) ([#23](https://github.com/iron-mapper/IronMapper/issues/23)) |
+| Маппинг через конструктор (позиционные record) | **Не поддерживается** | — | `CS7036` в сгенерированном файле; используйте свойства `init` ([#24](https://github.com/iron-mapper/IronMapper/issues/24)) |
 | `AssertConfigurationIsValid()` | Прямого аналога нет | — | Часть проверок выполняется при сборке, см. [диагностики](diagnostics.ru.md) |
 
 ---
@@ -98,6 +105,8 @@ dotnet add package IronMapper.Extensions.DI
 AutoMapper требует внедрения `IMapper` везде. IronMapper генерирует строго типизированные extension methods на source-типе, поэтому там, где типы известны во время компиляции, можно убрать DI-зависимость:
 
 ```diff
++ using IronMapper.Generated;   // здесь лежат сгенерированные методы MapTo*
+
 - var dto = _mapper.Map<OrderDto>(entity);
 + var dto = entity.MapToOrderDto();
 ```
