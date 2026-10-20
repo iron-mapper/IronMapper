@@ -15,10 +15,19 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- Snapshot tests of the generated code (GeneratedCodeSnapshotTests, Snapshots/*.verified.*). -->
+    <PackageReference Include="Verify.Xunit" Version="31.12.5" />
+    <PackageReference Include="Verify.SourceGenerators" Version="2.5.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Verified snapshots are generated code, not part of the test assembly. -->
+    <Compile Remove="Snapshots\**" />
+    <None Include="Snapshots\**" />
   </ItemGroup>
 
   <ItemGroup>
