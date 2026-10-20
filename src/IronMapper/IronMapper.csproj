@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <!-- global using IronMapper.Generated for projects with ImplicitUsings (also through IronMapper.Extensions.DI). -->
+    <None Include="buildTransitive\IronMapper.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
 
   <!--

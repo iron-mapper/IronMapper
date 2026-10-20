@@ -139,6 +139,46 @@ public class GeneratedClassVisibilityTests
         Assert.Null(compilation.Assembly.GetTypeByMetadataName(ClassName));
     }
 
+    // The package adds `global using IronMapper.Generated;` (ImplicitUsings): a project with no mappings yet, e.g.
+    // right after `dotnet add package`, must still compile instead of failing with CS0246.
+    [Fact]
+    public void NoMappings_UsingOfGeneratedNamespaceCompiles()
+    {
+        var source = """
+            global using IronMapper.Generated;
+
+            namespace App;
+
+            public class Plain { public int X { get; set; } }
+            """;
+
+        var (compilation, diagnostics) = GeneratorTestHelper.CompileProject("App", source);
+
+        AssertClean(diagnostics);
+        Assert.Null(compilation.Assembly.GetTypeByMetadataName(ClassName));
+    }
+
+    [Fact]
+    public void NoGeneratedMappings_UsingOfGeneratedNamespaceCompiles()
+    {
+        var source = """
+            global using IronMapper.Generated;
+            using IronMapper.Attributes;
+
+            namespace App;
+
+            public class Outer
+            {
+                [MapTo(typeof(Dto))] private class Hidden { public int X { get; set; } }
+                private class Dto { public int X { get; set; } }
+            }
+            """;
+
+        var (_, diagnostics) = GeneratorTestHelper.CompileProject("App", source);
+
+        Assert.Equal(new[] { "IM0010" }, diagnostics.Select(d => d.Id));
+    }
+
     // ------------------------------------------------------------------
     // Two assemblies: B references A, both use IronMapper
     // ------------------------------------------------------------------

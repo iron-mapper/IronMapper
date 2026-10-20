@@ -50,14 +50,16 @@ Source generator генерирует extension method `MapToUserDto()` прям
 ### Шаг 3 — Вызови сгенерированный extension
 
 ```csharp
-using IronMapper.Generated;   // сгенерированные методы MapTo* лежат в этом пространстве имён
-
 var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
 UserDto dto = entity.MapToUserDto();
 ```
 
-**`using IronMapper.Generated;` обязателен** в каждом файле, где вызываются методы `MapTo*`. Без него вызов падает
-с `CS1061` («не содержит определения "MapToUserDto"»). Та же ошибка появляется, если генератор вообще не запустился,
+Сгенерированные методы лежат в пространстве имён `IronMapper.Generated`. При неявных using
+(`<ImplicitUsings>enable</ImplicitUsings>`, по умолчанию в шаблонах .NET 6+) пакет добавляет
+`global using IronMapper.Generated;`, и `using` писать не нужно. **Без неявных using добавьте
+`using IronMapper.Generated;`** в каждый файл, где вызываются методы `MapTo*`, иначе вызов падает с `CS1061`
+(«не содержит определения "MapToUserDto"»). Как отключить — см. [Global using](configuration.ru.md#global-using-для-ironmappergenerated).
+Та же ошибка появляется, если генератор вообще не запустился,
 например на .NET SDK старше 8.0.400 (тогда сборка ещё выдаёт предупреждение `CS9057`).
 
 ---

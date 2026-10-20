@@ -90,10 +90,10 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(classAccessibility, static (spc, accessibility) =>
         {
-            // No generated mappings: there is no class to declare.
-            if (accessibility is null) return;
-
-            var (hintName, source) = MapperCodeEmitter.EmitClassDeclaration(accessibility);
+            // No generated mappings: there is no class to declare, only the namespace (for the global using).
+            var (hintName, source) = accessibility is null
+                ? MapperCodeEmitter.EmitEmptyNamespace()
+                : MapperCodeEmitter.EmitClassDeclaration(accessibility);
             spc.AddSource(hintName, source);
         });
     }

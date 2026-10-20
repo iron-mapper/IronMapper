@@ -21,6 +21,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - Claude Code **не выполняет** `git commit`, `git push`, `git tag`. `git add` разрешён.
 - Один пункт плана — одна ветка — один PR. Ветки: `fix/…`, `feature/…`, `chore/…`, `docs/…`, `release/…`.
 - Слияние в `main` только через PR, способ — **squash**.
+- CI (`ci.yml`) на push — только `main`; остальные ветки проверяются через `pull_request` (все job'ы, включая обязательные проверки ruleset «Build & Test» и «Pack & verify», а также `aot` и `benchmarks`). Ветку без PR CI не проверяет — открыть PR (можно черновик).
 - Теги `v*` ставятся только на `main` после слияния; пуш тега запускает публикацию на NuGet.
 - Новая ветка — всегда от актуального `main`. Если две ветки трогают одни файлы — сливать по очереди, вторую обновлять `git merge origin/main`.
 
@@ -84,15 +85,16 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
 | 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29). PR 2 (AOT) — `fix/aot-honesty` |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30). PR 3 (`global using`) — `feature/implicit-using` |
 
 **Ветки (сверено 20.10.2026, после #28):**
 
 - `chore/test-infrastructure` — слита в `main` (#20, `eec934a`). `chore/benchmarks-baseline` — слита (#21, `f70f3d2`); конфликт в CLAUDE.md при слиянии разрешён не до конца (остались `tests/IronMapper.Benchmarks` и второй раздел `benchmarks/`) — исправлено в `docs/readme-refresh`.
 - `docs/readme-refresh` — слита (#28, `f95e31d`), выпуск 1.1.4. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable).
 - `fix/generator-equatable` — слита (#29, `533b927`), PR 1 релиза 1.2.0.
-- `fix/aot-honesty` — PR 2 релиза 1.2.0 (п.1.3 — атрибуты, п.1.4 — AOT-проба), от `main` `533b927`; не слита.
-- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable` — уже в `main`. Удалить.
+- `fix/aot-honesty` — слита (#30, `da401f4`), PR 2 релиза 1.2.0.
+- `feature/implicit-using` — PR 3 релиза 1.2.0 (п.1.7), от `main` `da401f4`; не слита.
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty` — уже в `main`. Удалить.
 
 ---
 
@@ -137,7 +139,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 8.
 1. **EquatableArray** (п.2.9). Сделано (#29): данные пайплайна сравниваются по значению, включая диагностики; строгие тесты кэширования без Skip.
 2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26). Сделано в `fix/aot-honesty` (не слита): только `[RequiresUnreferencedCode]` — динамической генерации кода в DI-пути нет (`MethodInfo.Invoke` в NativeAOT работает, ломает его trimming), `[RequiresDynamicCode]` был бы неправдой; IL2026 на вызове `AddIronMapper`. Job `aot` (`eng/verify-aot.ps1`), см. п.1.4.
-3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством.
+3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством. Сделано в `feature/implicit-using` (не слита), см. п.1.7.
 4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
 5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26).
 6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22).
@@ -158,7 +160,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### 1.2. Проверка потребления пакета — ✅ 1.1.1
 
 - [x] `eng/verify-package.ps1`, `tests/IronMapper.PackageConsumer` (+ InternalLib, PublicLib), job `Pack & verify` в CI, `publish.yml` сверяет тег с `<Version>`.
-- [ ] PackageConsumer компилирует код Quick Start из README против упакованного пакета: блок кода извлекается из `README.md` автоматически (первый блок `csharp` после заголовка «Quick Start» — это целый `Program.cs`), а не копируется вручную. Так README не сломается незаметно: Quick Start 1.1.3 без `using IronMapper.Generated;` падал с CS1061, и ни одна проверка этого не заметила (найдено и исправлено в `docs/readme-refresh`).
+- [x] PackageConsumer компилирует код Quick Start из README против упакованного пакета (`feature/implicit-using`: `verify-package.ps1` извлекает блок между маркерами `<!-- quickstart:begin -->` / `<!-- quickstart:end -->` из `README.md` и `README.ru.md` в `tests/IronMapper.PackageConsumer.ImplicitUsings`, собирает и запускает, ждёт `Alice`): блок кода извлекается из `README.md` автоматически (первый блок `csharp` после заголовка «Quick Start» — это целый `Program.cs`), а не копируется вручную. Так README не сломается незаметно: Quick Start 1.1.3 без `using IronMapper.Generated;` падал с CS1061, и ни одна проверка этого не заметила (найдено и исправлено в `docs/readme-refresh`).
 
 ### 1.3. `IMapper` без рефлексии (аудит п.1, п.19) — issue **#26**
 
@@ -207,11 +209,11 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 **Проблема.** Сгенерированные методы лежат в `IronMapper.Generated`; без `using IronMapper.Generated;` вызов `MapTo*` даёт CS1061 — частая ошибка новичка (в README 1.1.3 её содержал сам Quick Start).
 
-- [ ] Сначала оценить риск: в решениях из нескольких проектов, где одна пара типов смаплена в двух проектах, глобальный `using` делает `source.MapToX()` неоднозначным (CS0121) во всех файлах, а не только там, где `using` написан руками. Проверить на PackageConsumer + InternalLib/PublicLib и на сценариях из `docs/configuration.md` («Multi-project solutions»); решить, включать ли по умолчанию.
-- [ ] Пакет добавляет `<Using Include="IronMapper.Generated" />` через `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`; MSBuild-свойство для отключения (например `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`).
-- [ ] Проверка упаковки: файл в `buildTransitive/`, PackageConsumer компилируется без явного `using`; тест с отключением.
-- [ ] Проверки через PackageConsumer (отдельные проекты-потребители): проект без `ImplicitUsings` (без `global using`, явный `using` работает); `LangVersion` < 10 (`global using` недоступен — props не добавляет `Using`, сборка без ошибок); решение из нескольких проектов (InternalLib/PublicLib + потребитель, без новых CS0121/CS0436); `IronMapperImplicitUsings=false` отключает.
-- [ ] README и getting-started: строка про обязательный `using` меняется на «добавляется автоматически при ImplicitUsings».
+- [x] Риск оценён (`feature/implicit-using`): global using равносилен явному `using` в каждом файле. Неоднозначность пары, смапленной в двух проектах (CS0121), та же, что с явным `using` — его и так нужно писать для синтаксиса расширения; CS0436 возникает только при обращении к классу по имени и от `using` не зависит. Новая CS0121 возможна только в файле, который раньше не импортировал `IronMapper.Generated` и через `using` импортирует другой метод расширения с тем же именем и типом параметра (ручной маппер из переносимого кода) — описано в `docs/configuration.md` и CHANGELOG (Changed). Включено по умолчанию, отключение свойством. PackageConsumer + InternalLib/PublicLib собираются с `TreatWarningsAsErrors`; новый файл `GlobalUsingCalls.cs` без `using` вызывает свои маппинги и маппинги PublicLib (в т.ч. квалифицированное имя).
+- [x] `buildTransitive/IronMapper.props`: `<Using Include="IronMapper.Generated" />` при `'$(Language)' == 'C#'`, `ImplicitUsings` = `enable`/`true`, `IronMapperImplicitUsings` != `false` (условие на `ItemGroup`: элементы вычисляются после всех свойств, поэтому значения из проекта видны, хотя props импортируется раньше). Папка `build/` не нужна: генератору нужен SDK 8.0.400+, а `buildTransitive` поддерживается с NuGet 5.0 и применяется и к прямой ссылке. Приходит и через `IronMapper.Extensions.DI` (зависимость `include="All"`) — проверено.
+- [x] Найдено по ходу: в проекте без маппингов (сразу после `dotnet add package`) пространства имён `IronMapper.Generated` не было, и global using падал бы с CS0246/CS0234. Генератор теперь выпускает пустое пространство имён (`GeneratedMappers.g.cs`) при отсутствии маппингов; тесты `NoMappings_UsingOfGeneratedNamespaceCompiles`, `NoGeneratedMappings_UsingOfGeneratedNamespaceCompiles` (падали до исправления). Снимки не изменились (в них нет сценария без маппингов).
+- [x] Проверка упаковки: `buildTransitive/IronMapper.props` в макете пакета; `tests/IronMapper.PackageConsumer.ImplicitUsings`, 9 вариантов в `verify-package.ps1` (сборка + запуск + наличие/отсутствие `global using IronMapper.Generated;` в `*.GlobalUsings.g.cs`): без `using` при ImplicitUsings; только `IronMapper.Extensions.DI`; без маппингов; Quick Start из `README.md` и `README.ru.md`; явный `using` рядом с глобальным (с `TreatWarningsAsErrors` собирается — предупреждений вроде CS0105/CS8933 нет); ImplicitUsings выключен; ImplicitUsings выключен + `LangVersion` 9; `IronMapperImplicitUsings=false`. До реализации варианты без `using` и `GlobalUsingCalls.cs` падали с CS1061.
+- [x] README (Quick Start без `using`), getting-started, migration guide, configuration (раздел «Global using», EN и RU): `using` добавляется автоматически при ImplicitUsings, без них — писать вручную, отключение `IronMapperImplicitUsings`.
 - Обратная связь из реального проекта (20.10.2026): забытый `using` — первая ошибка при подключении.
 
 ---

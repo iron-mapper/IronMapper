@@ -44,9 +44,10 @@ dotnet add package IronMapper
 
 `Program.cs` консольного приложения (`dotnet new console`):
 
+<!-- quickstart:begin -->
+
 ```csharp
 using IronMapper.Attributes;
-using IronMapper.Generated;   // обязательно: сгенерированные методы MapTo* лежат в этом пространстве имён
 
 var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
 UserDto dto = entity.MapToUserDto();   // создан при сборке
@@ -68,10 +69,16 @@ public class UserDto
 }
 ```
 
+<!-- quickstart:end -->
+
 Ни `IMapper`, ни регистрация сервисов не нужны.
 
-**`using IronMapper.Generated;` обязателен** в каждом файле, где вызываются методы `MapTo*`. Без него вызов
-падает с `CS1061` («не содержит определения "MapToUserDto"»).
+Сгенерированные методы `MapTo*` лежат в пространстве имён `IronMapper.Generated`. **При неявных using**
+(`<ImplicitUsings>enable</ImplicitUsings>`, по умолчанию в шаблонах .NET 6+) пакет сам добавляет
+`global using IronMapper.Generated;`. **Без неявных using добавьте `using IronMapper.Generated;`** в каждый файл, где
+вызываются методы `MapTo*`, иначе вызов падает с `CS1061` («не содержит определения "MapToUserDto"»). Отключить
+global using: `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`
+([Конфигурация](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md#global-using-для-ironmappergenerated)).
 
 **Требования.** Генератору нужен компилятор C# из **.NET SDK 8.0.400 или новее** (Roslyn 4.11; Visual Studio 2022
 17.11+). На более старом SDK компилятор выдаёт предупреждение `CS9057`, генератор не запускается, и каждый вызов
@@ -117,7 +124,8 @@ BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полн
 
 ## Ключевые возможности
 
-Во всех примерах подразумеваются `using IronMapper.Attributes;` и `using IronMapper.Generated;`. Полный справочник:
+Во всех примерах подразумевается `using IronMapper.Attributes;` (и `using IronMapper.Generated;` без неявных
+using). Полный справочник:
 [Конфигурация](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md).
 
 **Атрибуты на типе-источнике или типе-приёмнике**
@@ -238,7 +246,8 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
   Генератору нужен .NET SDK 8.0.400+.
 - Тесты библиотеки запускаются на .NET 10 (Ubuntu и Windows в CI). Тесты эквивалентности набора бенчмарков также
   запускаются на .NET 8. .NET 9 в CI не проверяется ([#10](https://github.com/iron-mapper/IronMapper/issues/10)).
-  Быстрый старт выше проверен вручную на .NET 8, 9 и 10.
+  Быстрый старт выше компилируется и запускается на упакованном пакете в CI (.NET 10); 1.1.4 проверялась вручную
+  на .NET 8, 9 и 10.
 
 ---
 

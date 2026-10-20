@@ -69,6 +69,7 @@ if (adminMember is not PublicLib.Admin.MemberDto { Name: "m" }) failures.Add($"P
 if (publicMembers.Count != 1 || publicMembers[0].Name != "l") failures.Add("PublicLib MapToPublicMemberDtoList: expected ['l']");
 if (adminMembers.Length != 1 || adminMembers[0].Name != "a") failures.Add("PublicLib MapToAdminMemberDtoArray: expected ['a']");
 if (publicMemberTarget.Name != "i") failures.Add($"PublicLib in-place MapToPublicMemberDto: expected 'i', got '{publicMemberTarget.Name}'");
+if (GlobalUsingCalls.Describe() != "gpm") failures.Add($"Calls without an explicit using: expected 'gpm', got '{GlobalUsingCalls.Describe()}'");
 if (teamDto.Members.Count != 1 || teamDto.Members[0].Name != "t") failures.Add("PublicLib nested collection of qualified element map: expected ['t']");
 
 if (failures.Count > 0)

@@ -11,6 +11,12 @@
        if the source generator is not loaded from the package. It references two libraries that also
        use the package (tests/IronMapper.PackageConsumer.InternalLib, .PublicLib), which are restored
        and built with it.
+    4. Builds tests/IronMapper.PackageConsumer.ImplicitUsings from the same feed in several variants: the global
+       using IronMapper.Generated from buildTransitive/IronMapper.props (ImplicitUsings on and no using; only the DI
+       package referenced; a project without mappings; the Quick Start of README.md and README.ru.md, marked with
+       <!-- quickstart:begin --> / <!-- quickstart:end -->) and the cases
+       where it must not be added or must not get in the way (ImplicitUsings off, LangVersion 9,
+       IronMapperImplicitUsings=false, an explicit using next to the global one). Each variant is also run.
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
@@ -96,6 +102,7 @@ Assert-Entry $core 'lib/netstandard2.0/IronMapper.dll'
 Assert-Entry $core 'lib/net10.0/IronMapper.dll'
 Assert-Entry $core 'analyzers/dotnet/cs/IronMapper.Generator.dll'
 Assert-Entry $core 'analyzers/dotnet/cs/IronMapper.CodeFixes.dll'
+Assert-Entry $core 'buildTransitive/IronMapper.props'
 Assert-NoRoslynDependency $core
 foreach ($entry in $core.Entries) {
     if ($entry -like 'lib/*' -and $entry -notlike 'lib/*/IronMapper.dll' -and $entry -notlike 'lib/*/IronMapper.xml') {
@@ -140,6 +147,93 @@ try {
         "-p:RestorePackagesPath=$packagesPath"
     Invoke-Dotnet build $consumer --no-restore -c $Configuration "-p:IronMapperVersion=$Version"
     Invoke-Dotnet run --project $consumer --no-build -c $Configuration
+
+    # -----------------------------------------------------------------------
+    # 4. global using IronMapper.Generated (buildTransitive/IronMapper.props)
+    # -----------------------------------------------------------------------
+    $implicitConsumer = Join-Path $repoRoot 'tests/IronMapper.PackageConsumer.ImplicitUsings/IronMapper.PackageConsumer.ImplicitUsings.csproj'
+    $sources = Join-Path (Split-Path -Parent $implicitConsumer) 'Sources'
+    $variantsRoot = Join-Path $packagesPath 'implicit-usings'
+    New-Item -ItemType Directory -Force -Path $variantsRoot | Out-Null
+
+    # The DI variant needs Microsoft.Extensions.DependencyInjection.Abstractions from nuget.org. Package source
+    # mapping keeps IronMapper* on the local feed: the released package with the same version must never be picked.
+    $nugetConfig = Join-Path $variantsRoot 'nuget.config'
+    @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="local" value="$([System.Security.SecurityElement]::Escape($PackageDir))" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="local"><package pattern="IronMapper*" /></packageSource>
+    <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+  </packageSourceMapping>
+</configuration>
+"@ | Set-Content -Path $nugetConfig -Encoding utf8
+
+    # The Quick Start of a README: the csharp block between <!-- quickstart:begin --> and <!-- quickstart:end -->
+    # (HTML comments, not shown on GitHub or nuget.org) is a whole Program.cs.
+    function Export-QuickStart([string] $readme, [string] $name) {
+        $text = (Get-Content -Raw -Encoding utf8 (Join-Path $repoRoot $readme)) -replace "`r`n", "`n"
+        $found = [regex]::Matches($text, '(?ms)^<!-- quickstart:begin -->\s*^```csharp\n(.*?)^```\s*^<!-- quickstart:end -->')
+        if ($found.Count -ne 1) { throw "Expected one quickstart:begin/end block with a csharp block in $readme, found $($found.Count)" }
+        $match = $found[0]
+        $path = Join-Path $variantsRoot "$name.cs"
+        Set-Content -Path $path -Value $match.Groups[1].Value -NoNewline -Encoding utf8
+        $path
+    }
+
+    $variants = @(
+        @{ Name = 'no using, ImplicitUsings on'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true; Output = 'NoUsing: OK' }
+        @{ Name = 'no using, only IronMapper.Extensions.DI referenced'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true
+           Output = 'NoUsing: OK'; Properties = @('-p:IronMapperPackage=IronMapper.Extensions.DI') }
+        @{ Name = 'no mappings in the project'; Source = "$sources/NoMappings.cs"; GlobalUsing = $true; Output = 'NoMappings: OK' }
+        @{ Name = 'README.md Quick Start'; Source = (Export-QuickStart 'README.md' 'QuickStart.en')
+           GlobalUsing = $true; Output = 'Alice' }
+        @{ Name = 'README.ru.md Quick Start'; Source = (Export-QuickStart 'README.ru.md' 'QuickStart.ru')
+           GlobalUsing = $true; Output = 'Alice' }
+        @{ Name = 'explicit using next to the global one'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
+           Output = 'ExplicitUsing: OK' }
+        @{ Name = 'ImplicitUsings off'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
+           Output = 'ExplicitUsing: OK'; Properties = @('-p:ImplicitUsings=disable') }
+        @{ Name = 'ImplicitUsings off, LangVersion 9'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
+           Output = 'ExplicitUsing: OK'; Properties = @('-p:ImplicitUsings=disable', '-p:LangVersion=9') }
+        @{ Name = 'IronMapperImplicitUsings=false'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
+           Output = 'ExplicitUsing: OK'; Properties = @('-p:IronMapperImplicitUsings=false') }
+    )
+
+    $index = 0
+    foreach ($variant in $variants) {
+        $index++
+        Write-Host "Implicit usings, variant ${index}: $($variant.Name)"
+        # Own artifacts folder per variant, so restore results and obj/ of different properties do not mix.
+        $artifacts = Join-Path $variantsRoot "v$index"
+        $properties = @("-p:IronMapperVersion=$Version", "-p:ConsumerSource=$($variant.Source)")
+        if ($variant.ContainsKey('Properties')) { $properties += $variant.Properties }
+
+        Invoke-Dotnet restore $implicitConsumer --force --artifacts-path $artifacts --configfile $nugetConfig `
+            "-p:RestorePackagesPath=$packagesPath" @properties
+        Invoke-Dotnet build $implicitConsumer --no-restore -c $Configuration --artifacts-path $artifacts @properties
+
+        $globalUsings = Get-ChildItem -Path $artifacts -Recurse -Filter '*.GlobalUsings.g.cs' | Select-Object -First 1
+        $hasGlobalUsing = [bool] ($globalUsings -and
+            (Select-String -Path $globalUsings.FullName -SimpleMatch 'global using IronMapper.Generated;' -Quiet))
+        if ($hasGlobalUsing -ne $variant.GlobalUsing) {
+            throw "Variant '$($variant.Name)': global using IronMapper.Generated expected $($variant.GlobalUsing), found $hasGlobalUsing"
+        }
+
+        $dll = Get-ChildItem -Path (Join-Path $artifacts 'bin') -Recurse -Filter 'IronMapper.PackageConsumer.ImplicitUsings.dll' |
+            Select-Object -First 1
+        if (-not $dll) { throw "Variant '$($variant.Name)': no built assembly under $artifacts" }
+        $output = & dotnet $dll.FullName
+        if ($LASTEXITCODE -ne 0 -or -not ($output -match [regex]::Escape($variant.Output))) {
+            throw "Variant '$($variant.Name)': expected exit code 0 and '$($variant.Output)', got $LASTEXITCODE and '$output'"
+        }
+    }
+    Write-Host 'Implicit usings OK.'
 }
 finally {
     Remove-Item -Recurse -Force $packagesPath -ErrorAction SilentlyContinue

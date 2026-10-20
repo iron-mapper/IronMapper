@@ -50,14 +50,16 @@ The source generator emits `MapToUserDto()` extension methods into your assembly
 ### Step 3 — Call the generated extension
 
 ```csharp
-using IronMapper.Generated;   // the generated MapTo* methods live in this namespace
-
 var entity = new UserEntity { Id = 1, Name = "Alice", Email = "alice@example.com" };
 UserDto dto = entity.MapToUserDto();
 ```
 
-**`using IronMapper.Generated;` is required** in every file that calls `MapTo*` methods. Without it the call fails
-with `CS1061` ("does not contain a definition for 'MapToUserDto'"). The same error appears when the generator does
+The generated methods live in the namespace `IronMapper.Generated`. With implicit usings
+(`<ImplicitUsings>enable</ImplicitUsings>`, the default in the .NET 6+ templates) the package adds
+`global using IronMapper.Generated;`, so no `using` is needed. **Without implicit usings, add
+`using IronMapper.Generated;`** to every file that calls `MapTo*` methods; otherwise the call fails with `CS1061`
+("does not contain a definition for 'MapToUserDto'"). See [Global using](configuration.md#global-using-of-ironmappergenerated)
+for how to turn it off. The same error appears when the generator does
 not run at all, e.g. on a .NET SDK older than 8.0.400 (then the build also reports warning `CS9057`).
 
 ---
