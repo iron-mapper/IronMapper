@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 
 namespace IronMapper.Generator.Analysis.Models;
@@ -15,7 +15,7 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     public DiagnosticDescriptor Descriptor { get; }
 
     /// <summary>Format arguments to interpolate into <see cref="DiagnosticDescriptor.MessageFormat"/>.</summary>
-    public string[] MessageArgs { get; }
+    public EquatableArray<string> MessageArgs { get; }
 
     /// <summary>Initialises a new <see cref="DiagnosticInfo"/>.</summary>
     /// <param name="descriptor">The diagnostic rule descriptor.</param>
@@ -23,18 +23,20 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     public DiagnosticInfo(DiagnosticDescriptor descriptor, params string[] messageArgs)
     {
         Descriptor = descriptor;
-        MessageArgs = messageArgs;
+        MessageArgs = ImmutableArray.Create(messageArgs);
+    }
+
+    /// <summary>Creates the diagnostic to report (without a source location).</summary>
+    public Diagnostic ToDiagnostic()
+    {
+        var args = new object[MessageArgs.Length];
+        for (var i = 0; i < args.Length; i++) args[i] = MessageArgs[i];
+        return Diagnostic.Create(Descriptor, Location.None, args);
     }
 
     /// <inheritdoc/>
     public bool Equals(DiagnosticInfo other)
-    {
-        if (Descriptor.Id != other.Descriptor.Id) return false;
-        if (MessageArgs.Length != other.MessageArgs.Length) return false;
-        for (var i = 0; i < MessageArgs.Length; i++)
-            if (MessageArgs[i] != other.MessageArgs[i]) return false;
-        return true;
-    }
+        => Equals(Descriptor, other.Descriptor) && MessageArgs.Equals(other.MessageArgs);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is DiagnosticInfo other && Equals(other);
@@ -42,9 +44,7 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = Descriptor.Id.GetHashCode();
-        foreach (var arg in MessageArgs)
-            hash = hash * 31 + arg.GetHashCode();
-        return hash;
+        var hash = Descriptor?.Id.GetHashCode() ?? 0;
+        return hash * 31 + MessageArgs.GetHashCode();
     }
 }

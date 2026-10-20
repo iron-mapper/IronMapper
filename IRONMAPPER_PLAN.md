@@ -63,7 +63,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | Правообладатель                          | Aleksey Mironov (`LICENSE`, `Authors`, `Copyright`)                                                                                                                               |
 | Название                                 | Менять до 2.0.0; новое имя не выбрано                                                                                                                                             |
 | Платформы                                | Пакет: `netstandard2.0` + `net10.0`. Тесты и бенчмарки: .NET 8 и .NET 10 (+ .NET 9 в CI). Минимальный SDK: 8.0.400 (Roslyn 4.11)                                                  |
-| Релизы                                   | 1.2.0 — производительность и быстрые исправления без смены поведения; 1.3.0 — вложенные объекты; 2.0.0 — смена поведения по умолчанию, решение по «класс-мапперу», переименование |
+| Релизы                                   | 1.2.0 — производительность и быстрые исправления без смены поведения; 1.3.0 — вложенные объекты и позиционные records (конструкторы); 2.0.0 — смена поведения по умолчанию, решение по «класс-мапперу», переименование |
 | Смена поведения                          | Всё, что ломает сборку или меняет семантику, по умолчанию — только в 2.0; в 1.x — через MSBuild-свойство                                                                          |
 | `null`-источник для ненулевого приёмника | Не превращать в `null!`; учитывать nullable-аннотации, иначе диагностика                                                                                                          |
 | `null` на входе при nullable-объявлении  | 2.0: `null` → `null` с `[return: NotNullIfNotNull]` (как Mapperly/Mapster/AutoMapper); 1.x — опция                                                                                |
@@ -71,6 +71,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | ProjectTo                                | После этапа 2 (корректность генератора)                                                                                                                                           |
 | Режим «класс-маппер»                     | Решить до 2.0                                                                                                                                                                     |
 | Защита `main`                            | Rulesets: `main-protection` (CI обязателен всем), `main-review` (апрув всем, кроме админа), `release-tags` (теги `v*` только админ)                                               |
+| Генерировать только используемые методы | **Отклонено** (20.10.2026). Чтобы знать, какие `MapToX`/`MapToXList`/`MapToXArray` вызываются, генератору пришлось бы сканировать все вызовы в компиляции: такой шаг зависит от каждого файла и ломает инкрементальность (перегенерация на каждое нажатие клавиши), а для `public`-методов, которые вызывают другие сборки, использование вообще не видно. Вместо этого: `[ExcludeFromCodeCoverage]` по свойству и отключение перегрузок (2.13) |
 
 ---
 
@@ -82,14 +83,15 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.1        | Генератор в пакете, проверка упаковки в CI                                                                                      |
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
-| 1.1.4        | Готовится в `docs/readme-refresh` (`<Version>` и CHANGELOG): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21). Документация по 1.1.3 и бенчмаркам — `docs/readme-refresh` |
+| 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21). PR 1 (EquatableArray) — `fix/generator-equatable` |
 
-**Ветки (сверено 20.10.2026):**
+**Ветки (сверено 20.10.2026, после #28):**
 
 - `chore/test-infrastructure` — слита в `main` (#20, `eec934a`). `chore/benchmarks-baseline` — слита (#21, `f70f3d2`); конфликт в CLAUDE.md при слиянии разрешён не до конца (остались `tests/IronMapper.Benchmarks` и второй раздел `benchmarks/`) — исправлено в `docs/readme-refresh`.
-- `docs/readme-refresh` — от `main` `f70f3d2`: README (EN/RU) переписан, docs по фактам 1.1.3 и бенчмаркам, CLAUDE.md, CHANGELOG. Не слита. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable); README и migration guide ссылаются на них. Здесь же подготовлен выпуск 1.1.4 (`<Version>`, CHANGELOG).
-- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline` — уже в `main`. Удалить.
+- `docs/readme-refresh` — слита (#28, `f95e31d`), выпуск 1.1.4. Ограничения без issue заведены 20.10: #22 (IM0001 в профилях), #23 (вложенные объекты), #24 (позиционные records), #25 (flattening), #26 (`IMapper` и NativeAOT), #27 (`null` при nullable).
+- `fix/generator-equatable` — PR 1 релиза 1.2.0 (п.2.9), от `main` `f95e31d`; не слита.
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh` — уже в `main`. Удалить.
 
 ---
 
@@ -127,20 +129,21 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - Collection (10): не хуже Mapperly. Collection (1000, 100k): не хуже текущего.
 - AOT, прирост к Baseline: +255 КБ → не больше +40 КБ.
 - `IMapper`: работает в AOT без предупреждений; Flat — не больше стоимости вызова делегата сверх extension-метода; без доп. аллокаций; холодный старт не больше +3 мс.
-- Сборка N=200: перемерить после PR 3, цель — порядок Mapperly.
+- Сборка N=200: перемерить после PR 4, цель — порядок Mapperly.
 
 ### Порядок PR
 
-0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 7.
-1. **EquatableArray** (п.2.9). `chore/test-infrastructure` слит (#20).
-2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет».
-3. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
-4. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе.
-5. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10).
-6. **Объём кода** (п.2.13): перемерить, при необходимости опции отключения перегрузок.
-7. **Полный прогон**, `benchmarks/results/1.2.0/`, таблица «1.1.3 → 1.2.0» в `RESULTS.md`; README по п.5.1.
+0. **Бенчмарки в `main`.** Набор в `main` (#18). Сделано (#21): `benchmarks/results/baseline-1.1.3/`; набор нацелен на `net10.0` и `net8.0`; job `benchmarks` в CI — smoke-проверка (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на обоих TFM); старый `tests/IronMapper.Benchmarks` удалён; `dotnet-quality: 'preview'` убран. Цифр на net8.0 ещё нет — полный прогон в шаге 8.
+1. **EquatableArray** (п.2.9). Сделано в `fix/generator-equatable` (не слита): данные пайплайна сравниваются по значению, включая диагностики; строгие тесты кэширования без Skip.
+2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26).
+3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством.
+4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT.
+5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26).
+6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22).
+7. **Объём кода и покрытие** (п.2.13): перемерить; опции отключения перегрузок (на сборку и на карту); `[GeneratedCode]` на сгенерированном классе и `IronMapperExcludeFromCodeCoverage`.
+8. **Полный прогон**, `benchmarks/results/1.2.0/`, таблица «1.1.3 → 1.2.0» в `RESULTS.md`; README по п.5.1.
 
-После каждого PR из 3–5 — прогон затронутых категорий бенчмарков.
+После каждого PR из 4–7 — прогон затронутых категорий бенчмарков; после PR 1–3 (сгенерированный код не меняется) достаточно smoke-проверки набора.
 
 ---
 
@@ -198,14 +201,16 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [x] Убрать `dotnet-quality: 'preview'` из `ci.yml` (3 места) и `publish.yml` (#21).
 - [ ] Unlist 1.0.0 и 1.1.0 на nuget.org (на 18.10 обе `listed`).
 
-### 1.7. `global using IronMapper.Generated` из пакета
+### 1.7. `global using IronMapper.Generated` из пакета — 1.2.0, PR 3
 
 **Проблема.** Сгенерированные методы лежат в `IronMapper.Generated`; без `using IronMapper.Generated;` вызов `MapTo*` даёт CS1061 — частая ошибка новичка (в README 1.1.3 её содержал сам Quick Start).
 
 - [ ] Сначала оценить риск: в решениях из нескольких проектов, где одна пара типов смаплена в двух проектах, глобальный `using` делает `source.MapToX()` неоднозначным (CS0121) во всех файлах, а не только там, где `using` написан руками. Проверить на PackageConsumer + InternalLib/PublicLib и на сценариях из `docs/configuration.md` («Multi-project solutions»); решить, включать ли по умолчанию.
 - [ ] Пакет добавляет `<Using Include="IronMapper.Generated" />` через `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`; MSBuild-свойство для отключения (например `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`).
 - [ ] Проверка упаковки: файл в `buildTransitive/`, PackageConsumer компилируется без явного `using`; тест с отключением.
+- [ ] Проверки через PackageConsumer (отдельные проекты-потребители): проект без `ImplicitUsings` (без `global using`, явный `using` работает); `LangVersion` < 10 (`global using` недоступен — props не добавляет `Using`, сборка без ошибок); решение из нескольких проектов (InternalLib/PublicLib + потребитель, без новых CS0121/CS0436); `IronMapperImplicitUsings=false` отключает.
 - [ ] README и getting-started: строка про обязательный `using` меняется на «добавляется автоматически при ImplicitUsings».
+- Обратная связь из реального проекта (20.10.2026): забытый `using` — первая ошибка при подключении.
 
 ---
 
@@ -233,6 +238,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] Карты нет — IM0002 (или вариант Mapperly: автоматический приватный маппинг; решить).
 - [ ] Только вместе с IM0004 (иначе StackOverflow на `Order.Customer.Orders`).
 - [ ] Тесты на вложенные массивы, `IEnumerable<T>`, `IReadOnlyList<T>`.
+- [ ] **Конструкторы и позиционные records** (перенесено из 3.4, аудит п.10, issue **#24**): `[MapperConstructor]` → наибольшее число сопоставленных параметров → диагностика при неоднозначности; остальное — инициализатор; `required`. В 1.3.0 вместе с вложенными объектами: оба меняют способ создания приёмника.
 
 ### 2.4. Коллизии имён и полные имена — ✅ 1.1.3
 
@@ -263,9 +269,9 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### 2.9. Тестовая инфраструктура (аудит п.24, п.25)
 
-- [x] Snapshot-тесты (Verify.SourceGenerators), 7 сценариев, каждый компилируется — в `chore/test-infrastructure`, **не в `main`**.
-- [x] Тест кэширования: все выходы кэшируются; трансформации возвращают `ImmutableArray` (сравнение по ссылке) — 2 строгих теста в Skip. В `chore/test-infrastructure`, **не в `main`**.
-- [ ] **EquatableArray** для данных пайплайна; `MappingDescriptor.Equals` учитывает `Diagnostics`; снять Skip.
+- [x] Snapshot-тесты (Verify.SourceGenerators), 7 сценариев, каждый компилируется (#20).
+- [x] Тест кэширования: все выходы кэшируются (#20).
+- [x] **EquatableArray** для данных пайплайна; `MappingDescriptor.Equals` учитывает `Diagnostics`; Skip снят — `fix/generator-equatable`. Ошибка была видна в IDE: правка, менявшая только диагностику карты (`[Ignore]` на свойстве приёмника → IM0001; один из двух `private`-членов лямбды профиля стал `internal` → IM0011), не доходила до вывода — старая диагностика оставалась до перезапуска генератора. Тесты `IncrementalDiagnosticsTests` (появление и исчезновение); в данных пайплайна нет `ISymbol`, `SyntaxNode`, `Location`, `Compilation`. Трансформы перезапускаются на каждой новой компиляции (семантическая модель), их результат — `Unchanged`, всё после — `Cached`. Снимки не изменились.
 - [ ] Runtime-тесты вместо текстовых для «Partial» в таблице миграции: `[MapFrom]`, `UseConverter`, `ConvertUsing<T>`, `ConvertUsing(lambda)`, массивы и др. коллекции.
 - [ ] Тесты code fix'ов (сейчас нет).
 
@@ -275,7 +281,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] 1.x: включается MSBuild-свойством; строгий режим `<IronMapperStrictMapping>true</IronMapperStrictMapping>` делает ошибкой. 2.0: по умолчанию.
 - [ ] Опционально: предупреждение о неиспользованных свойствах источника (выключено по умолчанию).
 
-### 2.11. Коллекции без LINQ (аудит п.2) — 1.2.0, PR 3
+### 2.11. Коллекции без LINQ (аудит п.2) — 1.2.0, PR 4
 
 **Проблема (подтверждено).** `MapToXList`, `MapToXArray` и вложенные коллекции — `Enumerable.ToList/ToArray(Enumerable.Select(...))`; `null`-коллекция → `null!`. Mapperly — `new List<T>(count)` + цикл.
 
@@ -291,12 +297,15 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] README и migration-from-automapper: отличие от AutoMapper/Mapster.
 - [ ] Этап 4: анализатор миграции предупреждает о таких коллекциях.
 
-### 2.13. Объём кода и время сборки (аудит п.22a)
+### 2.13. Объём кода, время сборки и покрытие (аудит п.22a) — 1.2.0, PR 7
 
 **Данные.** N=200: 201 файл, 12 210 строк, 799 КБ против 1 файла, 4 057 строк, 191 КБ у Mapperly; сборка +0,55 с против +0,26 с. Генераторы работают одинаково быстро — разница в компиляции результата.
 
 - [ ] Перемерить после 2.11.
-- [ ] Опции отключения перегрузок (in-place, Array) через MSBuild-свойство в 1.x; смена умолчаний — 2.0.
+- [ ] Опции отключения перегрузок (in-place, List, Array): MSBuild-свойство на сборку и параметр на карту (атрибут/профиль) в 1.x; смена умолчаний — 2.0.
+- [ ] `[global::System.CodeDom.Compiler.GeneratedCode("IronMapper", "<версия генератора>")]` на сгенерированном классе `GeneratedMappers` (одно объявление — `EmitClassDeclaration`).
+- [ ] Опциональное MSBuild-свойство `IronMapperExcludeFromCodeCoverage=true` добавляет `[global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]` (свойство передаётся генератору через `CompilerVisibleProperty`). Причина (обратная связь из реального проекта): неиспользуемые `MapToXList`/`MapToXArray` снижают покрытие в проектах пользователей. Проверить: атрибут доступен в `netstandard2.0`-потребителях (есть с .NET Standard 2.0); снимки обновятся.
+- «Генерировать только используемые методы» — отклонено, см. «Принятые решения».
 - [ ] Общий цикл в generic-хелпер без делегатов, если объём вырос.
 - [ ] Группировка файлов — только если замер покажет выигрыш.
 
@@ -330,7 +339,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### 3.4. Пробелы в конфигурации
 
-- [ ] **Конструкторы и позиционные records** (аудит п.10, issue **#24**): `[MapperConstructor]` → наибольшее число сопоставленных параметров → диагностика при неоднозначности; остальное — инициализатор; `required`.
+- Конструкторы и позиционные records (#24) — перенесены в 2.3 (1.3.0).
 - [ ] **Flattening по соглашению** (аудит п.11, issue **#25**): `Customer.Address.City` → `CustomerAddressCity`, проверки `null` по пути.
 - [ ] **Наследование** (аудит п.14): `switch` по типу источника; `Include`/`IncludeBase`.
 - [ ] `Condition`/`PreCondition` на члене (аудит п.15); `NullSubstitute` (п.17); `ForPath`; `UseDestinationValue` (п.20).

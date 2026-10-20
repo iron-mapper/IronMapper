@@ -21,10 +21,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public string? DestNamespace { get; }
 
     /// <summary>Per-property mapping instructions.</summary>
-    public ImmutableArray<PropertyMappingDescriptor> PropertyMappings { get; }
+    public EquatableArray<PropertyMappingDescriptor> PropertyMappings { get; }
 
     /// <summary>Diagnostics to report when this mapping is emitted.</summary>
-    public ImmutableArray<DiagnosticInfo> Diagnostics { get; }
+    public EquatableArray<DiagnosticInfo> Diagnostics { get; }
 
     /// <summary>True when at least one property uses a custom ITypeConverter.</summary>
     public bool HasCustomConverter { get; }
@@ -65,7 +65,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public string? AfterMapLambdaBody { get; }
 
     /// <summary>Profile-level value transformers to apply to name-matched properties by type.</summary>
-    public ImmutableArray<ValueTransformerDescriptor> ValueTransformers { get; }
+    public EquatableArray<ValueTransformerDescriptor> ValueTransformers { get; }
 
     /// <summary>
     /// Fully-qualified C# name of the source type (e.g. <c>global::App.Outer.Inner</c>), or <see langword="null"/>
@@ -144,15 +144,15 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string? sourceNamespace,
         string destTypeName,
         string? destNamespace,
-        ImmutableArray<PropertyMappingDescriptor> propertyMappings,
-        ImmutableArray<DiagnosticInfo> diagnostics,
+        EquatableArray<PropertyMappingDescriptor> propertyMappings,
+        EquatableArray<DiagnosticInfo> diagnostics,
         bool hasCustomConverter,
         string? whenConditionBody = null,
         string? wholeObjectConverterType = null,
         string? wholeObjectLambdaBody = null,
         string? beforeMapLambdaBody = null,
         string? afterMapLambdaBody = null,
-        ImmutableArray<ValueTransformerDescriptor> valueTransformers = default,
+        EquatableArray<ValueTransformerDescriptor> valueTransformers = default,
         string? sourceFullName = null,
         string? destFullName = null,
         string methodAccessibility = "public",
@@ -175,7 +175,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WholeObjectLambdaBody = wholeObjectLambdaBody;
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
-        ValueTransformers = valueTransformers.IsDefault ? ImmutableArray<ValueTransformerDescriptor>.Empty : valueTransformers;
+        ValueTransformers = valueTransformers;
         SourceFullName = sourceFullName;
         DestFullName = destFullName;
         MethodAccessibility = methodAccessibility;
@@ -227,15 +227,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestTypeArgsFull != other.DestTypeArgsFull)
             return false;
 
-        if (PropertyMappings.Length != other.PropertyMappings.Length) return false;
-        for (var i = 0; i < PropertyMappings.Length; i++)
-            if (!PropertyMappings[i].Equals(other.PropertyMappings[i])) return false;
-
-        if (ValueTransformers.Length != other.ValueTransformers.Length) return false;
-        for (var i = 0; i < ValueTransformers.Length; i++)
-            if (!ValueTransformers[i].Equals(other.ValueTransformers[i])) return false;
-
-        return true;
+        // Diagnostics count too: an edit that only adds or removes a diagnostic must reach the output.
+        return PropertyMappings.Equals(other.PropertyMappings)
+            && Diagnostics.Equals(other.Diagnostics)
+            && ValueTransformers.Equals(other.ValueTransformers);
     }
 
     /// <inheritdoc/>
@@ -259,13 +254,14 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + (DestFullName?.GetHashCode() ?? 0);
         hash = hash * 31 + MethodAccessibility.GetHashCode();
         hash = hash * 31 + Origin.GetHashCode();
+        hash = hash * 31 + OriginDisplay.GetHashCode();
         hash = hash * 31 + OriginRank;
         hash = hash * 31 + DestQualifier.GetHashCode();
         hash = hash * 31 + DestTypeArgsShort.GetHashCode();
-        foreach (var pm in PropertyMappings)
-            hash = hash * 31 + pm.GetHashCode();
-        foreach (var vt in ValueTransformers)
-            hash = hash * 31 + vt.GetHashCode();
+        hash = hash * 31 + DestTypeArgsFull.GetHashCode();
+        hash = hash * 31 + PropertyMappings.GetHashCode();
+        hash = hash * 31 + Diagnostics.GetHashCode();
+        hash = hash * 31 + ValueTransformers.GetHashCode();
         return hash;
     }
 }

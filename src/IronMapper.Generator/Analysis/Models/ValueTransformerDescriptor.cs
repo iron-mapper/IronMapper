@@ -34,7 +34,9 @@ internal sealed class ValueTransformerDescriptor : IEquatable<ValueTransformerDe
     public bool Equals(ValueTransformerDescriptor? other)
         => other is not null
             && FullyQualifiedTypeName == other.FullyQualifiedTypeName
-            && LambdaBody == other.LambdaBody;
+            && FriendlyTypeName == other.FriendlyTypeName
+            && LambdaBody == other.LambdaBody
+            && MethodName == other.MethodName;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as ValueTransformerDescriptor);
@@ -44,7 +46,9 @@ internal sealed class ValueTransformerDescriptor : IEquatable<ValueTransformerDe
     {
         var h = 17;
         h = h * 31 + FullyQualifiedTypeName.GetHashCode();
+        h = h * 31 + FriendlyTypeName.GetHashCode();
         h = h * 31 + LambdaBody.GetHashCode();
+        h = h * 31 + MethodName.GetHashCode();
         return h;
     }
 }

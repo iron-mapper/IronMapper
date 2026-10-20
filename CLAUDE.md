@@ -77,6 +77,9 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   same simple name get qualified names — destination namespace/containing-type segments, then type arguments
   (`MapToAdminUserDto`, `MapToBoxOfInt32`), IM0013; if nothing is unique — IM0014, not generated.
 - Must target `netstandard2.0` (Roslyn generator host constraint).
+- **Pipeline data** (`Analysis/Models`) is compared by value: every collection is `EquatableArray<T>`, every model
+  implements `Equals` over all its fields (diagnostics included); no `ISymbol`, `SyntaxNode`, `Location` or
+  `Compilation` in it. A new field must be added to `Equals`/`GetHashCode`.
 
 ### `src/IronMapper.CodeFixes` (netstandard2.0)
 Code fixes for IM0001 and IM0006. Not covered by tests yet.
@@ -102,7 +105,8 @@ Prefer tests that compile and run the generated code (`GeneratorTestHelper.RunGe
 over assertions on the generated text. Also contains:
 - `GeneratedCodeSnapshotTests` — snapshots of the generated code (Verify.SourceGenerators) in `Snapshots/` (see below);
 - `GeneratorCachingTests` — incremental caching (`trackIncrementalGeneratorSteps`; step names in
-  `src/IronMapper.Generator/TrackingNames.cs`).
+  `src/IronMapper.Generator/TrackingNames.cs`); `IncrementalDiagnosticsTests` — diagnostics after an edit match a
+  fresh run.
 
 ### `tests/IronMapper.Integration.Tests` (net10.0)
 The generator together with `IronMapper.Extensions.DI` and `Microsoft.Extensions.DependencyInjection`.
