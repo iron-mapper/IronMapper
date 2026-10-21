@@ -1,0 +1,17 @@
+<linker>
+  <!--
+    Feature switch IronMapper.Registration.IsSupported (MapperRegistry.IsSupported). When the application sets it to
+    false (buildTransitive/IronMapper.targets: a trimmed or NativeAOT publish without IronMapper.Extensions.DI), the
+    trimmer (ILLink, NativeAOT) replaces the property with false and removes the generated registration that it guards.
+  -->
+  <assembly fullname="IronMapper" feature="IronMapper.Registration.IsSupported" featurevalue="false">
+    <type fullname="IronMapper.Registration.MapperRegistry">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="false" />
+    </type>
+  </assembly>
+  <assembly fullname="IronMapper" feature="IronMapper.Registration.IsSupported" featurevalue="true">
+    <type fullname="IronMapper.Registration.MapperRegistry">
+      <method signature="System.Boolean get_IsSupported()" body="stub" value="true" />
+    </type>
+  </assembly>
+</linker>

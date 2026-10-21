@@ -15,4 +15,5 @@ internal static class TrackingNames
     public const string Plan = nameof(Plan);
     public const string ClassAccessibility = nameof(ClassAccessibility);
     public const string CodeOptions = nameof(CodeOptions);
+    public const string Registrations = nameof(Registrations);
 }

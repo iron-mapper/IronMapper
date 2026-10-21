@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    Feature switch IronMapper.Registration.IsSupported (IronMapper.Registration.MapperRegistry.IsSupported). The generated
+    module initializer of every assembly with mappings registers them for IMapper only when it is on. For a trimmed or
+    NativeAOT publish in which no project references IronMapper.Extensions.DI (it sets
+    _IronMapperExtensionsDIReferenced in its buildTransitive props) the switch is turned off, so the trimmer removes the
+    registration and the registry: an application that only calls the generated extension methods does not carry them.
+    Otherwise it is not set (on). Override with <IronMapperRegistration>true|false</IronMapperRegistration> in the
+    application project. Imported after the project file, so PublishAot / PublishTrimmed set there are seen.
+  -->
+  <PropertyGroup>
+    <IronMapperRegistration Condition="'$(IronMapperRegistration)' == ''
+                                       and '$(_IronMapperExtensionsDIReferenced)' != 'true'
+                                       and ('$(PublishAot)' == 'true' or '$(PublishTrimmed)' == 'true')">false</IronMapperRegistration>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IronMapperRegistration)' != ''">
+    <RuntimeHostConfigurationOption Include="IronMapper.Registration.IsSupported"
+                                    Value="$(IronMapperRegistration)"
+                                    Trim="true" />
+  </ItemGroup>
+
+</Project>

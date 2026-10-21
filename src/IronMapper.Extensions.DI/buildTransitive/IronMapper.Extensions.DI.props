@@ -1,0 +1,12 @@
+<Project>
+
+  <!--
+    The application uses IMapper: buildTransitive/IronMapper.targets of the IronMapper package keeps the generated
+    registration (feature switch IronMapper.Registration.IsSupported) for a trimmed or NativeAOT publish.
+    buildTransitive/, so it also applies when the application references this package through one of its libraries.
+  -->
+  <PropertyGroup>
+    <_IronMapperExtensionsDIReferenced>true</_IronMapperExtensionsDIReferenced>
+  </PropertyGroup>
+
+</Project>

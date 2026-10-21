@@ -87,7 +87,7 @@ $sb = [System.Text.StringBuilder]::new()
 [void] $sb.AppendLine()
 [void] $sb.AppendLine("$($meta.Date) UTC · $(Get-MachineSummary)")
 [void] $sb.AppendLine()
-[void] $sb.AppendLine("Each ``probes/StartupProbe.*`` console is published with ``dotnet publish -c Release -r $($meta.Rid) -p:PublishAot=true`` " +
+[void] $sb.AppendLine("Each ``probes/StartupProbe.*`` console is published with NativeAOT: ``dotnet publish -c Release -r $($meta.Rid) -p:StartupProbeAot=true`` (sets ``PublishAot`` in the probe) " +
     '(plus `-p:TrimmerSingleWarn=false` to list every warning and `-p:IlcGenerateMstatFile=true` for the size breakdown; neither changes the executable). ' +
     '**Works** means: the executable exited with 0 in every run and printed the same order checksum as the Baseline probe and as its own JIT build, i.e. the mapping really ran. ' +
     "Startup is the median wall-clock time of $($meta.Runs) runs (see [startup.md](startup.md)).")

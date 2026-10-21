@@ -21,7 +21,7 @@ function Get-ResultsRawDir { Join-Path $script:BenchmarksDir 'results' 'raw' }
 # Output of run-startup.ps1: publish logs, published probes, stderr of failed runs, mstat files.
 function Get-StartupLogDir { Join-Path (Get-ResultsRawDir) 'startup' }
 
-function Get-StartupProbeNames { @('Baseline', 'Manual', 'IronMapper', 'IronMapper_IMapper', 'Mapperly', 'Mapster', 'AutoMapper') }
+function Get-StartupProbeNames { @('Baseline', 'Manual', 'Manual_DI', 'IronMapper', 'IronMapper_IMapper', 'Mapperly', 'Mapster', 'AutoMapper') }
 
 function Get-StartupProbeProject([string] $Probe) {
     Join-Path $script:BenchmarksDir 'probes' "StartupProbe.$Probe" "StartupProbe.$Probe.csproj"
@@ -212,7 +212,9 @@ function Publish-StartupProbe {
     # --disable-build-servers: no MSBuild/compiler server processes stay in memory between the publishes.
     $publishArgs = @('publish', $project, '-c', 'Release', '-r', $Rid, '-o', $outDir, '-nologo', '--disable-build-servers')
     if ($Mode -eq 'Aot') {
-        $publishArgs += @('-p:PublishAot=true', '-p:IlcGenerateMstatFile=true', '-p:TrimmerSingleWarn=false')
+        # StartupProbeAot sets PublishAot in the probe only (probes/StartupProbe.props); a global PublishAot would
+        # reach the netstandard2.0 projects of ../src with UseLocalIronMapper=true and fail with NETSDK1207.
+        $publishArgs += @('-p:StartupProbeAot=true', '-p:IlcGenerateMstatFile=true', '-p:TrimmerSingleWarn=false')
         if ($LowMemory) { $publishArgs += '-p:IlcSingleThreaded=true' }
     }
     else { $publishArgs += @('--self-contained', 'false') }

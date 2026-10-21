@@ -5,7 +5,7 @@
     <PackageId>IronMapper.Extensions.DI</PackageId>
     <RootNamespace>IronMapper.Extensions.DI</RootNamespace>
     <AssemblyName>IronMapper.Extensions.DI</AssemblyName>
-    <PackageDescription>Microsoft.Extensions.DependencyInjection integration for IronMapper: registers an IMapper that dispatches to the generated mapping methods. Note: IMapper locates and invokes those methods via reflection.</PackageDescription>
+    <PackageDescription>Microsoft.Extensions.DependencyInjection integration for IronMapper: registers an IMapper that calls the generated mapping methods through a generated registry (no reflection; works with trimming and NativeAOT).</PackageDescription>
     <PackageTags>mapper;automapper;dto;object-mapping;source-generator;dependency-injection;aspnetcore</PackageTags>
   </PropertyGroup>
 
@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <!-- Keeps the generated registration for IMapper in a trimmed / NativeAOT publish (see IronMapper's buildTransitive targets). -->
+    <None Include="buildTransitive\IronMapper.Extensions.DI.props" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
 
   <ItemGroup>

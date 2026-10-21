@@ -87,16 +87,15 @@ public class DiIntegrationTests
     }
 
     [Fact]
-    public void AddIronMapper_AutoScansProfiles_RegistersProfileTypesAsSingletons()
+    public void AddIronMapper_DoesNotRegisterProfilesInTheContainer()
     {
         var services = new ServiceCollection();
         services.AddIronMapper(typeof(DiIntegrationTests).Assembly);
         using var sp = services.BuildServiceProvider();
 
-        // OrderProfile is a concrete MappingProfile in this assembly — it must be registered.
-        var profile = sp.GetService<OrderProfile>();
-
-        Assert.NotNull(profile);
+        // Profiles are read by the source generator; up to 1.1.4 AddIronMapper scanned the assembly and added them.
+        Assert.Null(sp.GetService<OrderProfile>());
+        Assert.Equal(7, sp.GetRequiredService<IMapper>().Map<OrderEntity, OrderDto>(new OrderEntity { Id = 7 }).Id);
     }
 
     [Fact]
@@ -344,9 +343,9 @@ public class DiIntegrationTests
         services.AddIronMapper(opt => opt.AddProfile<OrderProfile>());
         using var sp = services.BuildServiceProvider();
 
-        // OrderProfile lives in this assembly — AddProfile<T> must cause it to be registered.
-        var profile = sp.GetService<OrderProfile>();
-        Assert.NotNull(profile);
+        // AddProfile<T> registers the mappings of the profile's assembly; the profile is not added to the container.
+        Assert.Null(sp.GetService<OrderProfile>());
+        Assert.Equal(3, sp.GetRequiredService<IMapper>().Map<OrderEntity, OrderDto>(new OrderEntity { Id = 3 }).Id);
     }
 
     // ------------------------------------------------------------------

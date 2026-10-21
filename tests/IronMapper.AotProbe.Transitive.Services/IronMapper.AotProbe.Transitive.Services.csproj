@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Library of probe C (eng/verify-aot.ps1): the only project that references IronMapper.Extensions.DI. The host gets
+    the package (and its buildTransitive props) through this library. Intentionally NOT part of IronMapper.slnx.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronMapper.Extensions.DI" Version="[$(IronMapperVersion)]" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -22,6 +22,10 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <!-- global using IronMapper.Generated for projects with ImplicitUsings (also through IronMapper.Extensions.DI). -->
     <None Include="buildTransitive\IronMapper.props" Pack="true" PackagePath="buildTransitive" />
+    <!-- Feature switch IronMapper.Registration.IsSupported: off for a trimmed / NativeAOT publish without the DI package. -->
+    <None Include="buildTransitive\IronMapper.targets" Pack="true" PackagePath="buildTransitive" />
+    <!-- MapperRegistry.IsSupported as a constant for the trimmer (ILLink and NativeAOT read it from the assembly). -->
+    <EmbeddedResource Include="ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
   </ItemGroup>
 
   <!--

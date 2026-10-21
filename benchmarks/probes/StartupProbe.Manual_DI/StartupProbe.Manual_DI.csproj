@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Hand-written mapping resolved from the same DI container as StartupProbe.IronMapper_IMapper (ManualDiSetup):
+    IronMapper_IMapper minus Manual_DI is what IronMapper adds on top of Microsoft.Extensions.DependencyInjection.
+  -->
+  <Import Project="..\StartupProbe.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MappersDir)Shared\SalaryFormat.cs" Link="Linked\SalaryFormat.cs" />
+    <Compile Include="$(MappersDir)Manual\ManualMappings.cs" Link="Linked\ManualMappings.cs" />
+    <Compile Include="$(MappersDir)Manual\ManualDiSetup.cs" Link="Linked\ManualDiSetup.cs" />
+  </ItemGroup>
+
+</Project>

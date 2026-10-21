@@ -31,9 +31,15 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 2. Исправить.
 3. `dotnet build IronMapper.slnx -c Release` без предупреждений, `dotnet test IronMapper.slnx` зелёный.
 4. Упаковку и CI проверять **только на чистом дереве**: сначала `git add -A`, затем `git clean -xdf -e .claude/ -e IRONMAPPER_PLAN.md`, затем `./eng/verify-package.ps1 -PackageDir ./artifacts/packages`.
-5. Изменения в сгенерированном коде видны в snapshot-тестах (`*.verified.cs`). Изменился снимок — прогнать затронутые категории бенчмарков (`benchmarks/`, `-p:UseLocalIronMapper=true`).
+5. Изменения в сгенерированном коде видны в snapshot-тестах (`*.verified.cs`). Бенчмарки в PR не запускаются (см. «Бенчмарки» ниже); изменённый снимок — пометка для полного прогона перед релизом.
 6. Документация (EN и RU вместе) и `CHANGELOG.md` (`[Unreleased]`) — в том же PR.
 7. Отметить пункт в этом плане.
+
+### Бенчмарки
+
+- В PR бенчмарки **не запускаются** (ни полные, ни частичные замеры). В PR достаточно smoke-проверки набора: job `benchmarks` в CI (сборка на локальных исходниках, тесты эквивалентности, одна итерация каждого runtime-сценария на net10.0 и net8.0); локально — то же самое, если менялся сам набор.
+- Полный прогон (`benchmarks/scripts/run-all.ps1`) — отдельная задача перед релизом, когда весь код релиза в `main`. Цифры в README, `docs/`, CHANGELOG и `benchmarks/results/` обновляются только по нему.
+- Если цель PR сформулирована в цифрах, её проверяет полный прогон; в PR — только код и smoke-проверка. Причину недостигнутой цели ищут в отдельной задаче (`DisassemblyDiagnoser`), не подгоняя код под число.
 
 ### Ограничения
 
@@ -72,6 +78,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | ProjectTo                                | После этапа 2 (корректность генератора)                                                                                                                                           |
 | Режим «класс-маппер»                     | Решить до 2.0                                                                                                                                                                     |
 | Защита `main`                            | Rulesets: `main-protection` (CI обязателен всем), `main-review` (апрув всем, кроме админа), `release-tags` (теги `v*` только админ)                                               |
+| Регистрация для `IMapper` в trimmed/AOT | **Feature switch** (21.10.2026): `IronMapper.Registration.IsSupported` (`MapperRegistry.IsSupported`, `ILLink.Substitutions.xml` в `IronMapper.dll`); `buildTransitive/IronMapper.targets` выключает его при `PublishAot`/`PublishTrimmed`, если ни один проект не ссылается на `IronMapper.Extensions.DI` (пакет DI помечает себя своим `buildTransitive`, транзитивно тоже); переопределение — `IronMapperRegistration=true|false`; при выключенном switch `RuntimeMapper` бросает исключение с именем свойства. Отклонены: opt-out свойство (по умолчанию +~90 КБ AOT у приложений только с extension-методами) и «принять для 1.2.0» |
 | Генерировать только используемые методы | **Отклонено** (20.10.2026). Чтобы знать, какие `MapToX`/`MapToXList`/`MapToXArray` вызываются, генератору пришлось бы сканировать все вызовы в компиляции: такой шаг зависит от каждого файла и ломает инкрементальность (перегенерация на каждое нажатие клавиши), а для `public`-методов, которые вызывают другие сборки, использование вообще не видно. Вместо этого: `[ExcludeFromCodeCoverage]` по свойству и отключение перегрузок (2.13) |
 
 ---
@@ -85,7 +92,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
 | 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30), PR 3 — `global using` (#31). PR 4 (форма кода) — `perf/generated-code-shape` |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30), PR 3 — `global using` (#31), PR 4 — форма кода (#32). PR 5 (реестр `IMapper`) — `feature/mapper-registry` |
 
 **Ветки (сверено 20.10.2026, после #28):**
 
@@ -94,8 +101,9 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - `fix/generator-equatable` — слита (#29, `533b927`), PR 1 релиза 1.2.0.
 - `fix/aot-honesty` — слита (#30, `da401f4`), PR 2 релиза 1.2.0.
 - `feature/implicit-using` — слита (#31, `b4f84c6`), PR 3 релиза 1.2.0.
-- `perf/generated-code-shape` — PR 4 релиза 1.2.0 (п.2.11), от `main` `b4f84c6`; не слита.
-- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty`, `feature/implicit-using` — уже в `main`. Удалить.
+- `perf/generated-code-shape` — слита (#32, `5047b24`), PR 4 релиза 1.2.0.
+- `feature/mapper-registry` — PR 5 релиза 1.2.0 (п.1.3, #26, #8), от `main` `5047b24`; не слита.
+- `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty`, `feature/implicit-using`, `perf/generated-code-shape` — уже в `main`. Удалить.
 
 ---
 
@@ -132,7 +140,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - InPlace: ×1,12 → не хуже ×1,03.
 - Collection (10): не хуже Mapperly. Collection (1000, 100k): не хуже текущего.
 - AOT, прирост к Baseline: +255 КБ → не больше +40 КБ.
-- `IMapper`: работает в AOT без предупреждений; Flat — не больше стоимости вызова делегата сверх extension-метода; без доп. аллокаций; холодный старт не больше +3 мс.
+- `IMapper`: работает в AOT без предупреждений; без доп. аллокаций; **Flat — не дороже вызова обобщённого метода через интерфейс `IMapper` и быстрее `IMapper` AutoMapper; холодный старт — вклад IronMapper поверх DI-контейнера не больше 3 мс** (`IronMapper_IMapper` минус `Manual_DI`). Цели Flat и холодного старта переформулированы мейнтейнером 21.10.2026: прежние («не больше стоимости делегата сверх extension-метода», «+3 мс к приложению без маппера») недостижимы через интерфейс `IMapper` и с MS.DI (см. п.1.3); проверяет полный прогон (шаг 8). Типизированный `IMapper<TSource, TDest>` — этап 3 (п.3.3). **Замеры PR 5 (предварительно, до правила «бенчмарки не в PR», см. п.1.3):** AOT без предупреждений и работает — да; без доп. аллокаций — да (200 → 168 Б, in-place 40 → 0 Б); Flat — нет: 16,0 нс против 11,1 нс у extension-метода (+4–5 нс; в 1.1.3 30,3 нс), причина — диспетчеризация generic-метода интерфейса, сам `RuntimeMapper` укладывается; холодный старт — нет: +21,1 мс (1.1.3 +23,3), из них ~14,5 мс — сам MS.DI, вклад IronMapper ~4 мс.
 - Сборка N=200: перемерить после PR 4, цель — порядок Mapperly.
 
 ### Порядок PR
@@ -142,12 +150,12 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 2. **Честность в AOT:** `[RequiresUnreferencedCode]`/`[RequiresDynamicCode]` на `AddIronMapper`, `RuntimeMapper` и других точках входа DI-пути (пользователь получает IL2026/IL3050 на своём вызове, а не общий IL2104); AOT-проба в CI для extension-методов; README: «сгенерированные маппинги совместимы с NativeAOT (проверено в CI), `IMapper` — пока нет» (#26). Сделано в `fix/aot-honesty` (не слита): только `[RequiresUnreferencedCode]` — динамической генерации кода в DI-пути нет (`MethodInfo.Invoke` в NativeAOT работает, ломает его trimming), `[RequiresDynamicCode]` был бы неправдой; IL2026 на вызове `AddIronMapper`. Job `aot` (`eng/verify-aot.ps1`), см. п.1.4.
 3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством. Сделано (#31), см. п.1.7.
 4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT. Сделано в `perf/generated-code-shape` (не слита): Collection(10), InPlace, AOT — цели достигнуты; Nested ×1,26 → ×1,09 (net10) / ×1,06 (net8) — цель ×1,05 не достигнута, причина — проверки на `null`, см. п.2.11; ×1,09 принято для 1.2.0, цель перенесена в 1.3.0 (п.2.3).
-5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26).
+5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26). Сделано в `feature/mapper-registry` (не слита), см. п.1.3: AOT и аллокации — цели достигнуты; цели Flat и холодного старта переформулированы (21.10.2026, раздел «Цели»), проверка — полный прогон. Найдено и исправлено по ходу: регистрация увеличивала AOT у приложений только с extension-методами (+2,6 → +93,7 КБ) — feature switch (решение 21.10.2026); инициализатор модуля создавал словари реестра и в приложении без `IMapper` — теперь только кладёт делегат сборки в lock-free список, регистрацию выполняет `RuntimeMapper`; проба `Manual_DI` в наборе; проверка ILLink-trimming в `verify-aot`.
 6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22).
 7. **Объём кода и покрытие** (п.2.13): перемерить; опции отключения перегрузок (на сборку и на карту); `[GeneratedCode]` на сгенерированном классе и `IronMapperExcludeFromCodeCoverage`.
-8. **Полный прогон**, `benchmarks/results/1.2.0/`, таблица «1.1.3 → 1.2.0» в `RESULTS.md`; README по п.5.1.
+8. **Полный прогон**, `benchmarks/results/1.2.0/`, таблица «1.1.3 → 1.2.0» в `RESULTS.md`; README по п.5.1. Цифры раздела Performance в CHANGELOG (при выпуске 1.2.0) и в docs — только из этого прогона: в `[Unreleased]` цифр нет (решение 21.10.2026, цифры PR 4 заменены качественными описаниями).
 
-После каждого PR из 4–7 — прогон затронутых категорий бенчмарков; после PR 1–3 (сгенерированный код не меняется) достаточно smoke-проверки набора.
+Бенчмарки в PR не запускаются (правило 21.10.2026, «Правила работы» → «Бенчмарки»): в каждом PR — smoke-проверка набора в CI; замеры — полный прогон (шаг 8), когда весь код 1.2.0 в `main`. Замеры PR 4 и PR 5 сделаны до этого правила.
 
 ---
 
@@ -167,18 +175,29 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 **Проблема (подтверждено бенчмарками).** `RuntimeMapper` сканирует сборки, ищет `assembly.GetType("IronMapper.Generated.GeneratedMappers")` по строке, вызывает `MethodInfo.Invoke`. Следствия: ×2,66 на Flat и +32–40 Б на вызов; холодный старт +23,1 мс; в NativeAOT триммер вырезает методы — `MappingException: No mapping registered` при запуске; исключения оборачиваются в `TargetInvocationException`.
 
-- [ ] Генератор выпускает регистрацию: `MapperCache<TSource, TDest>.Map` / `.MapInPlace` (статические поля-делегаты), заполняемые через `[ModuleInitializer]`; для `Map<TDest>(object)` — словарь `(Type, Type) → Delegate` из того же инициализатора.
-- [ ] Учесть платформы без `ModuleInitializerAttribute` и сборки, к которым ещё не обращались (`AddIronMapper(assembly)` явно запускает инициализатор).
-- [ ] Убрать `GetTypes()` и регистрацию профилей из `AddIronMapper` (профили нужны только генератору).
-- [ ] `Map<List<T>>`, `T[]`, `IEnumerable<T>` и др. как `TDest` — issue **#8**.
-- [ ] Тест: через `IMapper` пользователь получает исходное исключение (`ArgumentNullException`, исключение конвертера/хука) со стеком из сгенерированного метода.
-- [ ] Снять атрибуты `RequiresUnreferencedCode` (поставлены в PR 2 релиза 1.2.0, `fix/aot-honesty`), перевести `tests/IronMapper.AotProbe.DI` на ноль предупреждений и запуск.
+- [x] Генератор выпускает регистрацию (`feature/mapper-registry`): `GeneratedMappers.Registration.g.cs` — `[ModuleInitializer] RegisterIronMapperMappings()` передаёт колбэк в `MapperRegistry.AddAssembly`; колбэк вызывает `MapperRegistry.Register<TSource, TDest>(map, mapInto, mapList, mapArray)` с лямбдами на сгенерированные методы. `MapperCache<TSource, TDest>.Map` / `.MapInto` — статические делегаты; для `Map<TDest>(object)` — таблица по `Type` (вложенные `ConcurrentDictionary<Type, …>`: ключ-кортеж `(Type, Type)` и `Clear()` стоили 4,6 → 1,8 мс регистрации на старте — JIT словаря и EventSource). Регистрация ленивая: инициализатор модуля только кладёт делегат сборки в lock-free список (`MapperRegistry.PendingAssemblies`; статический конструктор реестра и его словари при этом не создаются — до исправления 21.10 создавались в каждом приложении), `Register` выполняется при создании первого `RuntimeMapper` или при следующем поиске (`EnsureInitialized`, под блокировкой; вызывающие ждут идущую регистрацию). `AddIronMapper(assembly)` только запускает инициализатор модуля (`EnsureModuleInitialized`, бывший `EnsureRegistered`). Тесты: реестр пуст, пока не создан `IMapper` (реальная сборка Application и `AddAssembly`); параллельное создание 8 мапперов — регистрация один раз и видна каждому; сборка, к которой обратились после создания маппера, находится; обе мутации (счётчик до конца регистрации, регистрация в `AddAssembly`) ловятся. В приложении без `IMapper` (JIT) остаётся загрузка `IronMapper.dll` и JIT четырёх маленьких методов (`IsSupported`, `AddAssembly`, `Push`, конструктор узла) плюс один узел на сборку: `IsSupported` должен быть в `IronMapper.dll`, иначе trimmer не подставит константу (подстановка — `ILLink.Substitutions.xml` этой сборки). Первая регистрация пары побеждает; кэш поиска по базовым типам сбрасывается при новой регистрации (тест на гонку/сброс).
+- [x] Платформы без `ModuleInitializerAttribute` — internal-копия атрибута в сгенерированном файле (если его нет в компиляции); C# 8 — регистрация без `[ModuleInitializer]`, пользователь вызывает `RegisterIronMapperMappings()` сам (документировано, вариант в `verify-package`). Сборки, к которым ещё не обращались: `AddIronMapper(assembly)` → `RuntimeHelpers.RunModuleConstructor` (без IL-предупреждений); при ненайденной карте `RuntimeMapper` запускает инициализаторы всех загруженных не-фреймворковых сборок и ищет снова (`GetReferencedAssemblies` не используется — IL2026). Тест: `MapperRegistryAssemblyTests` (Application/Domain, не параллельно; без `EnsureModuleInitialized` падает).
+- [x] `GetTypes()` и регистрация профилей убраны из `AddIronMapper` (CHANGELOG Changed); `AddProfile<T>`/`AddProfilesFromAssembly` только добавляют сборку.
+- [x] `Map<List<T>>`, `T[]`, `IEnumerable<T>`, `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>` как `TDest` для любого `IEnumerable<S>` — issue **#8**, через сгенерированные `MapToXList`/`MapToXArray`, без `MakeGenericType`/`MakeGenericMethod`. Runtime-тип источника и его базовые типы — да; интерфейсы источника и базовые типы приёмника — нет (не требовалось, описано в docs).
+- [x] Тест: исходные исключения (`ArgumentNullException` с `ParamName`, конвертер, хук, in-place) — `MapperRegistryTests`; до PR 5 падали 14 из 18 новых тестов.
+- [x] `RequiresUnreferencedCode` снят (`TrimMessages.cs`, polyfill удалены; `DynamicallyAccessedMembers` на `AddConverter<T>`), `IsAotCompatible` без подавлений; `MappingValidator` остаётся помеченным. `tests/IronMapper.AotProbe.DI` — ноль предупреждений и запуск (net8/net10).
+- [x] Проверка ILLink-trimming без AOT (`PublishTrimmed`, self-contained) в `verify-aot`: `AotProbe` — регистрации нет в обрезанной сборке пробы, `AotProbe.DI` — есть; ноль предупреждений, обе запускаются (net8/net10).
+- [x] **Feature switch регистрации** (решение 21.10.2026, см. «Принятые решения»): без него регистрация удерживала в AOT реестр и все сгенерированные методы — +2,6 → +93,7 КБ у приложения только с extension-методами. Теперь снова +2,6 КБ. Матрица проверена на локальных пакетах: `verify-aot` (A без DI — регистрации нет в map-файле ILC; A с `IronMapperRegistration=true` — есть, +41 КБ net10 / +277 КБ net8; B — работает; B с `=false` — падает с сообщением про свойство; C — DI транзитивно через библиотеку, карты в библиотеке без DI — JIT и AOT работают) и `verify-package` (switch в `runtimeconfig.json`: не задан по умолчанию и с DI, `false` с `PublishTrimmed` без DI, `true` с `IronMapperRegistration=true`; framework-dependent publish без DI — реестр находит карту).
 
 **Готово, когда:** нет `System.Reflection` в `Extensions.DI` и в сгенерированном коде; цели `IMapper` из раздела 1.2.0 выполнены; тест с одноимёнными типами из разных пространств имён проходит.
+
+**Итог (21.10.2026, предварительно; локальные исходники против опубликованного 1.1.3 в одной сессии, net10 / net8):**
+- `System.Reflection` в `Extensions.DI` — нет; в `MapperRegistry` (пакет `IronMapper`) — только тип `Assembly` и `RunModuleConstructor`, без рефлексии по сгенерированному коду. Одноимённые типы — тест проходит.
+- Flat: 30,3 → 16,0 нс (×2,61 → ×1,39) / 36,3 → 21,8 нс; extension-метод 11,1 / 14,5 нс. Прежняя цель «не больше стоимости делегата» не достигнута (+4–5 нс); переформулирована 21.10.2026 (раздел «Цели»). Причина (`DisassemblyDiagnoser` + временный бенчмарк): вызов через интерфейс — диспетчеризация generic virtual method (`VirtualDispatchHelpers.VirtualFunctionPointer`, поиск в хэш-таблице); делегат из поля, `MapperCache<,>.Map` и `RuntimeMapper.Map` напрямую стоят как extension-метод (11,7–12,2 против 13,3 нс; JIT встраивает чтение статического поля и превращает вызов делегата в прямой вызов `MapToUserDto`). Это свойство интерфейса `IMapper` (у AutoMapper так же), кодом реестра не убирается.
+- Аллокации: как у extension-метода (Flat 200 → 168 Б, in-place 40 → 0 Б, Collection 1000 +7 % → +0,5 % — `ToList` бенчмарка). **Достигнута.**
+- In-place 31,0 → 13,3 нс (×3,54 → ×1,50); Nested ×1,35 → ×1,10 / ×1,49 → ×1,13; Collection 1000 (net8) ×1,30 → ×1,04; DiOverhead Flat 30,8 → 16,4 нс.
+- Холодный старт (JIT, процесс, медиана 40): +23,3 → +21,1 мс. Прежняя цель +3 мс не достигнута. Разбивка (замер фаз внутри процесса): пустой контейнер MS.DI (`AddSingleton` + `Build` + `Get`) — 14,5 мс; вклад IronMapper поверх него было +7,3, стало +4,1 мс (регистрация 4,6 → 1,8 мс после смены ключей словаря; `AddIronMapper` ~1 мс; JIT первого маппинга ~1 мс). Регистрация растёт с числом карт: ~22 мс на 200 карт (~0,1 мс на карту — загрузка generic-типов делегатов и JIT большого `RegisterIronMapperMappingsCore`). Extension-методы: +2,1 → +2,8 мс (в пределах шума; теперь загружается `IronMapper.dll` из инициализатора модуля; после этого замера инициализатор перестал создавать словари реестра). Цель переформулирована (21.10.2026): вклад IronMapper поверх DI ≤ 3 мс, по пробе `Manual_DI`; проверка — полный прогон.
+- NativeAOT: `IMapper` работает, ноль предупреждений, +1,49 МБ (почти всё — MS.DI; 1.1.3: +1,47 МБ и падал), старт +1,4 мс; extension-методы +2,6 КБ (регистрация вырезается).
 
 ### 1.4. NativeAOT в CI (аудит п.23)
 
 - [x] Подтверждено бенчмарками: extension-методы публикуются без IL-предупреждений, работают, к старту ничего не добавляют.
+- [x] DI в AOT-пробе (PR 5, `feature/mapper-registry`): `tests/IronMapper.AotProbe.DI` — ноль предупреждений и запуск; добавлены `tests/IronMapper.AotProbe.Transitive` (+ `.Maps`, `.Services`) и проверка feature switch по map-файлу ILC (см. п.1.3).
 - [x] AOT-проба в CI (publish + запуск + проверка результата) — для extension-методов; DI — после 1.3 (`fix/aot-honesty`). Job `aot` в `ci.yml`, ubuntu, `eng/verify-aot.ps1` на упакованных пакетах, net8.0 и net10.0: `tests/IronMapper.AotProbe` (атрибуты, профиль с `MapFrom`, вложенная коллекция, `List`/`Array`, in-place, `[MapConverter]`) — ноль IL-предупреждений (`TreatWarningsAsErrors`, `TrimmerSingleWarn=false`), запуск проверяет значения; `tests/IronMapper.AotProbe.DI` — IL2026 на строке `AddIronMapper` в `Program.cs` и больше ничего (не запускается). Локально на Windows обе пробы проходят (~30 с с упаковкой, publish 5–8 с на пробу при тёплом кэше). На пакете 1.1.4 проба DI падает, как и должна: предупреждения внутри `IronMapper.Extensions.DI`, на вызове — ничего.
 - [x] Атрибуты DI-пути (`fix/aot-honesty`): `[RequiresUnreferencedCode]` на обеих перегрузках `AddIronMapper`, на `RegisterServices` и на классе `RuntimeMapper` (покрывает конструктор и подавляет предупреждения внутри); `IronMapperOptions` рефлексию не использует (только складывает сборки и типы в списки) — без атрибутов. Polyfill-атрибуты для netstandard2.0/2.1 (`Polyfills/`), `IsAotCompatible` для net10.0 обеих библиотек. При снятии атрибутов (п.1.3) — инвертировать пробу DI: ноль предупреждений и запуск.
 - [x] `MappingValidator` (рефлексия): `[RequiresUnreferencedCode]` на классе (`fix/aot-honesty`). Альтернатива — `[DynamicallyAccessedMembers]` на параметрах `Type` (без предупреждения при `typeof(X)`) — не выбрана: задача просила `RequiresUnreferencedCode`; можно пересмотреть в 2.0.0 вместе с судьбой валидатора.
@@ -186,8 +205,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 ### 1.4a. Размер AOT-бинарника (аудит п.23a)
 
 - [x] Причина установлена (mstat): не код IronMapper (~1,4 КБ, runtime-сборки в бинарнике нет), а `Enumerable.Select`+`ToList` → `System.Private.TypeLoader` (+~100 КБ) и generic-код CoreLib. Фиксированная цена на приложение.
-- [x] Исправлено в 2.11 (`perf/generated-code-shape`): +2,6 КБ к Baseline (1 230 336 → 1 232 896 Б; Mapperly +23,6 КБ), без предупреждений, контрольная сумма совпадает. Замер — пробы `StartupProbe.Baseline/IronMapper/Mapperly` из копии `benchmarks/` на локально упакованном пакете `1.2.0-local.1`: `run-aot.ps1` с `UseLocalIronMapper=true` не публикуется (NETSDK1207: глобальное `PublishAot=true` доходит до `ProjectReference` на netstandard2.0-проекты `src/`) — починить в скриптах набора до шага 8.
-- [ ] В AOT-пробу `IMapper` добавить базовую линию «ручной код + тот же DI-контейнер», чтобы отделить вклад IronMapper от Microsoft.Extensions.DependencyInjection.
+- [x] Исправлено в 2.11 (`perf/generated-code-shape`): +2,6 КБ к Baseline (1 230 336 → 1 232 896 Б; Mapperly +23,6 КБ), без предупреждений, контрольная сумма совпадает. Замер — пробы `StartupProbe.Baseline/IronMapper/Mapperly` из копии `benchmarks/` на локально упакованном пакете `1.2.0-local.1`: `run-aot.ps1` с `UseLocalIronMapper=true` не публикуется (NETSDK1207: глобальное `PublishAot=true` доходит до `ProjectReference` на netstandard2.0-проекты `src/`) — починить в скриптах набора до шага 8. **Починено в PR 5:** скрипт передаёт `StartupProbeAot=true`, `PublishAot` ставит сама проба (`probes/StartupProbe.props`); `UndefineProperties` не помогал (restore). При локальных исходниках `Directory.Build.targets` импортирует `src/IronMapper/buildTransitive/IronMapper.targets` (feature switch), чтобы размер мерился как у пакета.
+- [x] Базовая линия «ручной код + тот же DI-контейнер» (PR 5): `Manual_DI` в `StartupBenchmark` и `probes/StartupProbe.Manual_DI` (`ManualDiSetup`: singleton по типу, `BuildServiceProvider`, `GetRequiredService`), в списках проб скриптов, исключена из `run-footprint` (не библиотека). Проверено smoke: сборка, тесты эквивалентности, `StartupBenchmark --job Dry`, публикация JIT и NativeAOT с одним запуском (контрольная сумма как у Baseline, без IL-предупреждений). Замеры — полный прогон.
 
 ### 1.5. Конвертеры (аудит п.3, п.18)
 
@@ -342,8 +361,12 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ### 3.3. Поверхность `IMapper`
 
-- [ ] #8 (через 1.3); `Map(source, destination)` возвращает `TDest`; `Map(object, Type, Type)`; выбор карты по типу времени выполнения с базовыми типами.
+- [x] #8 (через 1.3, PR 5): коллекции как `TDest`.
+- [x] `Map(object, Type, Type)` — на `RuntimeMapper` и `MapperRegistry`, **не** в интерфейсе `IMapper` (новый член интерфейса сломал бы чужие реализации в 1.x; в интерфейс — в 2.0).
+- [x] Выбор карты по типу времени выполнения с базовыми типами источника (PR 5). Интерфейсы источника и базовые типы приёмника — нет.
+- [ ] `Map(source, destination)` возвращает `TDest`.
 - [ ] Контекст в `Map` — issue **#7** (после реестра, сначала дизайн API).
+- [ ] **Типизированный `IMapper<TSource, TDest>`** (решение 21.10.2026): вызов через обобщённый метод интерфейса `IMapper.Map<TSource, TDest>` стоит диспетчеризации generic virtual method (+4–5 нс на Flat, PR 5), типизированный сервис из DI — обычный интерфейсный вызов. Рассмотреть вместе с режимом «класс-маппер» (внедрение в DI без рефлексии).
 
 ### 3.4. Пробелы в конфигурации
 
@@ -412,7 +435,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 
 ## Режим «класс-маппер» (аудит п.26) — решить до 2.0
 
-Сейчас каждая карта добавляет 4 метода в IntelliSense исходного типа, класс `GeneratedMappers` одинаково называется во всех сборках. Опциональный режим `partial class OrderMapper` (как Mapperly): контроль имён и видимости, внедрение в DI без рефлексии, подмена в тестах, нет конфликтов между сборками. Не ломать текущий API.
+Сейчас каждая карта добавляет 4 метода в IntelliSense исходного типа, класс `GeneratedMappers` одинаково называется во всех сборках. Опциональный режим `partial class OrderMapper` (как Mapperly): контроль имён и видимости, внедрение в DI без рефлексии, подмена в тестах, нет конфликтов между сборками. Не ломать текущий API. Вместе с ним — типизированный `IMapper<TSource, TDest>` (п.3.3).
 
 ## Переименование — до 2.0.0
 
@@ -428,7 +451,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | #   | Суть                              | Пункт |
 | --- | --------------------------------- | ----- |
 | 7   | Контекст в `Map`                  | 3.3   |
-| 8   | `Map<List<Dto>>` падает в runtime | 1.3   |
+| 8   | `Map<List<Dto>>` падает в runtime | 1.3 (PR 5, `feature/mapper-registry`) |
 | 9   | ProjectTo                         | 3.2   |
 | 10  | .NET 9                            | 5.3   |
 

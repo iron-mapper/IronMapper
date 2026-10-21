@@ -24,9 +24,9 @@ English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main
   меньше (`IM0001` для них не выдаётся, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
 - **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,6 нс на объект. Вложенные объекты медленнее
   (×1,26), см. [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
-- **Работа сгенерированных методов в NativeAOT проверяется в CI** (.NET 8 и .NET 10): они публикуются без
-  предупреждений trimming/AOT и работают корректно. Необязательный сервис `IMapper` в NativeAOT пока не работает и
-  предупреждает об этом при публикации: IL2026 на вашем вызове `AddIronMapper` ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
+- **Работа в NativeAOT проверяется в CI** (.NET 8 и .NET 10): сгенерированные методы и, начиная с 1.2.0,
+  необязательный сервис `IMapper` публикуются без предупреждений trimming/AOT и работают корректно. До 1.1.4
+  включительно `IMapper` использовал reflection и в NativeAOT не работал ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Холодный старт — около 2 мс** (запуск процесса и первый маппинг сверх консольного приложения без маппера), тот же
   порядок, что у ручного кода. AutoMapper и Mapster тратят на этом десятки миллисекунд — строят конфигурацию маппинга
   ([результаты](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
@@ -114,7 +114,8 @@ BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полн
 - Холодный старт — медиана времени от запуска процесса до выхода с одним маппингом, минус то же консольное
   приложение без маппера (30 запусков). Метрика чувствительна к шуму, смотрите на порядок величины.
 - NativeAOT: «работает» — опубликованный файл запустился и вывел правильный результат. Файл с `IMapper` из IronMapper
-  падает с `MappingException`. Mapster и AutoMapper строят мапперы во время выполнения и тоже падают.
+  1.1.3 падает с `MappingException` (начиная с 1.2.0 работает, проверяется в CI). Mapster и AutoMapper строят мапперы
+  во время выполнения и тоже падают.
 - Размеры — прирост к тому же консольному приложению без маппера.
 - Разница в коллекциях в несколько процентов (здесь ×1,01–×1,05; 100 000 элементов — в полном отчёте) в пределах
   разброса между запусками и не означает, что одна библиотека быстрее.
@@ -199,14 +200,22 @@ dotnet add package IronMapper.Extensions.DI
 using IronMapper.Extensions.DI;
 using IronMapper.Interfaces;
 
-builder.Services.AddIronMapper(typeof(Program).Assembly);   // регистрирует IMapper и профили
+builder.Services.AddIronMapper(typeof(Program).Assembly);   // регистрирует IMapper и маппинги этой сборки
 
 app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUser(id)));
+app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()));
 ```
 
-`IMapper` находит и вызывает сгенерированные методы через reflection. Он медленнее extension-методов (см. таблицу
-выше) и не работает в NativeAOT (публикация выдаёт IL2026 на `AddIronMapper`); если типы известны при компиляции,
-вызывайте extension-методы напрямую.
+Начиная с 1.2.0 `IMapper` вызывает сгенерированные методы через делегаты, которые генератор регистрирует для каждого
+маппинга (без reflection): он работает с trimming и NativeAOT, а исключения ваших конвертеров и хуков приходят как
+есть. `Map<List<UserDto>>`, `Map<UserDto[]>` и `Map<IEnumerable<UserDto>>` маппят коллекции. Передайте в
+`AddIronMapper` все сборки, где объявлены маппинги; маппинги регистрируются при создании первого `IMapper`.
+Приложение, которое не использует `IMapper`, только загружает сборку IronMapper для сгенерированного инициализатора
+модуля, а в приложении с trimming или NativeAOT без `IronMapper.Extensions.DI` регистрации нет вовсе
+([подробнее](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md#регистрация-для-imapper-в-приложениях-с-trimming-и-nativeaot)).
+Вызов через `IMapper` всё равно дороже extension-метода (вызов обобщённого метода интерфейса и делегата, а для
+`Map<TDest>(object)` — ещё поиск по типу); если типы известны при компиляции, вызывайте extension-методы напрямую. До 1.1.4 включительно `IMapper` использовал reflection, был в 2,7 раза медленнее на Flat и
+не работал в NativeAOT.
 
 ---
 
@@ -221,11 +230,6 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
   Используйте `MapFrom`.
 - **`IM0001` не выдаётся для маппингов из профилей** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
   остаётся со значением по умолчанию без предупреждения.
-- **`IMapper` (IronMapper.Extensions.DI) использует reflection и не работает в NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): публикация с
-  trimming или NativeAOT выдаёт IL2026 на вашем вызове `AddIronMapper`, а приложение падает с `MappingException` при
-  запуске. В нём также нет перегрузки `Map` для
-  коллекций ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) и передачи контекста в вызов
-  ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 - **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
@@ -233,7 +237,8 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
   используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002`–`IM0004` пока не выдаются.
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Кроме того: у диагностик нет места в исходном коде; in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
+Кроме того: у диагностик нет места в исходном коде; в `IMapper` нельзя передать контекст в вызов
+([#7](https://github.com/iron-mapper/IronMapper/issues/7)); in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
 `ReverseMap()` сопоставляет только по именам; конвертерам нужен публичный конструктор без параметров; private- и
 protected-вложенные типы маппить нельзя (`IM0010`); у каждого проекта решения свой класс `GeneratedMappers`.
 Подробности: [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md),
@@ -256,13 +261,13 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
 Открытые issues:
 
 - `ProjectTo<TDestination>()` для `IQueryable` — [#9](https://github.com/iron-mapper/IronMapper/issues/9)
-- `Map<List<T>>(source)` через `IMapper` — [#8](https://github.com/iron-mapper/IronMapper/issues/8)
 - Передача контекста в вызов `Map` (аналог `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
 - Целевой фреймворк `net9.0` — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
 
-Следующий релиз, 1.2.0: более быстрый сгенерированный код для вложенных объектов и коллекций, `IMapper` без
-reflection (NativeAOT, [#26](https://github.com/iron-mapper/IronMapper/issues/26)), `IM0001` для профилей с включением по флагу ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), диагностики с местом в
-исходном коде. Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
+Следующий релиз, 1.2.0. Сделано (ещё не выпущено): сгенерированный код коллекций без LINQ, `IMapper` без reflection,
+который работает в NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) и маппит коллекции через `Map<List<T>>`
+([#8](https://github.com/iron-mapper/IronMapper/issues/8)). В планах: `IM0001` для профилей с включением по флагу ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), диагностики
+с местом в исходном коде. Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
 он может меняться.
 
 ---

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Application layer of the multi-project IMapper test (MapperRegistryAssemblyTests): DTOs and a MappingProfile for
+    the entities of IronMapper.Integration.Domain. The test project never touches a type of this assembly before
+    AddIronMapper(assembly), so the mappings are registered only if AddIronMapper runs the assembly's registration.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper.Integration.Domain\IronMapper.Integration.Domain.csproj" />
+    <ProjectReference Include="..\..\src\IronMapper\IronMapper.csproj" />
+    <ProjectReference Include="..\..\src\IronMapper.Generator\IronMapper.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

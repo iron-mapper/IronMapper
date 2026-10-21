@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using IronMapper.Configuration;
 using IronMapper.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IronMapper.Extensions.DI;
 
@@ -13,32 +16,33 @@ namespace IronMapper.Extensions.DI;
 /// </summary>
 public sealed class IronMapperOptions
 {
-    internal List<Assembly> ProfileAssemblies { get; } = new();
-    internal List<Type> ConverterTypes { get; } = new();
+    internal List<Assembly> MappingAssemblies { get; } = new();
+    internal List<Action<IServiceCollection>> ServiceRegistrations { get; } = new();
 
     /// <summary>
-    /// Registers the assembly containing <typeparamref name="TProfile"/> for profile scanning.
-    /// The profile type itself must have a public parameterless constructor.
+    /// Registers the generated mappings of the assembly that contains <typeparamref name="TProfile"/>.
+    /// The profile itself is not added to the container: profiles are read by the source generator at compile time.
     /// </summary>
     /// <typeparam name="TProfile">A concrete <see cref="MappingProfile"/> subclass with a public parameterless constructor.</typeparam>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddProfile<TProfile>() where TProfile : MappingProfile, new()
     {
-        ProfileAssemblies.Add(typeof(TProfile).Assembly);
+        MappingAssemblies.Add(typeof(TProfile).Assembly);
         return this;
     }
 
     /// <summary>
-    /// Scans <paramref name="assembly"/> for all concrete <see cref="MappingProfile"/> subclasses
-    /// and registers each of them in the DI container as a singleton.
-    /// Mappings themselves come from the code generated at compile time; registering a profile
-    /// does not add or change mappings at runtime.
+    /// Registers the generated mappings of <paramref name="assembly"/> (attributes and profiles): <c>AddIronMapper</c> runs
+    /// its module initializer even if nothing has used the assembly yet, and the mappings are registered when the first
+    /// <c>IMapper</c> is created. The assembly is not scanned, and profiles are not added
+    /// to the container: mappings come from the code generated at compile time.
     /// </summary>
-    /// <param name="assembly">The assembly to scan for <see cref="MappingProfile"/> subclasses.</param>
+    /// <param name="assembly">An assembly with generated mappings.</param>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddProfilesFromAssembly(Assembly assembly)
     {
-        ProfileAssemblies.Add(assembly);
+        if (assembly is null) throw new ArgumentNullException(nameof(assembly));
+        MappingAssemblies.Add(assembly);
         return this;
     }
 
@@ -49,9 +53,10 @@ public sealed class IronMapperOptions
     /// </summary>
     /// <typeparam name="TConverter">A concrete type implementing <see cref="ITypeConverter"/>.</typeparam>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
-    public IronMapperOptions AddConverter<TConverter>() where TConverter : class, ITypeConverter
+    public IronMapperOptions AddConverter<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TConverter>()
+        where TConverter : class, ITypeConverter
     {
-        ConverterTypes.Add(typeof(TConverter));
+        ServiceRegistrations.Add(static services => services.TryAddTransient<TConverter>());
         return this;
     }
 }

@@ -4,7 +4,8 @@
     The global using IronMapper.Generated added by the packed IronMapper package (buildTransitive/IronMapper.props).
     eng/verify-package.ps1 builds this project several times from the local feed, each time with one source file
     (ConsumerSource) and different properties: ImplicitUsings on/off, LangVersion 9, IronMapperImplicitUsings=false,
-    a reference to IronMapper.Extensions.DI only (IronMapperPackage), the Quick Start of README.md / README.ru.md.
+    a reference to IronMapper.Extensions.DI only (IronMapperPackage), the Quick Start of README.md / README.ru.md, and the
+    feature switch of the IMapper registration (PublishTrimmed, IronMapperRegistration, a framework-dependent publish).
     Intentionally NOT part of IronMapper.slnx.
   -->
   <PropertyGroup>

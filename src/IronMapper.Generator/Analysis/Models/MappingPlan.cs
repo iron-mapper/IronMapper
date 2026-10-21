@@ -96,9 +96,15 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <summary>Accessibility of the generated methods (<c>public</c>/<c>internal</c>), as in <see cref="MappingDescriptor.MethodAccessibility"/>.</summary>
     public string MethodAccessibility { get; }
 
+    /// <summary>Fully-qualified C# name of the source type (<c>global::...</c>), for the generated registration.</summary>
+    public string SourceFullName { get; }
+
+    /// <summary>Fully-qualified C# name of the destination type, for the generated registration.</summary>
+    public string DestFullName { get; }
+
     /// <summary>Initialises a new <see cref="MappingPlanEntry"/>.</summary>
     public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
-        string methodAccessibility)
+        string methodAccessibility, string sourceFullName, string destFullName)
     {
         Origin = origin;
         PairKey = pairKey;
@@ -107,6 +113,8 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         HintName = hintName;
         HelperScope = helperScope;
         MethodAccessibility = methodAccessibility;
+        SourceFullName = sourceFullName;
+        DestFullName = destFullName;
     }
 
     /// <inheritdoc/>
@@ -118,7 +126,9 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && MethodName == other.MethodName
            && HintName == other.HintName
            && HelperScope == other.HelperScope
-           && MethodAccessibility == other.MethodAccessibility;
+           && MethodAccessibility == other.MethodAccessibility
+           && SourceFullName == other.SourceFullName
+           && DestFullName == other.DestFullName;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -134,6 +144,8 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + HintName.GetHashCode();
         hash = hash * 31 + HelperScope.GetHashCode();
         hash = hash * 31 + MethodAccessibility.GetHashCode();
+        hash = hash * 31 + SourceFullName.GetHashCode();
+        hash = hash * 31 + DestFullName.GetHashCode();
         return hash;
     }
 }

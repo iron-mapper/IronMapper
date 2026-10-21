@@ -1,58 +1,64 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using IronMapper.Exceptions;
 using IronMapper.Interfaces;
+using IronMapper.Registration;
 
 namespace IronMapper.Extensions.DI;
 
 /// <summary>
 /// Runtime implementation of <see cref="IMapper"/> for use with dependency injection.
-/// Delegates all mapping calls to the extension methods emitted by the IronMapper Source Generator
-/// (found in <c>IronMapper.Generated.GeneratedMappers</c>).
+/// Calls the extension methods emitted by the IronMapper Source Generator through the delegates of the generated
+/// registry (<see cref="MapperRegistry"/>, <see cref="MapperCache{TSource, TDest}"/>), without reflection: it works
+/// with trimming and NativeAOT, and exceptions of the generated code (a <see langword="null"/> argument, a converter,
+/// a hook) reach the caller as they are.
 /// </summary>
 /// <remarks>
-/// On the first mapping call the mapper scans every loaded assembly for the generated
-/// <c>IronMapper.Generated.GeneratedMappers</c> static class and caches a <see cref="MethodInfo"/>
-/// per <c>(sourceType, destType)</c> pair.  Every call then invokes the cached method via
-/// <c>MethodInfo.Invoke</c>, so this mapper relies on reflection and does not work with trimming or NativeAOT
-/// (the trimmer removes the generated methods; creating the mapper reports IL2026). Methods are matched by signature: a <c>MapTo*</c> method whose
-/// parameter is the exact source type and whose return type is the destination type (or, for the in-place
-/// overload, whose parameters are both types), so qualified method names (IM0013) are found too;
-/// public and internal generated methods are both found;
-/// assemblies whose names start with <c>System.</c> or
-/// <c>Microsoft.</c> are not scanned.
+/// <para>
+/// Every assembly with generated mappings registers them through its module initializer. An assembly whose code
+/// nothing has used yet (for example one that holds only profiles) is registered by <c>AddIronMapper(assembly)</c>;
+/// when a mapping is not found, the loaded assemblies are registered and the lookup is repeated.
+/// </para>
+/// <para>
+/// <c>Map&lt;TSource, TDest&gt;</c> uses the mapping of the exact pair; otherwise, like <c>Map&lt;TDest&gt;(object)</c>,
+/// it looks the mapping up by type (<see cref="MapperRegistry.TryGetMap"/>): the nearest base type of the source with
+/// a mapping, and collections as the destination type (<c>List&lt;T&gt;</c>, <c>T[]</c>, <c>IEnumerable&lt;T&gt;</c> and
+/// the collection interfaces of <c>List&lt;T&gt;</c>) for any <c>IEnumerable&lt;S&gt;</c> source of a mapped element pair.
+/// </para>
 /// </remarks>
-[RequiresUnreferencedCode(TrimMessages.IMapper, Url = TrimMessages.IMapperUrl)]
 public sealed class RuntimeMapper : IMapper
 {
-    // null value = mapping was looked up and not found (negative cache).
-    private readonly ConcurrentDictionary<(Type Source, Type Dest), MethodInfo?> _cache = new();
-    private readonly ConcurrentDictionary<(Type Source, Type Dest), MethodInfo?> _inPlaceCache = new();
-    private readonly IServiceProvider _provider;
-
-    /// <summary>Initialises the mapper with the application's <see cref="IServiceProvider"/>.</summary>
-    /// <param name="provider">The application service provider used for dependency resolution.</param>
+    /// <summary>Initialises the mapper and registers the mappings of the assemblies whose module initializers have run.</summary>
+    /// <param name="provider">The application service provider (kept for compatibility; mappings do not use it).</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="provider"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The registration of the generated mappings is turned off (<see cref="MapperRegistry.IsSupported"/>), e.g. by
+    /// <c>&lt;IronMapperRegistration&gt;false&lt;/IronMapperRegistration&gt;</c>: the mapper would find no mappings.
+    /// </exception>
     public RuntimeMapper(IServiceProvider provider)
     {
-        _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        if (provider is null) throw new ArgumentNullException(nameof(provider));
+        MapperRegistry.EnsureSupported();
+        MapperRegistry.EnsureInitialized();
     }
 
     /// <inheritdoc/>
     public TDest Map<TDest>(object source)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return (TDest)MapInternal(source.GetType(), typeof(TDest), source)!; // safe: MapInternal throws MappingException rather than returning null
+
+        // Looked up on every call (a dictionary lookup in the registry): a cache here would keep the mapping of a base
+        // type after an exact mapping is registered by an assembly loaded later.
+        return (TDest)GetMap(source.GetType(), typeof(TDest))(source)!; // safe: the generated mapping returns a TDest
     }
 
     /// <inheritdoc/>
     public TDest Map<TSource, TDest>(TSource source)
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return (TDest)MapInternal(typeof(TSource), typeof(TDest), source)!; // safe: MapInternal throws MappingException rather than returning null
+
+        var map = MapperCache<TSource, TDest>.Map;
+        return map is not null ? map(source) : MapSlow<TSource, TDest>(source);
     }
 
     /// <inheritdoc/>
@@ -66,22 +72,14 @@ public sealed class RuntimeMapper : IMapper
         if (source is null) throw new ArgumentNullException(nameof(source));
         if (destination is null) throw new ArgumentNullException(nameof(destination));
 
-        var key = (typeof(TSource), typeof(TDest));
-        if (!_inPlaceCache.TryGetValue(key, out var method))
+        var mapInto = MapperCache<TSource, TDest>.MapInto;
+        if (mapInto is not null)
         {
-            method = FindGeneratedInPlaceMethod(typeof(TSource), typeof(TDest));
-            _inPlaceCache.TryAdd(key, method);
+            mapInto(source, destination);
+            return;
         }
 
-        if (method is null)
-        {
-            throw new MappingException(
-                $"No in-place mapping registered from '{typeof(TSource).Name}' to '{typeof(TDest).Name}'. " +
-                "Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the " +
-                "IronMapper Source Generator has run on the project that owns these types.");
-        }
-
-        method.Invoke(null, new object[] { source, destination });
+        GetMapInto(typeof(TSource), source.GetType(), typeof(TDest))(source, destination);
     }
 
     /// <inheritdoc/>
@@ -96,78 +94,64 @@ public sealed class RuntimeMapper : IMapper
         return result;
     }
 
+    /// <summary>
+    /// Maps <paramref name="source"/> to <paramref name="destinationType"/>, looking the mapping up by
+    /// <paramref name="sourceType"/> (see <see cref="MapperRegistry.TryGetMap"/>).
+    /// </summary>
+    /// <param name="source">The object to map.</param>
+    /// <param name="sourceType">The source type; <paramref name="source"/> must be an instance of it.</param>
+    /// <param name="destinationType">The destination type.</param>
+    /// <returns>The mapped object.</returns>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    /// <exception cref="MappingException">No mapping is registered for the types.</exception>
+    public object? Map(object source, Type sourceType, Type destinationType)
+        => MapperRegistry.Map(source, sourceType, destinationType);
+
     // -----------------------------------------------------------------------
     // Internal
     // -----------------------------------------------------------------------
 
-    private object? MapInternal(Type sourceType, Type destType, object source)
+    private static TDest MapSlow<TSource, TDest>(TSource source)
     {
-        var key = (sourceType, destType);
+        // The registry may not have run the registrations of assemblies initialized after this mapper was created.
+        MapperRegistry.EnsureInitialized();
+        var map = MapperCache<TSource, TDest>.Map;
+        if (map is not null) return map(source);
 
-        if (!_cache.TryGetValue(key, out var method))
-        {
-            method = FindGeneratedMethod(sourceType, destType);
-            _cache.TryAdd(key, method);
-        }
+        var declared = typeof(TSource);
+        var runtime = source!.GetType();
+        if (MapperRegistry.TryGetMap(declared, typeof(TDest), out var found)
+            || (runtime != declared && MapperRegistry.TryGetMap(runtime, typeof(TDest), out found)))
+            return (TDest)found(source)!;
 
-        if (method is null)
-        {
-            throw new MappingException(
-                $"No mapping registered from '{sourceType.Name}' to '{destType.Name}'. " +
-                "Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the " +
-                "IronMapper Source Generator has run on the project that owns these types.");
-        }
-
-        return method.Invoke(null, new[] { source });
+        return (TDest)GetMap(runtime, typeof(TDest))(source)!;
     }
 
-    /// <summary>
-    /// Scans all loaded assemblies for the generated <c>IronMapper.Generated.GeneratedMappers</c>
-    /// static class and returns the single-parameter extension method matching the requested type pair.
-    /// </summary>
-    private static MethodInfo? FindGeneratedMethod(Type sourceType, Type destType)
-        => FindInGeneratedClass(new[] { sourceType }, destType);
-
-    /// <summary>
-    /// Scans all loaded assemblies for the two-parameter in-place extension method
-    /// <c>MapToDestType(source, destination)</c>.
-    /// </summary>
-    private static MethodInfo? FindGeneratedInPlaceMethod(Type sourceType, Type destType)
-        => FindInGeneratedClass(new[] { sourceType, destType }, typeof(void));
-
-    private static MethodInfo? FindInGeneratedClass(Type[] paramTypes, Type returnType)
+    private static Func<object, object?> GetMap(Type sourceType, Type destinationType)
     {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        if (MapperRegistry.TryGetMap(sourceType, destinationType, out var map)) return map;
+
+        MapperRegistry.EnsureLoadedAssembliesRegistered();
+        if (MapperRegistry.TryGetMap(sourceType, destinationType, out map)) return map;
+
+        throw MapperRegistry.NoMappingException(sourceType, destinationType);
+    }
+
+    private static Action<object, object> GetMapInto(Type declaredType, Type runtimeType, Type destinationType)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            // Fast path: skip known framework / system assemblies.
-            var asmName = assembly.GetName().Name;
-            if (asmName is null) continue;
-            if (asmName.StartsWith("System.", StringComparison.Ordinal)
-                || asmName.StartsWith("Microsoft.", StringComparison.Ordinal)
-                || asmName == "mscorlib" || asmName == "netstandard")
-                continue;
+            if (MapperRegistry.TryGetMapInto(declaredType, destinationType, out var mapInto)
+                || (runtimeType != declaredType && MapperRegistry.TryGetMapInto(runtimeType, destinationType, out mapInto)))
+                return mapInto;
 
-            var generatedClass = assembly.GetType("IronMapper.Generated.GeneratedMappers");
-            if (generatedClass is null) continue;
-
-            // Generated methods are internal when a mapped type is internal.
-            // Temporary until the reflection-free registry (plan item 1.3).
-            foreach (var method in generatedClass.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
-            {
-                // By signature, not by name: the name is MapTo{Dest.Name} or a qualified name (IM0013).
-                // MapToXList/MapToXArray take IEnumerable<T> and never match an exact element type.
-                if (!method.Name.StartsWith("MapTo", StringComparison.Ordinal) || method.ReturnType != returnType)
-                    continue;
-                var parameters = method.GetParameters();
-                if (parameters.Length != paramTypes.Length) continue;
-
-                var matches = true;
-                for (var i = 0; i < parameters.Length && matches; i++)
-                    matches = parameters[i].ParameterType == paramTypes[i];
-                if (matches) return method;
-            }
+            MapperRegistry.EnsureLoadedAssembliesRegistered();
         }
 
-        return null;
+        throw new MappingException(
+            $"No in-place mapping registered from '{declaredType.Name}' to '{destinationType.Name}'. " +
+            "Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists, the " +
+            "IronMapper Source Generator has run on the project that owns these types, and that project's " +
+            "assembly is passed to AddIronMapper (or used before the first mapping).");
     }
 }

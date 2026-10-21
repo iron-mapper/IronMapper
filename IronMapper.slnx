@@ -8,6 +8,8 @@
   <Folder Name="/tests/">
     <Project Path="tests/IronMapper.Generator.Tests/IronMapper.Generator.Tests.csproj" />
     <Project Path="tests/IronMapper.Tests/IronMapper.Tests.csproj" />
+    <Project Path="tests/IronMapper.Integration.Application/IronMapper.Integration.Application.csproj" />
+    <Project Path="tests/IronMapper.Integration.Domain/IronMapper.Integration.Domain.csproj" />
     <Project Path="tests/IronMapper.Integration.Tests/IronMapper.Integration.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">

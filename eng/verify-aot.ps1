@@ -4,11 +4,19 @@
 
 .DESCRIPTION
     1. Packs IronMapper and IronMapper.Extensions.DI (unless -SkipPack).
-    2. Publishes tests/IronMapper.AotProbe (generated extension methods) with PublishAot for every framework, requires
-       zero trim/AOT warnings, runs the executable and checks that it exits with 0 (it checks the mapped values).
-    3. Publishes tests/IronMapper.AotProbe.DI (IMapper from the DI package) and requires IL2026 on the AddIronMapper
-       line of its Program.cs and no other trim/AOT warning (no summary IL2104 for an IronMapper assembly). Not run:
-       IMapper does not work in NativeAOT yet (plan item 1.3, issue #26).
+    2. Publishes the probes with PublishAot for every framework, requires zero trim/AOT warnings and runs the
+       executables (each checks the mapped values and exits with 0). The ILC map file shows whether the generated
+       registration for IMapper (feature switch IronMapper.Registration.IsSupported) is in the executable:
+       - A: tests/IronMapper.AotProbe, generated extension methods, no DI package: the registration must be removed;
+       - A with IronMapperRegistration=true: the registration must stay (explicit override);
+       - B: tests/IronMapper.AotProbe.DI, IMapper (registry, collections, runtime types, original exceptions);
+       - B with IronMapperRegistration=false: the executable must fail with the message that names the property;
+       - C: tests/IronMapper.AotProbe.Transitive, IMapper through a library that references the DI package, mappings
+         in a library without it; also run with the JIT (dotnet run) first.
+       The sizes of A with and without the registration are printed.
+    3. Publishes A and B trimmed without NativeAOT (ILLink: PublishTrimmed, self-contained) with the same requirements;
+       whether the registration is in the trimmed probe assembly is read from the assembly itself (the name of the
+       generated RegisterIronMapperMappingsCore is gone when the trimmer removed the method).
     The probes are restored into an isolated package cache: IronMapper* only from -PackageDir, everything else
     (Microsoft.Extensions.DependencyInjection, the ILCompiler packages) from nuget.org.
     Needs the NativeAOT prerequisites (Linux: clang, zlib1g-dev; Windows: the C++ build tools of Visual Studio).
@@ -60,6 +68,20 @@ if (-not $SkipPack) {
 
 $probeA = Join-Path $repoRoot 'tests/IronMapper.AotProbe/IronMapper.AotProbe.csproj'
 $probeB = Join-Path $repoRoot 'tests/IronMapper.AotProbe.DI/IronMapper.AotProbe.DI.csproj'
+$probeC = Join-Path $repoRoot 'tests/IronMapper.AotProbe.Transitive/IronMapper.AotProbe.Transitive.csproj'
+# Registration: whether the generated registration must be in the executable. Fails: the text the executable must
+# fail with (exit code not 0). Jit: run it with the JIT (dotnet run) before the publish.
+$cases = @(
+    @{ Name = 'A'; Project = $probeA; Registration = $false }
+    @{ Name = 'A, IronMapperRegistration=true'; Project = $probeA; Properties = @('-p:IronMapperRegistration=true')
+       Registration = $true }
+    @{ Name = 'B'; Project = $probeB; Registration = $true }
+    @{ Name = 'B, IronMapperRegistration=false'; Project = $probeB; Properties = @('-p:IronMapperRegistration=false')
+       Registration = $false; Fails = '<IronMapperRegistration>true</IronMapperRegistration>' }
+    @{ Name = 'C'; Project = $probeC; Registration = $true; Jit = $true }
+    @{ Name = 'A, PublishTrimmed'; Project = $probeA; Trimmed = $true; Registration = $false }
+    @{ Name = 'B, PublishTrimmed'; Project = $probeB; Trimmed = $true; Registration = $true }
+)
 $work = Join-Path ([System.IO.Path]::GetTempPath()) "ironmapper-aot-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $work | Out-Null
 
@@ -80,51 +102,81 @@ $nugetConfig = Join-Path $work 'nuget.config'
 </configuration>
 "@ | Set-Content -Path $nugetConfig -Encoding utf8
 
-# Publishes one probe for one framework; returns the IL warnings (unique, the same warning is printed by the analyzer
-# and by ILC) and the output directory.
-function Publish-Probe([string] $project, [string] $tf) {
-    $name = [System.IO.Path]::GetFileNameWithoutExtension($project)
-    $out = Join-Path $work "$name-$tf"
-    $log = Join-Path $work "$name-$tf.log"
-    $props = "-p:IronMapperVersion=$Version", "-p:RestorePackagesPath=$(Join-Path $work 'packages')", "-p:RestoreConfigFile=$nugetConfig"
+$restoreProps = @("-p:IronMapperVersion=$Version", "-p:RestorePackagesPath=$(Join-Path $work 'packages')",
+    "-p:RestoreConfigFile=$nugetConfig")
+
+# Publishes one case for one framework (own artifacts folder, so the variants of one project do not share obj/);
+# returns the IL warnings (unique, the same warning is printed by the analyzer and by ILC/ILLink), the executable and
+# the file that shows whether the generated registration was kept: the ILC map file (NativeAOT) or the trimmed probe
+# assembly (ILLink).
+function Publish-Probe($case, [string] $tf, [int] $index) {
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($case.Project)
+    $out = Join-Path $work "out$index-$tf"
+    $log = Join-Path $work "out$index-$tf.log"
+    $artifacts = Join-Path $work "a$index-$tf"
+    $props = $restoreProps + '-p:IlcGenerateMapFile=true'
+    if ($case.ContainsKey('Trimmed')) { $props += '-p:PublishAot=false', '-p:PublishTrimmed=true', '--self-contained' }
+    if ($case.ContainsKey('Properties')) { $props += $case.Properties }
 
     $started = Get-Date
-    & dotnet publish $project -c $Configuration -f $tf -r $rid -o $out @props 2>&1 | Tee-Object -FilePath $log | Out-Host
+    & dotnet publish $case.Project -c $Configuration -f $tf -r $rid -o $out --artifacts-path $artifacts @props 2>&1 |
+        Tee-Object -FilePath $log | Out-Host
     $exit = $LASTEXITCODE
-    Write-Host ("{0} {1}: publish {2:N0} s, exit code {3}" -f $name, $tf, ((Get-Date) - $started).TotalSeconds, $exit)
+    Write-Host ("{0} {1}: publish {2:N0} s, exit code {3}" -f $case.Name, $tf, ((Get-Date) - $started).TotalSeconds, $exit)
 
     $warnings = @(Get-Content $log | Where-Object { $_ -match '\b(warning|error) IL\d{4}' } |
         ForEach-Object { ($_ -replace '\s*\[[^\]]*\.csproj[^\]]*\]\s*$', '').Trim() } | Sort-Object -Unique)
-    [pscustomobject]@{ Name = $name; Framework = $tf; ExitCode = $exit; Warnings = $warnings; Output = $out }
+    $map = if ($case.ContainsKey('Trimmed')) { Get-Item (Join-Path $out "$name.dll") -ErrorAction SilentlyContinue }
+    else { Get-ChildItem -Path $artifacts -Recurse -Filter "$name.map.xml" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+    [pscustomobject]@{
+        ExitCode = $exit; Warnings = $warnings; Map = $map; Executable = Join-Path $out ($IsWindows ? "$name.exe" : $name)
+    }
 }
 
 $errors = [System.Collections.Generic.List[string]]::new()
 try {
     foreach ($tf in $Framework) {
-        # A: generated extension methods: no warnings, the executable runs and checks the mapped values.
-        $a = Publish-Probe $probeA $tf
-        if ($a.ExitCode -ne 0) { $errors.Add("$($a.Name) ${tf}: publish failed (exit code $($a.ExitCode))") }
-        foreach ($w in $a.Warnings) { $errors.Add("$($a.Name) ${tf}: unexpected warning: $w") }
-        if ($a.ExitCode -eq 0) {
-            $exe = Join-Path $a.Output ($IsWindows ? "$($a.Name).exe" : $a.Name)
-            & $exe | Out-Host
-            if ($LASTEXITCODE -ne 0) { $errors.Add("$($a.Name) ${tf}: the NativeAOT executable exited with $LASTEXITCODE") }
+        $sizes = @{}
+        for ($i = 0; $i -lt $cases.Count; $i++) {
+            $case = $cases[$i]
+            $label = "$($case.Name) ${tf}"
+
+            if ($case.ContainsKey('Jit')) {
+                & dotnet run --project $case.Project -c $Configuration -f $tf --artifacts-path (Join-Path $work "jit$i-$tf") @restoreProps |
+                    Out-Host
+                if ($LASTEXITCODE -ne 0) { $errors.Add("${label}: the JIT run exited with $LASTEXITCODE") }
+            }
+
+            $p = Publish-Probe $case $tf $i
+            if ($p.ExitCode -ne 0) { $errors.Add("${label}: publish failed (exit code $($p.ExitCode))"); continue }
+            foreach ($w in $p.Warnings) { $errors.Add("${label}: unexpected warning: $w") }
+            $sizes[$case.Name] = (Get-Item $p.Executable).Length
+
+            if ($null -eq $p.Map) { $errors.Add("${label}: no ILC map file or trimmed probe assembly") }
+            else {
+                # Latin1 keeps every byte, so the name is found in the metadata of an assembly as well as in the map file.
+                $text = [System.IO.File]::ReadAllText($p.Map.FullName, [System.Text.Encoding]::Latin1)
+                $registered = $text.Contains('RegisterIronMapperMappingsCore')
+                if ($registered -ne $case.Registration) {
+                    $errors.Add("${label}: generated registration in the executable: expected $($case.Registration), found $registered")
+                }
+            }
+
+            $output = & $p.Executable 2>&1 | Out-String
+            $exitCode = $LASTEXITCODE
+            Write-Host $output.TrimEnd()
+            if ($case.ContainsKey('Fails')) {
+                if ($exitCode -eq 0 -or -not $output.Contains($case.Fails)) {
+                    $errors.Add("${label}: expected a failure that mentions '$($case.Fails)', got exit code $exitCode")
+                }
+            }
+            elseif ($exitCode -ne 0) { $errors.Add("${label}: the published executable exited with $exitCode") }
         }
 
-        # B: IMapper: exactly IL2026 on the AddIronMapper call of Program.cs, nothing else.
-        $b = Publish-Probe $probeB $tf
-        $source = Join-Path (Split-Path -Parent $probeB) 'Program.cs'
-        $line = (Select-String -Path $source -Pattern 'AddIronMapper\(' | Select-Object -First 1).LineNumber
-        # The analyzer prints 'Program.cs(8,1): warning IL2026', ILC 'Program.cs(8): Trim analysis warning IL2026'.
-        $expected = "Program\.cs\($line(,\d+)?\): (Trim analysis )?warning IL2026: .*AddIronMapper"
-        if ($b.ExitCode -ne 0) { $errors.Add("$($b.Name) ${tf}: publish failed (exit code $($b.ExitCode))") }
-        if (-not ($b.Warnings | Where-Object { $_ -match $expected })) {
-            $errors.Add("$($b.Name) ${tf}: no IL2026 for AddIronMapper at Program.cs line $line")
+        if ($sizes.ContainsKey('A') -and $sizes.ContainsKey('A, IronMapperRegistration=true')) {
+            Write-Host ("Probe A {0}: {1:N0} bytes; with the registration (IronMapperRegistration=true) {2:N0} bytes" -f
+                $tf, $sizes['A'], $sizes['A, IronMapperRegistration=true'])
         }
-        foreach ($w in $b.Warnings | Where-Object { $_ -notmatch $expected }) {
-            $errors.Add("$($b.Name) ${tf}: unexpected warning: $w")
-        }
-        foreach ($w in $b.Warnings | Where-Object { $_ -match $expected }) { Write-Host "$($b.Name) ${tf}: expected: $w" }
     }
 }
 finally {

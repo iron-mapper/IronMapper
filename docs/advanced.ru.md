@@ -146,15 +146,45 @@ In-place перегрузка только присваивает замапле
 ## IMapper и сгенерированные extension-методы
 
 - Сгенерированные extension-методы (`source.MapToDto()`) — обычный скомпилированный C# без reflection.
-- `IMapper` из `IronMapper.Extensions.DI` (`RuntimeMapper`) использует reflection. При первом вызове для пары
-  `(TSource, TDest)` он сканирует загруженные сборки (пропуская имена, начинающиеся с `System.` или
-  `Microsoft.`) в поисках `IronMapper.Generated.GeneratedMappers` (public или internal) и ищет метод `MapTo*` по
-  сигнатуре (точный тип source в параметре, `TDest` в возвращаемом типе), поэтому находит и уточнённые имена
-  (`IM0013`); найденный `MethodInfo` кэшируется. **Каждый вызов** затем выполняется через `MethodInfo.Invoke`.
-- `IMapper.Map<TDest>(object)` использует runtime-тип source; производный тип source не совпадёт с маппингом,
-  объявленным для базового типа.
-- `IMapper.Map<List<TDto>>(list)` не поддерживается и бросает `MappingException`
-  ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); используйте `MapCollection<TSource, TDest>` или `list.MapToDtoList()`.
+- `IMapper` из `IronMapper.Extensions.DI` (`RuntimeMapper`) вызывает те же сгенерированные методы через делегаты,
+  без reflection (начиная с 1.2.0). Для каждой сборки с маппингами генератор выпускает регистрацию
+  (`GeneratedMappers.Registration.g.cs`): инициализатор модуля (`[ModuleInitializer]`) передаёт её в
+  `IronMapper.Registration.MapperRegistry`, а тот регистрирует маппинги при создании первого `IMapper` (для сборки, к
+  которой обратились позже, — при следующем маппинге). Инициализатор модуля только кладёт в список один делегат на
+  сборку, поэтому приложение без `IMapper` ничего не регистрирует; сборку IronMapper оно всё же загружает: инициализатор
+  проверяет там `MapperRegistry.IsSupported` (см. ниже). Это работает с
+  trimming и NativeAOT, а исключения сгенерированного кода, ваших конвертеров и хуков приходят к вызывающему как есть.
+  До 1.1.4 включительно `RuntimeMapper` искал `GeneratedMappers` в загруженных сборках, вызывал методы через
+  `MethodInfo.Invoke` (исключения оборачивались в `TargetInvocationException`) и не работал в NativeAOT.
+- **Какие сборки регистрируются.** Инициализатор модуля выполняется при первом использовании кода сборки.
+  `AddIronMapper(assembly)` (а также `AddProfile<T>()` и `AddProfilesFromAssembly`) запускает его сам
+  (`MapperRegistry.EnsureModuleInitialized`), поэтому
+  передайте все сборки с маппингами, особенно ту, которую приложение больше никак не использует до первого маппинга
+  (профили в `Application`, сущности в `Domain`, вызов из веб-проекта). Если маппинг не найден, `IMapper` запускает
+  инициализаторы модулей всех загруженных сборок (кроме имён, начинающихся с `System.` и `Microsoft.`) и ищет снова.
+  Профили не добавляются в DI-контейнер: до 1.1.4 включительно `AddIronMapper` сканировал сборки через `GetTypes()` и
+  добавлял каждый `MappingProfile` как singleton.
+- **Приложения с trimming и NativeAOT без пакета DI.** Регистрация стоит за feature switch
+  `IronMapper.Registration.IsSupported`: при публикации с trimming или NativeAOT, если ни один проект не ссылается на
+  `IronMapper.Extensions.DI`, пакет выключает его, и trimmer удаляет регистрацию, поэтому приложение, которое вызывает
+  только extension-методы, её не несёт. Правила и свойство `IronMapperRegistration` — в разделе
+  [Регистрация для IMapper](configuration.ru.md#регистрация-для-imapper-в-приложениях-с-trimming-и-nativeaot).
+- **C# 8** (`LangVersion` ниже 9) не поддерживает инициализаторы модулей: регистрация генерируется без
+  `[ModuleInitializer]`, и `IMapper` не найдёт маппинги этой сборки, пока вы не вызовете
+  `IronMapper.Generated.GeneratedMappers.RegisterIronMapperMappings()` один раз при старте (метод `internal`, поэтому
+  вызывайте его из этой сборки). Для целей без `ModuleInitializerAttribute` (`netstandard`, .NET Framework) в сборку
+  генерируется internal-копия атрибута.
+- `Map<TSource, TDest>(source)` использует маппинг точной пары: чтение статического поля и вызов делегата. Если его
+  нет, а также для `Map<TDest>(object)` маппинг ищется по типу: runtime-тип источника, затем его базовые типы
+  (`DerivedEntity` без своего маппинга использует маппинг `Entity`). Интерфейсы источника и базовые типы приёмника не
+  учитываются. Если одну пару типов маппят две сборки, действует первая регистрация.
+- **Коллекции как тип приёмника** ([#8](https://github.com/iron-mapper/IronMapper/issues/8)): `Map<List<UserDto>>(users)`, `Map<UserDto[]>`,
+  `Map<IEnumerable<UserDto>>`, а также `IList<T>`, `ICollection<T>`, `IReadOnlyList<T>`, `IReadOnlyCollection<T>`
+  работают для любого источника `IEnumerable<User>` (`List`, массив, `HashSet`, …), если есть маппинг
+  `User → UserDto`. Они вызывают сгенерированные `MapToUserDtoList`/`MapToUserDtoArray`, поэтому результат —
+  `List<UserDto>` (для `T[]` — массив).
+- `RuntimeMapper.Map(object source, Type sourceType, Type destinationType)` и `MapperRegistry.Map` маппят по `Type`.
+  В интерфейсе `IMapper` этого метода нет: новый член интерфейса сломал бы другие его реализации в 1.x.
 - `IMapper.MapCollection<TSource, TDest>` маппит весь источник во время вызова и возвращает `List<TDest>` (с типом
   `IEnumerable<TDest>`); повторное перечисление результата не маппит заново. До 1.1.4 включительно метод возвращал
   ленивую последовательность, которая маппила при каждом перечислении и бросала исключение для `null`-источника
@@ -172,8 +202,9 @@ IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; среднее время 
 | Коллекция, 1 000 заказов | 258,1 мкс (×1,01) | 282,4 мкс (×1,11) |
 | Холодный старт, Δ мс к консольному приложению без маппера | 2,2 | 23,1 |
 
-- `IMapper` добавляет вызов через reflection (`MethodInfo.Invoke`) на каждый вызов и сканирование сборок при первом
-  вызове для пары типов.
+- В 1.1.3 `IMapper` добавляет вызов через reflection (`MethodInfo.Invoke`) на каждый вызов и сканирование сборок при
+  первом вызове для пары типов. Начиная с 1.2.0 он вызывает сгенерированные методы через делегаты и сам ничего не
+  выделяет; таблицу обновит полный прогон к релизу.
 - В сценарии Nested IronMapper маппит вложенные объекты через `ForMember(... MapFrom(...))` (см.
   [Вложенные объекты](#вложенные-объекты)); сгенерированный код коллекций 1.1.3 использует `Enumerable.Select` +
   `ToList`. У Mapperly там ×1,00.
@@ -198,21 +229,23 @@ IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; среднее время 
   [`benchmarks/results/aot.md`](../benchmarks/results/aot.md)) время старта такое же, как без маппера, а файл на
   255,5 КБ больше приложения без маппера (у Mapperly +23,6 КБ) в 1.1.3, в основном потому, что сгенерированный код
   коллекций (`Enumerable.Select` + `ToList`) подтягивает загрузчик типов NativeAOT. Не выпущено (1.2.0, без LINQ в
-  сгенерированном коде): +2,6 КБ, предварительно, замерено на локальных исходниках.
-- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): пока несовместимы** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
-  `RuntimeMapper` находит сгенерированные методы по имени через reflection (сканирование сборок `AppDomain`,
-  `Assembly.GetType`, `GetMethods`), чего trimmer не видит, их метаданные не сохраняются, и исполняемый файл падает
-  при первом вызове с `MappingException: No mapping registered`. `AddIronMapper` и `RuntimeMapper` помечены
-  `[RequiresUnreferencedCode]`, поэтому публикация с trimming или NativeAOT сообщает об этом на вашем вызове:
-
-  ```text
-  Program.cs(8,1): warning IL2026: Using member 'IronMapper.Extensions.DI.IronMapperServiceCollectionExtensions.AddIronMapper(IServiceCollection, params Assembly[])' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. IMapper finds and calls the generated mapping methods through reflection; trimming and NativeAOT remove them, and mapping fails at runtime with MappingException. Call the generated MapTo* extension methods (using IronMapper.Generated;) instead. https://github.com/iron-mapper/IronMapper/issues/26
-  ```
-
-  CI проверяет, что это предупреждение есть, а других предупреждений из сборок IronMapper нет
-  (`tests/IronMapper.AotProbe.DI`). До 1.1.4 включительно предупреждения (IL2026, IL2062, IL2072, IL2075) указывали
-  внутрь сборки IronMapper, по умолчанию одним общим IL2104, а не на ваш вызов. В приложениях с NativeAOT и trimming
-  используйте extension-методы.
+  сгенерированном коде): +2,6 КБ, предварительно, замерено на локальных исходниках. Регистрации для `IMapper` в таком
+  приложении нет: без `IronMapper.Extensions.DI` trimmer её удаляет (см.
+  [Регистрация для IMapper](configuration.ru.md#регистрация-для-imapper-в-приложениях-с-trimming-и-nativeaot)); CI
+  проверяет, что в `tests/IronMapper.AotProbe` её нет, а с `IronMapperRegistration=true` она есть.
+- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): совместимы начиная с 1.2.0** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)). Они используют
+  сгенерированный реестр (см. [IMapper и сгенерированные extension-методы](#imapper-и-сгенерированные-extension-методы)),
+  а не reflection по сгенерированному коду. CI публикует `tests/IronMapper.AotProbe.DI` для .NET 8 и .NET 10, не
+  допуская ни одного предупреждения trimming/AOT, и запускает его: `AddIronMapper`, `Map` по объявленному и
+  runtime-типу, обновление на месте, `MapCollection`, `Map<List<T>>`/`Map<T[]>`/`Map<IEnumerable<T>>`, маппинг из
+  профиля с конвертером, исходное `ArgumentNullException` для `null`-элемента. Ещё CI публикует
+  `tests/IronMapper.AotProbe.Transitive` (пакет DI только через библиотеку, маппинги в библиотеке без него), проверяет,
+  что с `IronMapperRegistration=false` приложение падает с сообщением, где названо свойство, и публикует пробу
+  extension-методов и пробу `IMapper` с trimming без NativeAOT (`PublishTrimmed`, self-contained; ILLink): без
+  предупреждений, они запускаются, из первой регистрация удалена, во второй осталась. До 1.1.4 включительно `RuntimeMapper`
+  находил сгенерированные методы по имени через reflection, чего trimmer не видит: публикация выдавала IL2026, IL2062,
+  IL2072 и IL2075 внутри сборки IronMapper (по умолчанию одним общим IL2104), а исполняемый файл падал при первом
+  вызове с `MappingException: No mapping registered`.
 - **`MappingValidator`** читает свойства и конструкторы переданных типов через reflection и тоже помечен
   `[RequiresUnreferencedCode]`: вызов в приложении с trimming или NativeAOT даёт IL2026. Генератор сообщает об этих
   проблемах при компиляции.

@@ -130,7 +130,7 @@ internal static class MappingPlanner
             if (!emit)
             {
                 entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, false, PlainName(mapping), string.Empty, string.Empty,
-                    mapping.MethodAccessibility));
+                    mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!));
                 continue;
             }
 
@@ -144,7 +144,7 @@ internal static class MappingPlanner
                 hintName = $"{hintBase}_{n}.g.cs";
 
             entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodNames[mapping.Origin], hintName, helperScope,
-                mapping.MethodAccessibility));
+                mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!));
         }
 
         return new MappingPlan(

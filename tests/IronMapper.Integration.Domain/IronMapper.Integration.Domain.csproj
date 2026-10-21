@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Domain layer of the multi-project IMapper test (MapperRegistryAssemblyTests): entities only, no IronMapper
+    reference. The mappings are declared in IronMapper.Integration.Application and called from
+    IronMapper.Integration.Tests.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

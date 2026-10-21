@@ -37,7 +37,7 @@ param(
     [int] $WarmupRuns = 3,
     [ValidateSet('Jit', 'Aot', 'Both')]
     [string] $Mode = 'Both',
-    [string[]] $Probes = @('Baseline', 'Manual', 'IronMapper', 'IronMapper_IMapper', 'Mapperly', 'Mapster', 'AutoMapper'),
+    [string[]] $Probes = @('Baseline', 'Manual', 'Manual_DI', 'IronMapper', 'IronMapper_IMapper', 'Mapperly', 'Mapster', 'AutoMapper'),
     # Reuse the published probes from a previous run.
     [switch] $SkipPublish,
     # Skip the in-process BenchmarkDotNet StartupBenchmark (otherwise it runs together with the JIT mode).
@@ -210,6 +210,8 @@ function Write-StartupReport {
         'prints a checksum and exits. Time is wall-clock from `Process.Start` to process exit, measured by the script; ' +
         'the launch overhead of the script is the same for every probe, so compare the Δ column. ' +
         '`Baseline` creates the same order and prints the checksum of the source without any mapper. ' +
+        '`Manual_DI` is the hand-written mapping resolved from the same Microsoft.Extensions.DependencyInjection container ' +
+        'as `IronMapper_IMapper`, so `IronMapper_IMapper` minus `Manual_DI` is what IronMapper adds on top of the container. ' +
         'Runs are interleaved across probes after the warmup runs.')
     [void] $sb.AppendLine()
     if ($expected) { [void] $sb.AppendLine("Expected checksum (Baseline): ``$expected``. Status `ok` means every run exited with 0 and printed this value.") }

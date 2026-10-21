@@ -18,8 +18,8 @@
 
 Вспомогательные методы `BeforeMap`/`AfterMap` и `AddTransformer` всегда `private`.
 
-Internal-маппинги работают и через `IMapper` (`IronMapper.Extensions.DI`): он ищет в том числе непубличные
-сгенерированные методы. Код из других сборок может использовать internal-маппинг только через `[InternalsVisibleTo]`.
+Internal-маппинги работают и через `IMapper` (`IronMapper.Extensions.DI`): сгенерированная регистрация сборки
+регистрирует и их. Код из других сборок может вызвать internal-маппинг напрямую только через `[InternalsVisibleTo]`.
 
 ---
 
@@ -66,8 +66,8 @@ source-типа):
 | глобальное пространство имён: `Dto` и `App.Dto` | `MapToGlobalDto`, `MapToAppDto` |
 | `App.SummaryDto` (коллизии нет) | `MapToSummaryDto`, без изменений |
 
-Сгенерированный код для элементов вложенных коллекций и `IMapper` (`IronMapper.Extensions.DI`, который ищет методы по
-сигнатуре) используют уточнённые имена автоматически. Ваш код — в том числе лямбды `MapFrom` — должен вызывать
+Сгенерированный код для элементов вложенных коллекций и `IMapper` (`IronMapper.Extensions.DI`, который использует
+сгенерированную регистрацию) используют уточнённые имена автоматически. Ваш код — в том числе лямбды `MapFrom` — должен вызывать
 уточнённое имя. Если ни одно правило не даёт уникальных имён (все заняты другими маппингами), маппинги этой группы не
 генерируются и выдаётся ошибка [`IM0014`](diagnostics.ru.md#im0014--коллизию-имён-методов-маппинга-нельзя-устранить).
 
@@ -146,8 +146,42 @@ var order = entity.MapToOrderDto();       // маппинг текущего п�
   неоднозначен (`CS0121`). То же происходит внутри сгенерированного кода, если тип элемента вложенной коллекции
   маппится в обоих проектах. Держите маппинг в проекте, которому принадлежат типы.
 
-`IMapper` (`IronMapper.Extensions.DI`) находит сгенерированные методы во всех загруженных сборках, независимо от
-того, `public` класс или `internal`.
+`IMapper` (`IronMapper.Extensions.DI`) использует маппинги всех сборок, чья сгенерированная регистрация выполнилась,
+независимо от того, `public` класс или `internal`: передайте сборки с маппингами в `AddIronMapper` (см.
+[IMapper и сгенерированные extension-методы](advanced.ru.md#imapper-и-сгенерированные-extension-методы)). Самой
+библиотеке с маппингами пакет DI не нужен: достаточно, чтобы на него ссылалось приложение.
+
+## Регистрация для `IMapper` в приложениях с trimming и NativeAOT
+
+Для `IMapper` каждая сборка с маппингами регистрирует их через сгенерированный инициализатор модуля (см.
+[IMapper и сгенерированные extension-методы](advanced.ru.md#imapper-и-сгенерированные-extension-методы)). В приложении с
+trimming или NativeAOT эта регистрация удерживала бы реестр и все сгенерированные методы сборки — даже в приложении,
+которое вызывает только extension-методы. Поэтому она стоит за feature switch `IronMapper.Registration.IsSupported`
+(`MapperRegistry.IsSupported`), который пакет `IronMapper` выставляет по MSBuild-свойству `IronMapperRegistration`
+проекта приложения (`buildTransitive/IronMapper.targets`):
+
+| Приложение | Switch | Регистрация |
+|---|---|---|
+| `PublishAot` или `PublishTrimmed`, ни один проект не ссылается на `IronMapper.Extensions.DI` | `false` | удаляется trimmer'ом |
+| ссылается на `IronMapper.Extensions.DI` напрямую или через свою библиотеку | не задан (включён) | остаётся |
+| без trimming (`dotnet run`, публикация без trimming) | не задан (включён) | остаётся |
+
+Задайте свойство в проекте приложения, если автоматический выбор не подходит: например, приложение NativeAOT
+использует `MapperRegistry` без пакета DI (`true`) или ссылается на пакет DI, но `IMapper` не использует (`false`):
+
+```xml
+<PropertyGroup>
+  <IronMapperRegistration>true</IronMapperRegistration>
+</PropertyGroup>
+```
+
+- При выключенном switch создание `IMapper` (`RuntimeMapper`) бросает `InvalidOperationException` с именем свойства,
+  а `MappingException` из `MapperRegistry` для ненайденного маппинга говорит то же самое вместо простого «No mapping
+  registered».
+- Сгенерированные extension-методы от switch не зависят.
+- Свойство действует только в проекте приложения (оно превращается в `RuntimeHostConfigurationOption`); в библиотеке
+  оно ни на что не влияет. При ссылках на исходники IronMapper (ProjectReference) вместо пакета ничего не задаётся, и
+  регистрация остаётся.
 
 ---
 
@@ -389,7 +423,8 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 
 `IronMapperOptions.AddConverter<T>()` регистрирует тип converter в DI-контейнере как transient-сервис.
 На маппинг это **не** влияет: сгенерированный код не получает converters из DI и всегда создаёт их через
-`new TConverter()`.
+`new TConverter()`. `AddProfilesFromAssembly` и `AddProfile<T>()` регистрируют сгенерированные маппинги сборки для
+`IMapper`; сами профили в контейнер не добавляются (до 1.1.4 включительно добавлялись как singleton).
 
 ```csharp
 services.AddIronMapper(opt =>

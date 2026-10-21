@@ -29,6 +29,13 @@ public class StartupBenchmark
     [Benchmark(Baseline = true)]
     public OrderDto Manual() => ManualMappings.MapNested(_order);
 
+    /// <summary>
+    /// <see cref="Manual"/> behind the same DI container as <see cref="IronMapper_IMapper"/>: the difference between
+    /// the two is what IronMapper adds on top of Microsoft.Extensions.DependencyInjection.
+    /// </summary>
+    [Benchmark]
+    public OrderDto Manual_DI() => ManualDiSetup.CreateMapper().Map(_order);
+
     [Benchmark]
     public OrderDto IronMapper() => _order.MapToOrderDto();
 

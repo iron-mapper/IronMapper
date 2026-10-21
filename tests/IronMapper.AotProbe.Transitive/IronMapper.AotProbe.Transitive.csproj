@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    NativeAOT probe C: the host references neither IronMapper nor IronMapper.Extensions.DI directly. IMapper comes
+    through IronMapper.AotProbe.Transitive.Services (the DI package, transitively: its buildTransitive props must keep
+    the generated registration), the mappings from IronMapper.AotProbe.Transitive.Maps (a library without the DI
+    package). eng/verify-aot.ps1 runs it with the JIT and publishes it with PublishAot for net8.0 and net10.0: zero
+    trim/AOT warnings, the executable checks the mapped values. Intentionally NOT part of IronMapper.slnx.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PublishAot>true</PublishAot>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronMapper.AotProbe.Transitive.Maps\IronMapper.AotProbe.Transitive.Maps.csproj" />
+    <ProjectReference Include="..\IronMapper.AotProbe.Transitive.Services\IronMapper.AotProbe.Transitive.Services.csproj" />
+  </ItemGroup>
+
+</Project>
