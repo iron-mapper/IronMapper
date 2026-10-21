@@ -102,9 +102,12 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <summary>Fully-qualified C# name of the destination type, for the generated registration.</summary>
     public string DestFullName { get; }
 
+    /// <summary>The generated code of the mapping uses <c>ConverterCache&lt;T&gt;</c>, as in <see cref="MappingDescriptor.UsesConverterCache"/>.</summary>
+    public bool UsesConverterCache { get; }
+
     /// <summary>Initialises a new <see cref="MappingPlanEntry"/>.</summary>
     public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
-        string methodAccessibility, string sourceFullName, string destFullName)
+        string methodAccessibility, string sourceFullName, string destFullName, bool usesConverterCache = false)
     {
         Origin = origin;
         PairKey = pairKey;
@@ -115,6 +118,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         MethodAccessibility = methodAccessibility;
         SourceFullName = sourceFullName;
         DestFullName = destFullName;
+        UsesConverterCache = usesConverterCache;
     }
 
     /// <inheritdoc/>
@@ -128,7 +132,8 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && HelperScope == other.HelperScope
            && MethodAccessibility == other.MethodAccessibility
            && SourceFullName == other.SourceFullName
-           && DestFullName == other.DestFullName;
+           && DestFullName == other.DestFullName
+           && UsesConverterCache == other.UsesConverterCache;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -146,6 +151,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + MethodAccessibility.GetHashCode();
         hash = hash * 31 + SourceFullName.GetHashCode();
         hash = hash * 31 + DestFullName.GetHashCode();
+        hash = hash * 31 + UsesConverterCache.GetHashCode();
         return hash;
     }
 }

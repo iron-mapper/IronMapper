@@ -233,12 +233,13 @@ compile time. Up to 1.1.4 `IMapper` used reflection, was ×2.7 slower on Flat an
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
   `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` fail with a C# error in the generated file;
-  use `MapFrom` or a converter. Declared diagnostics `IM0002`–`IM0004` are not reported yet.
+  use `MapFrom` or a converter. Declared diagnostics `IM0002` and `IM0004` are not reported yet.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Also: diagnostics have no source location; `IMapper` has no per-call context
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
-`ReverseMap()` maps by name only; converters need a public parameterless constructor; private/protected nested types
+`ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public
+or internal parameterless constructor (`IM0015`); private/protected nested types
 cannot be mapped (`IM0010`); several projects in one solution have their own `GeneratedMappers` class. Details:
 [Advanced topics](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md),
 [Configuration](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md),

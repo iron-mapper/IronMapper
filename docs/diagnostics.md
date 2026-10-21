@@ -2,16 +2,16 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0012`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0015`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Current status** (1.1.3):
+**Current status** (`main`, unreleased 1.2.0):
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|
 | IM0001 | Warning | Unmapped destination property | Yes — `[MapTo]`/`[MapFrom]` only |
 | IM0002 | Error | Incompatible property types | **Not reported yet** |
-| IM0003 | Error | Unresolvable mapping target type | **Not reported yet** |
+| IM0003 | Error | Type in `[MapTo]`/`[MapFrom]` cannot be mapped | Yes — open generic types and arrays; an unresolved type is reported by the compiler only |
 | IM0004 | Error | Cyclic mapping detected | **Not reported yet** |
 | IM0005 | Warning | Empty MappingProfile | Yes |
 | IM0006 | Error | `[MapProperty]` destination property not found | Yes |
@@ -23,12 +23,17 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0012`. 
 | IM0012 | Error | Profile lambda captures state | Yes — profiles |
 | IM0013 | Warning | Mapping method name qualified to avoid a collision | Yes — attributes and profiles |
 | IM0014 | Error | Mapping method name collision cannot be resolved | Yes — attributes and profiles |
+| IM0015 | Error | Converter cannot be created by generated code | Yes — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
 
 All diagnostics are currently reported **without a source location**, so the IDE lists them in the
 Error List but does not point to a line in your code.
 
 When a problem has no working diagnostic (for example, a property type mismatch), the build fails with
 a regular C# error (`CS0029`, `CS7036`, …) inside the generated `*.g.cs` file instead.
+
+A type that does not resolve (`typeof(Missing)` in `[MapTo]`/`[MapFrom]`, a type argument of `CreateMap`, a converter
+type) is reported by the compiler at your code (`CS0246`, `CS0234`, `CS0122`, …). The generator skips that mapping, so
+there is no second error inside a generated file; other mappings are generated.
 
 ---
 
@@ -66,15 +71,24 @@ generated file.
 
 ---
 
-## IM0003 — Unresolvable mapping target type
+## IM0003 — Type in [MapTo]/[MapFrom] cannot be mapped
 
-**Severity:** Error · **Not reported yet**
+**Severity:** Error
 
-**Message (declared):** `The type '{0}' referenced in [{1}] could not be resolved in the current compilation`
+**Message:** `Mapping for [{0}(typeof({1}))] on '{2}' was not generated: {3}`
 
-**Current behavior:** if the type passed to `[MapTo]`/`[MapFrom]` cannot be resolved, the C# compiler
-reports `CS0246` for the `typeof(...)` expression, and the generator still emits a mapping file that
-references the missing type, which adds `CS0400` errors in the generated code.
+**Cause:** the type in `typeof(...)` compiles but is not a type that can be mapped: an open generic type
+(`typeof(Box<>)`) or an array (`typeof(Item[])`). The compiler accepts both; before this diagnostic the mapping was
+dropped without any message, and the first error was `CS1061` at the call of the missing `MapTo...` method.
+
+**Fix:** use a class, struct or record; close the generic type (`typeof(Box<int>)`). To map collections, map the
+element type: `MapTo{Name}List`/`MapTo{Name}Array` are generated for every mapping. Other mappings are generated.
+
+**Not reported for a type that does not resolve** (`typeof(Missing)`, an inaccessible or ambiguous type). The
+compiler reports it at the `typeof` (`CS0246`, `CS0234`, `CS0122`, `CS0104`), and the generator skips that mapping, so
+this is the only error you see. IM0003 would only repeat it (and, until diagnostics get a source location, without
+pointing to the line). Up to 1.1.4 the generator still emitted the mapping, which added `CS0400`/`CS0246` errors
+inside the generated file.
 
 ---
 
@@ -245,3 +259,28 @@ If the qualified names are intended, suppress the warning with `<NoWarn>$(NoWarn
 
 **Fix:** rename one of the destination types. Only the mappings of the colliding group are skipped; other mappings are
 generated.
+
+---
+
+## IM0015 — Converter cannot be created by generated code
+
+**Severity:** Error
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: converter '{2}' ({3}) cannot be created with 'new {2}()' because {4}`
+
+**Cause:** the generated code creates converters itself (it does not resolve them from DI), and the converter of
+`[MapConverter]`, `UseConverter<T>()` or `ConvertUsing<T>()` cannot be created that way:
+
+- it has no parameterless constructor (for example, only a constructor with dependencies, or a primary constructor
+  with parameters);
+- its parameterless constructor is `private` or `protected`;
+- it is abstract, an interface, a static class or an open generic type (`typeof(Converter<>)`);
+- the generated class `IronMapper.Generated.GeneratedMappers` cannot access it (a `private` nested type).
+
+Before this diagnostic the build failed with `CS7036`, `CS1729`, `CS0122` or `CS0144` inside the generated file.
+
+**Fix:** give the converter a public or internal parameterless constructor and make it a non-abstract class or a
+struct the generated class can access. A converter that needs services from DI cannot be used yet:
+`AddConverter<T>()` does not change how converters are created (see
+[Converter instances](configuration.md#converter-instances)). Only the affected mapping is skipped; other mappings are
+generated. A property marked `[Ignore]` does not use its converter, so its converter is not checked.

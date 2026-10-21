@@ -156,6 +156,29 @@ internal static class SymbolHelpers
         return isInternal ? "internal" : "public";
     }
 
+    /// <summary>
+    /// True when <paramref name="type"/>, a type containing it, its element type or a type argument did not resolve
+    /// (<c>typeof(Missing)</c>, an inaccessible or ambiguous type). The compiler already reports an error at the user's
+    /// code; generated code that names such a type would only add a second error inside a <c>.g.cs</c> file.
+    /// </summary>
+    public static bool ContainsErrorType(ITypeSymbol type)
+    {
+        switch (type)
+        {
+            case { TypeKind: TypeKind.Error }:
+                return true;
+            case IArrayTypeSymbol array:
+                return ContainsErrorType(array.ElementType);
+            case INamedTypeSymbol named:
+                if (named.ContainingType is not null && ContainsErrorType(named.ContainingType)) return true;
+                foreach (var argument in named.TypeArguments)
+                    if (ContainsErrorType(argument)) return true;
+                return false;
+            default:
+                return false;
+        }
+    }
+
     /// <summary>Returns the C# keyword(s) for <paramref name="accessibility"/>.</summary>
     public static string ToKeyword(Accessibility accessibility) => accessibility switch
     {

@@ -31,16 +31,18 @@ internal static class DiagnosticDescriptors
         description: "The source and destination property types are not compatible. Provide a custom ITypeConverter to convert between them.");
 
     /// <summary>
-    /// IM0003 — The type referenced by [MapTo] or [MapFrom] could not be resolved.
+    /// IM0003 — The type in <c>typeof(...)</c> of [MapTo] or [MapFrom] resolves but cannot be mapped (an open generic type,
+    /// an array, a pointer). A type that does not resolve is not reported: the compiler already reports it (CS0246 and
+    /// similar) at the <c>typeof</c>, and the mapping is skipped so that generated code does not repeat the error.
     /// </summary>
-    public static readonly DiagnosticDescriptor UnresolvableTargetType = new(
+    public static readonly DiagnosticDescriptor UnsupportedAttributeType = new(
         id: "IM0003",
-        title: "Unresolvable mapping target type",
-        messageFormat: "The type '{0}' referenced in [{1}] could not be resolved in the current compilation",
+        title: "Type in [MapTo]/[MapFrom] cannot be mapped",
+        messageFormat: "Mapping for [{0}(typeof({1}))] on '{2}' was not generated: {3}",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Ensure the target type is accessible from the current project and that all required assembly references are present.");
+        description: "[MapTo] and [MapFrom] take a class, struct or record. A generic type must be closed (typeof(Box<int>), not typeof(Box<>)). Other mappings in the project are still generated.");
 
     /// <summary>
     /// IM0004 — A cyclic mapping was detected (A→B→…→A).
@@ -176,4 +178,17 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0015 — A converter (<c>[MapConverter]</c>, <c>UseConverter&lt;T&gt;()</c>, <c>ConvertUsing&lt;T&gt;()</c>) cannot be
+    /// created by the generated code with <c>new T()</c>; the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor ConverterCannotBeCreated = new(
+        id: "IM0015",
+        title: "Converter cannot be created by generated code",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: converter '{2}' ({3}) cannot be created with 'new {2}()' because {4}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Generated code creates converters itself; it does not resolve them from dependency injection. Use a non-abstract class or a struct that the generated class can access, with a public or internal parameterless constructor. Other mappings in the project are still generated.");
 }

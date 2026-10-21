@@ -234,12 +234,13 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
   `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` дают ошибку C# в сгенерированном файле;
-  используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002`–`IM0004` пока не выдаются.
+  используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002` и `IM0004` пока не выдаются.
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Кроме того: у диагностик нет места в исходном коде; в `IMapper` нельзя передать контекст в вызов
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
-`ReverseMap()` сопоставляет только по именам; конвертерам нужен публичный конструктор без параметров; private- и
+`ReverseMap()` сопоставляет только по именам; конвертеры создаёт сгенерированный код, а не DI, и им нужен публичный или
+internal конструктор без параметров (`IM0015`); private- и
 protected-вложенные типы маппить нельзя (`IM0010`); у каждого проекта решения свой класс `GeneratedMappers`.
 Подробности: [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md),
 [Конфигурация](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md),

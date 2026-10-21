@@ -90,18 +90,20 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
-        // the plan does not generate (IM0007/IM0014) do not count. The final Select yields a string, so the
-        // declaration is re-emitted only when the accessibility actually changes.
-        var classAccessibility = plan.Select(static (mappingPlan, _) => GetClassAccessibility(mappingPlan))
+        // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache when a
+        // generated mapping uses one. The final Select yields a value tuple, so the declaration is re-emitted only when
+        // the accessibility or the need for the cache actually changes.
+        var classAccessibility = plan.Select(static (mappingPlan, _) =>
+                (Accessibility: GetClassAccessibility(mappingPlan), UsesConverterCache: UsesConverterCache(mappingPlan)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
 
         context.RegisterSourceOutput(classAccessibility.Combine(codeOptions), static (spc, item) =>
         {
             // No generated mappings: there is no class to declare, only the namespace (for the global using).
-            var (accessibility, options) = item;
+            var ((accessibility, usesConverterCache), options) = item;
             var (hintName, source) = accessibility is null
                 ? MapperCodeEmitter.EmitEmptyNamespace()
-                : MapperCodeEmitter.EmitClassDeclaration(accessibility, options);
+                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, options);
             spc.AddSource(hintName, source);
         });
 
@@ -141,6 +143,13 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         }
 
         return result;
+    }
+
+    private static bool UsesConverterCache(MappingPlan plan)
+    {
+        foreach (var entry in plan.Entries)
+            if (entry.Emit && entry.UsesConverterCache) return true;
+        return false;
     }
 
     /// <summary>

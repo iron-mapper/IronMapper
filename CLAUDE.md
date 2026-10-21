@@ -94,6 +94,16 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `CreateMap` wins over `ReverseMap`, `[MapTo]`, `[MapFrom]`). Two mappings from one source to destinations with the
   same simple name get qualified names — destination namespace/containing-type segments, then type arguments
   (`MapToAdminUserDto`, `MapToBoxOfInt32`), IM0013; if nothing is unique — IM0014, not generated.
+- **Converters** (`Analysis/ConverterAnalyzer.cs`): `[MapConverter]`, `UseConverter<T>()`, `ConvertUsing<T>()`. A
+  converter without state (class with a public parameterless constructor, no instance fields/field-like events/finalizer
+  in its hierarchy except `object`, constructors without code, every type of the hierarchy in source) is reused through
+  `ConverterCache<T>.Instance` — a private generic holder declared once in `GeneratedMappers.g.cs` when a generated
+  mapping needs it (`MappingPlanEntry.UsesConverterCache`); any other converter is `new T()` per call. A converter the
+  generated class cannot create → IM0015, mapping not generated. Runtime tests: `tests/IronMapper.Tests/ConverterCacheTests.cs`.
+- **Unresolved types** (`typeof(Missing)`, `CreateMap<_, Missing>`, a converter type): the compiler reports them at the
+  user's code; the mapping is skipped without a diagnostic of its own (`SymbolHelpers.ContainsErrorType`), so the
+  generated code adds no errors. IM0003 only for a type that compiles but cannot be mapped (`typeof(Box<>)`, arrays).
+  Tests: `UnresolvedTypeTests`.
 - Must target `netstandard2.0` (Roslyn generator host constraint).
 - **Pipeline data** (`Analysis/Models`) is compared by value: every collection is `EquatableArray<T>`, every model
   implements `Equals` over all its fields (diagnostics included); no `ISymbol`, `SyntaxNode`, `Location` or

@@ -204,6 +204,12 @@ Multiple destinations are supported — apply the attribute more than once:
 public class ProductEntity { ... }
 ```
 
+The type in `typeof(...)` must be a class, struct or record; a generic type must be closed (`typeof(Box<int>)`). For an
+open generic type (`typeof(Box<>)`) or an array the mapping is not generated and
+[`IM0003`](diagnostics.md#im0003--type-in-maptomapfrom-cannot-be-mapped) is reported. A type that does not resolve
+(`typeof(Missing)`) is reported by the compiler (`CS0246`) at the attribute, and that mapping is skipped, so the
+generated code adds no errors of its own; the same applies to `[MapFrom]`, `CreateMap<,>` and converter types.
+
 ---
 
 ### `[MapFrom(typeof(TSource))]`
@@ -258,7 +264,7 @@ public class Order
 
 ### `[MapConverter(typeof(TConverter))]`
 
-Applied to a **source property** when the source and destination property types differ and a custom conversion is needed. The generated code creates the converter with `new TConverter()`, so it needs a public parameterless constructor.
+Applied to a **source property** when the source and destination property types differ and a custom conversion is needed. The generated code creates the converter itself, so it needs a public or internal parameterless constructor (otherwise [`IM0015`](diagnostics.md#im0015--converter-cannot-be-created-by-generated-code)); a converter without state is created once and reused, see [Converter instances](#converter-instances).
 
 ```csharp
 public class PriceConverter : ITypeConverter<decimal, string>
@@ -323,7 +329,7 @@ CreateMap<User, UserDto>()
 
 ### `ForMember(dest => dest.Prop, opt => opt.UseConverter<TConverter>())`
 
-Applies a type converter to a single property (created with `new TConverter()`). Covered by a generator test that checks the emitted code only; there is no runtime test yet.
+Applies a type converter to a single property. The converter is created by the generated code, like `[MapConverter]` (see [Converter instances](#converter-instances)). Runtime test: `ConverterCacheTests.UseConverter_StatelessCachedAndStatefulNew`.
 
 ```csharp
 CreateMap<Product, ProductDto>()
@@ -334,7 +340,7 @@ CreateMap<Product, ProductDto>()
 
 ### `ConvertUsing<TConverter>()`
 
-Replaces the entire object initializer with a single converter call. Not applied by the in-place overload `source.MapToX(existing)`. Covered by a generator test of the emitted code only.
+Replaces the entire object initializer with a single converter call. Not applied by the in-place overload `source.MapToX(existing)`. The converter is created by the generated code, like `[MapConverter]` (see [Converter instances](#converter-instances)). Runtime test: `ConverterCacheTests.ConvertUsing_StatelessCachedAndStatefulNew`.
 
 ```csharp
 public class FullOrderConverter : ITypeConverter<OrderEntity, OrderDto>
@@ -422,10 +428,39 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 }
 ```
 
-`IronMapperOptions.AddConverter<T>()` registers the converter type in the DI container as a transient service.
-This does **not** affect mapping: the generated code does not resolve converters from DI and always creates them with
-`new TConverter()`. `AddProfilesFromAssembly` and `AddProfile<T>()` register the generated mappings of the assembly
-for `IMapper`; the profiles themselves are not added to the container (up to 1.1.4 they were, as singletons).
+### Converter instances
+
+The generated code creates converters itself; it never resolves them from DI. How depends on the converter:
+
+- **Without state — one instance for all calls.** A class with a public parameterless constructor, no instance fields
+  anywhere in its class hierarchy except `object` (auto-property backing fields and field-like events count as fields),
+  no finalizer, and constructors that run no code (implicit, or an empty body whose `base()`/`this()` call has no
+  arguments). The instance is created on first use, once per converter type for the assembly (`ConverterCache<T>` in
+  `GeneratedMappers.g.cs`); the runtime runs that initialization once even when several threads map at the same time.
+  Static fields do not count as state.
+- **Anything else — a new instance on every call**, as before 1.2.0: a converter with instance fields (in the class or in
+  a base class), a constructor with code or arguments in its `base(...)` call, a primary constructor with parameters, a
+  struct, a non-public parameterless constructor (`internal`, or only one with optional parameters), and any class whose
+  hierarchy contains a type from another assembly (the generator cannot see its private fields or constructor bodies).
+- **Cannot be created — the mapping is not generated** and
+  [`IM0015`](diagnostics.md#im0015--converter-cannot-be-created-by-generated-code) is reported: no parameterless
+  constructor (only constructors with parameters, e.g. dependencies), a `private`/`protected` one, an abstract class, an
+  interface, a static class, an open generic type, or a converter type the generated class cannot access. Other mappings
+  of the project are generated.
+
+A cached converter must not rely on being new: it is the same object for every mapping and every thread. Since it has no
+fields, this only matters if it keeps state elsewhere, for example in a static field. Tests:
+`tests/IronMapper.Tests/ConverterCacheTests.cs` (one instance, a new instance per call with a field in the class, in a
+base class or an auto-property, a constructor with code, first use from 16 threads).
+
+### `AddConverter<T>()` does not affect mapping
+
+`IronMapperOptions.AddConverter<T>()` registers the converter type in the DI container as a transient service, and that
+is all it does: the generated code does not resolve converters from DI (see [Converter instances](#converter-instances)),
+so a converter registered this way, with its dependencies, is **not** the one used for mapping. A converter with
+constructors that all take parameters gets `IM0015` whether it is registered or not. `AddProfilesFromAssembly` and `AddProfile<T>()`
+register the generated mappings of the assembly for `IMapper`; the profiles themselves are not added to the container
+(up to 1.1.4 they were, as singletons).
 
 ```csharp
 services.AddIronMapper(opt =>
