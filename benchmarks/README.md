@@ -161,6 +161,10 @@ cd benchmarks
 pwsh ./scripts/run-all.ps1              # full run
 pwsh ./scripts/run-all.ps1 -Quick       # smoke test (~20 min): --job short, fewer runs, smaller N; not for publication
 pwsh ./scripts/run-all.ps1 -CheckOnly   # only the estimate and the environment checks
+pwsh ./scripts/run-all.ps1 -Dry         # checks that every command works (~5 min): --job Dry, 2 startup runs, N = 5
+# A release run: the local sources into results/<version>, the published package into another folder.
+pwsh ./scripts/run-all.ps1 -UseLocalIronMapper -ResultsDir results/1.2.0
+pwsh ./scripts/run-all.ps1 -ResultsDir results/1.1.3-rerun
 ./scripts/run-all.sh                    # the same on Linux/macOS
 ```
 
@@ -197,8 +201,15 @@ dotnet run -c Release -f net8.0 --project src/Comparison.Benchmarks -- --filter 
 
 Their BenchmarkDotNet output goes to `results/raw/bdn-net8.0/` (the .NET 10 output stays in `results/raw/bdn/`, which
 `generate-report.ps1` reads), and the feature matrix written by `dotnet test` on .NET 8 goes to
-`results/raw/feature-matrix.net8.0.md`. `run-all.ps1`, the probes (cold start, NativeAOT, size) and the build time
-projects are .NET 10 only.
+`results/raw/feature-matrix.net8.0.md`. `run-all.ps1` runs the runtime benchmarks on both (step `RuntimeNet8`, off
+with `-SkipNet8`; RESULTS.md shows .NET 8 in its own section); the probes (cold start, NativeAOT, size) and the build
+time projects are .NET 10 only.
+
+`-ResultsDir <folder>` (relative to `benchmarks/`) writes the whole run — reports, raw data, BenchmarkDotNet artifacts,
+the feature matrix — to that folder instead of `results/` (environment variable `IRONMAPPER_RESULTS_DIR`, read by the
+scripts, `Program.cs` and the feature matrix test); its `raw/` is not committed. `-UseLocalIronMapper` measures the
+local sources (`UseLocalIronMapper=true` for every build of the run); RESULTS.md then lists IronMapper as "local
+sources" with the commit instead of the package version.
 
 ### Smoke check (CI)
 

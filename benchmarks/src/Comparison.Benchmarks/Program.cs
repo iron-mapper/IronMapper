@@ -20,7 +20,13 @@ public static class Program
         if (!args.Contains("--artifacts"))
         {
             var folder = Environment.Version.Major == 10 ? "bdn" : $"bdn-net{Environment.Version.Major}.0";
-            config = config.WithArtifactsPath(Path.Combine(FindBenchmarksDirectory(), "results", "raw", folder));
+            // IRONMAPPER_RESULTS_DIR (absolute, or relative to benchmarks/; set by run-all.ps1 -ResultsDir) moves the whole
+            // run to another folder, e.g. results/1.2.0, like the scripts (BenchmarkCommon.psm1, Get-ResultsDir).
+            var results = Environment.GetEnvironmentVariable("IRONMAPPER_RESULTS_DIR");
+            var resultsDir = string.IsNullOrWhiteSpace(results)
+                ? Path.Combine(FindBenchmarksDirectory(), "results")
+                : Path.Combine(FindBenchmarksDirectory(), results);
+            config = config.WithArtifactsPath(Path.Combine(resultsDir, "raw", folder));
         }
 
         var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config).ToList();

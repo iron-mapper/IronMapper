@@ -108,9 +108,11 @@ foreach ($probe in $libraryProbes) {
     $direct = @($all | Where-Object Direct)
     $transitive = @($all | Where-Object { -not $_.Direct })
     $directText = ($direct | ForEach-Object { "$($_.Id) $($_.Version)" }) -join '<br>'
+    # With UseLocalIronMapper the IronMapper probes reference ../src as projects: no package, no .nupkg size.
+    if (-not $direct.Count -and (Test-UseLocalIronMapper) -and $probe -like 'IronMapper*') { $directText = 'local sources (project reference, no package)' }
     $transitiveText = if ($transitive.Count) { ($transitive | Sort-Object Id | ForEach-Object { "$($_.Id) $($_.Version)" }) -join '<br>' } else { '–' }
-    $directSize = ($direct | Measure-Object -Property Size -Sum).Sum
-    $allSize = ($all | Measure-Object -Property Size -Sum).Sum
+    $directSize = $direct.Count ? ($direct | Measure-Object -Property Size -Sum).Sum : $null
+    $allSize = @($all).Count ? (@($all) | Measure-Object -Property Size -Sum).Sum : $null
     [void] $sb.AppendLine("| $probe | $directText | $(Format-Size $directSize) | $transitiveText | $(Format-Size $allSize) |")
 }
 [void] $sb.AppendLine()

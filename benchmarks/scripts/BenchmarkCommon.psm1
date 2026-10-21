@@ -14,9 +14,26 @@ $script:BenchmarksDir = Split-Path -Parent $PSScriptRoot
 
 function Get-BenchmarksDir { $script:BenchmarksDir }
 
-function Get-ResultsDir { Join-Path $script:BenchmarksDir 'results' }
+# The folder a run writes its reports and raw data to: results/ by default, or IRONMAPPER_RESULTS_DIR (absolute, or relative
+# to benchmarks/), e.g. results/1.2.0 (set by run-all.ps1 -ResultsDir). Program.cs of Comparison.Benchmarks reads the same
+# variable for the BenchmarkDotNet artifacts.
+function Get-ResultsDir {
+    $dir = $env:IRONMAPPER_RESULTS_DIR
+    if ([string]::IsNullOrWhiteSpace($dir)) { return Join-Path $script:BenchmarksDir 'results' }
+    if ([System.IO.Path]::IsPathRooted($dir)) { return $dir }
+    return Join-Path $script:BenchmarksDir $dir
+}
 
-function Get-ResultsRawDir { Join-Path $script:BenchmarksDir 'results' 'raw' }
+function Get-ResultsRawDir { Join-Path (Get-ResultsDir) 'raw' }
+
+# The results folder relative to benchmarks/ with '/' (for the text of the reports), e.g. results/1.2.0.
+function Get-ResultsDirDisplay {
+    [System.IO.Path]::GetRelativePath($script:BenchmarksDir, (Get-ResultsDir)).Replace('\', '/')
+}
+
+# Whether this process measures the local sources of ../src (UseLocalIronMapper=true as an environment variable, which
+# MSBuild reads as a property) rather than the IronMapper package of Directory.Packages.props.
+function Test-UseLocalIronMapper { $env:UseLocalIronMapper -eq 'true' }
 
 # Output of run-startup.ps1: publish logs, published probes, stderr of failed runs, mstat files.
 function Get-StartupLogDir { Join-Path (Get-ResultsRawDir) 'startup' }

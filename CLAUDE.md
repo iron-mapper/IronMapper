@@ -241,7 +241,10 @@ a PR (only the CI smoke check); the full run is a separate task before a release
   build, equivalence tests on net10.0 and net8.0, one iteration (BenchmarkDotNet `--job Dry`) of every runtime
   scenario on both TFMs (`StartupBenchmark` excluded). About 2.5 minutes; no numbers are published. The benchmark
   program exits with 1 when a benchmark fails or a filter matches nothing.
-- **Numbers come only from a full run:** `pwsh ./scripts/run-all.ps1` (~1.5 h, one machine, nothing else running).
+- **Numbers come only from a full run:** `pwsh ./scripts/run-all.ps1` (~2 h 45 min with net8.0, one machine, nothing
+  else running). `-UseLocalIronMapper` measures `../src`; `-ResultsDir results/<name>` writes the run to its own folder
+  (`IRONMAPPER_RESULTS_DIR`; `raw/` not committed; `baseline-1.1.3/` is never written); `-Dry` checks the commands in a
+  few minutes; `-SkipNet8` skips the runtime benchmarks on net8.0.
 
 ```bash
 cd benchmarks
