@@ -101,6 +101,63 @@ public class IncrementalDiagnosticsTests
         Assert.Empty(ids);
     }
 
+    // The converter is declared in another file than the mapping: editing only that file must reach the mapping's output.
+    private const string MappingWithConverter = """
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        [MapTo(typeof(TagDto))]
+        public class Tag { [MapConverter(typeof(Upper))] public string Label { get; set; } = ""; }
+        public class TagDto { public string Label { get; set; } = ""; }
+        """;
+
+    private const string Converter = """
+        using IronMapper.Interfaces;
+
+        namespace App;
+
+        public sealed class Upper : ITypeConverter<string, string>
+        {
+            /*MEMBER*/
+            public string Convert(string source) => source.ToUpperInvariant();
+        }
+        """;
+
+    [Fact]
+    public void Converter_FieldAddedInAnotherFile_CacheReplacedByNew()
+    {
+        var sources = AssertSameAsFreshRun(
+            new[] { MappingWithConverter, Converter }, 1, Converter.Replace("/*MEMBER*/", "private int _calls;"), out var ids);
+
+        Assert.Empty(ids);
+        Assert.Contains(sources, s => s.Contains("new global::App.Upper().Convert(source.Label)"));
+        Assert.DoesNotContain(sources, s => s.Contains("ConverterCache<"));
+    }
+
+    [Fact]
+    public void Converter_FieldRemovedInAnotherFile_Cached()
+    {
+        var sources = AssertSameAsFreshRun(
+            new[] { MappingWithConverter, Converter.Replace("/*MEMBER*/", "private int _calls;") }, 1, Converter, out var ids);
+
+        Assert.Empty(ids);
+        Assert.Contains(sources, s => s.Contains("ConverterCache<global::App.Upper>.Instance.Convert(source.Label)"));
+    }
+
+    [Fact]
+    public void Converter_IM0015_AppearsAndDisappearsWithConstructor()
+    {
+        var withArgument = Converter.Replace("/*MEMBER*/", "public Upper(int start) { }");
+
+        AssertSameAsFreshRun(new[] { MappingWithConverter, Converter }, 1, withArgument, out var appeared);
+        Assert.Equal(new[] { "IM0015" }, appeared);
+
+        var sources = AssertSameAsFreshRun(new[] { MappingWithConverter, withArgument }, 1, Converter, out var disappeared);
+        Assert.Empty(disappeared);
+        Assert.Contains(sources, s => s.Contains("MapToTagDto(this"));
+    }
+
     /// <summary>
     /// Runs the driver on <paramref name="before"/>, then on <paramref name="after"/>, and asserts that the
     /// diagnostics and generated sources of the second run equal those of a fresh driver on <paramref name="after"/>.
@@ -108,8 +165,18 @@ public class IncrementalDiagnosticsTests
     /// </summary>
     private static string[] AssertSameAsFreshRun(string before, string after)
     {
-        var first = GeneratorTestHelper.CreateCompilation(new[] { before });
-        var tree = first.SyntaxTrees.Single();
+        AssertSameAsFreshRun(new[] { before }, 0, after, out var ids);
+        return ids;
+    }
+
+    /// <summary>
+    /// Like <see cref="AssertSameAsFreshRun(string, string)"/> for several files, of which only the one at
+    /// <paramref name="editedIndex"/> changes. Returns the generated sources of the second run.
+    /// </summary>
+    private static string[] AssertSameAsFreshRun(string[] before, int editedIndex, string after, out string[] ids)
+    {
+        var first = GeneratorTestHelper.CreateCompilation(before);
+        var tree = first.SyntaxTrees.ElementAt(editedIndex);
         var second = first.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(after, (CSharpParseOptions)tree.Options));
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
@@ -121,7 +188,8 @@ public class IncrementalDiagnosticsTests
         Assert.Equal(Describe(fresh.Diagnostics), Describe(incremental.Diagnostics));
         Assert.Equal(Sources(fresh), Sources(incremental));
 
-        return incremental.Diagnostics.Select(d => d.Id).OrderBy(id => id, System.StringComparer.Ordinal).ToArray();
+        ids = incremental.Diagnostics.Select(d => d.Id).OrderBy(id => id, System.StringComparer.Ordinal).ToArray();
+        return incremental.GeneratedTrees.Select(t => t.ToString()).ToArray();
     }
 
     private static IEnumerable<string> Describe(IEnumerable<Diagnostic> diagnostics)

@@ -59,6 +59,8 @@ internal static class ProfileAnalyzer
 
         // Look for the primary (or any) constructor body.
         var ctorIndex = -1;
+        // A CreateMap whose types did not resolve is skipped, but the profile is not empty (no IM0005).
+        var hasSkippedMapping = false;
         foreach (var ctor in classDecl.Members)
         {
             ct.ThrowIfCancellationRequested();
@@ -94,13 +96,15 @@ internal static class ProfileAnalyzer
 
                 // Stable key of this CreateMap call: profile, constructor, statement (zero-padded for ordinal sorting).
                 var origin = $"profile:{profileName}#{ctorIndex:D4}.{statementIndex:D4}";
-                var descriptors = AnalyseChain(exprStmt.Expression, ctx.SemanticModel, transformers, profileName, origin, ct);
+                var descriptors = AnalyseChain(
+                    exprStmt.Expression, ctx.SemanticModel, transformers, profileName, origin, out var skipped, ct);
                 builder.AddRange(descriptors);
+                hasSkippedMapping |= skipped;
             }
         }
 
         // IM0005: profile class exists but defines no mappings.
-        if (builder.Count == 0)
+        if (builder.Count == 0 && !hasSkippedMapping)
         {
             var sentinel = new MappingDescriptor(
                 sourceTypeName: string.Empty,
@@ -125,7 +129,8 @@ internal static class ProfileAnalyzer
     /// <summary>
     /// Recursively unwraps an invocation chain such as:
     /// CreateMap&lt;Src,Dest&gt;().ForMember(...).Ignore(...).When(...).ReverseMap()
-    /// Returns one (or two, for ReverseMap) descriptors.
+    /// Returns one (or two, for ReverseMap) descriptors. <paramref name="skippedUnresolved"/> is set when a mapping of the
+    /// chain is skipped because a type did not resolve (the compiler reports it at the user's code).
     /// </summary>
     private static IReadOnlyList<MappingDescriptor> AnalyseChain(
         ExpressionSyntax expr,
@@ -133,8 +138,11 @@ internal static class ProfileAnalyzer
         ImmutableArray<ValueTransformerDescriptor> transformers,
         string profileName,
         string origin,
+        out bool skippedUnresolved,
         CancellationToken ct)
     {
+        skippedUnresolved = false;
+
         // Problems found while rewriting lambdas (IM0011/IM0012); any problem skips the whole chain.
         var lambdaDiagnostics = new List<DiagnosticInfo>();
 
@@ -153,15 +161,15 @@ internal static class ProfileAnalyzer
         if (calls.Count == 0) return System.Array.Empty<MappingDescriptor>();
 
         var innermost = calls[calls.Count - 1];
-        var (sourceSymbol, destSymbol) = ExtractCreateMapTypes(innermost, model, ct);
+        var (sourceSymbol, destSymbol) = ExtractCreateMapTypes(innermost, model, out skippedUnresolved, ct);
         if (sourceSymbol is null || destSymbol is null) return System.Array.Empty<MappingDescriptor>();
 
         // Walk calls from innermost (CreateMap) outward, collecting config.
         // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
-        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)>();
+        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)>();
         var includedMembers = new List<string>();
         string? whenConditionBody = null;
-        string? wholeObjectConverterType = null;
+        INamedTypeSymbol? wholeObjectConverter = null;
         string? wholeObjectLambdaBody = null;
         string? beforeMapBody = null;
         string? afterMapBody = null;
@@ -197,12 +205,7 @@ internal static class ProfileAnalyzer
                     if (inv.ArgumentList.Arguments.Count == 0)
                     {
                         // ConvertUsing<TConverter>() — extract generic type argument.
-                        var methodSym = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
-                        if (methodSym?.TypeArguments.Length > 0
-                            && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
-                        {
-                            wholeObjectConverterType = SymbolHelpers.GetFullyQualifiedName(convSym);
-                        }
+                        wholeObjectConverter = GetConverterTypeArgument(inv, model, ct);
                     }
                     else if (inv.ArgumentList.Arguments.Count == 1)
                     {
@@ -243,9 +246,11 @@ internal static class ProfileAnalyzer
 
         var forward = BuildDescriptorFromProfile(
             sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
-            wholeObjectConverterType, wholeObjectLambdaBody,
-            beforeMapBody, afterMapBody, transformers, model, ct);
-        if (forward is not null)
+            wholeObjectConverter, wholeObjectLambdaBody,
+            beforeMapBody, afterMapBody, transformers, profileName, model, ct);
+        // Null only when a converter type did not resolve.
+        if (forward is null) skippedUnresolved = true;
+        else
             results.Add(forward.WithOrigin(
                 origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol)));
 
@@ -255,14 +260,14 @@ internal static class ProfileAnalyzer
             // IncludeMembers is intentionally not propagated to the reverse mapping.
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
-                new List<(string, string?, bool, string?)>(),
+                new List<(string, string?, bool, INamedTypeSymbol?)>(),
                 ImmutableArray<string>.Empty,
                 whenCondition: null,
-                wholeObjectConverterType: null,
+                wholeObjectConverter: null,
                 wholeObjectLambdaBody: null,
                 beforeMapBody: null,
                 afterMapBody: null,
-                transformers, model, ct);
+                transformers, profileName, model, ct);
             if (reverse is not null)
                 results.Add(reverse.WithOrigin(
                     origin + ":reverse", $"ReverseMap() in MappingProfile '{profileName}'", originRank: 1,
@@ -274,7 +279,7 @@ internal static class ProfileAnalyzer
 
     private static void ParseForMember(
         InvocationExpressionSyntax inv,
-        List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> configs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)> configs,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -304,12 +309,9 @@ internal static class ProfileAnalyzer
         if (optMethod == "UseConverter")
         {
             // UseConverter<TConverter>() — extract generic type argument.
-            var methodSym = model.GetSymbolInfo(optBody, ct).Symbol as IMethodSymbol;
-            if (methodSym?.TypeArguments.Length > 0
-                && methodSym.TypeArguments[0] is INamedTypeSymbol convSym)
-            {
-                configs.Add((destPropName, null, false, SymbolHelpers.GetFullyQualifiedName(convSym)));
-            }
+            var converter = GetConverterTypeArgument(optBody, model, ct);
+            if (converter is not null)
+                configs.Add((destPropName, null, false, converter));
             return;
         }
 
@@ -319,6 +321,21 @@ internal static class ProfileAnalyzer
             var body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
             configs.Add((destPropName, body, false, null));
         }
+    }
+
+    /// <summary>
+    /// The type argument of <c>UseConverter&lt;T&gt;()</c> or <c>ConvertUsing&lt;T&gt;()</c>. When the call does not bind
+    /// (the type argument does not resolve), the type is read from the type argument itself, so the mapping can be skipped
+    /// instead of generated without its converter.
+    /// </summary>
+    private static INamedTypeSymbol? GetConverterTypeArgument(InvocationExpressionSyntax inv, SemanticModel model, CancellationToken ct)
+    {
+        if (model.GetSymbolInfo(inv, ct).Symbol is IMethodSymbol { TypeArguments.Length: > 0 } method)
+            return method.TypeArguments[0] as INamedTypeSymbol;
+
+        return (inv.Expression as MemberAccessExpressionSyntax)?.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name
+            ? model.GetTypeInfo(name.TypeArgumentList.Arguments[0], ct).Type as INamedTypeSymbol
+            : null;
     }
 
     private static void ParseIncludeMembers(
@@ -383,14 +400,15 @@ internal static class ProfileAnalyzer
     private static MappingDescriptor? BuildDescriptorFromProfile(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
-        List<(string destProp, string? lambdaBody, bool isIgnore, string? converterType)> forMemberConfigs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)> forMemberConfigs,
         ImmutableArray<string> includedMembers,
         string? whenCondition,
-        string? wholeObjectConverterType,
+        INamedTypeSymbol? wholeObjectConverter,
         string? wholeObjectLambdaBody,
         string? beforeMapBody,
         string? afterMapBody,
         ImmutableArray<ValueTransformerDescriptor> transformers,
+        string profileName,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -435,7 +453,7 @@ internal static class ProfileAnalyzer
             sourcePropsByName[p.Name] = p;
 
         // Index ForMember configs by dest property name.
-        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, string? converterType)>(
+        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
             configByDest[dp] = (lb, ign, cvt);
@@ -466,6 +484,10 @@ internal static class ProfileAnalyzer
         }
 
         var propertyMappings = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
+        var converters = new ConverterAnalyzer(model.Compilation, sourceSymbol, destSymbol);
+        var wholeObject = wholeObjectConverter is null
+            ? null
+            : converters.Add(wholeObjectConverter, $"ConvertUsing in MappingProfile '{profileName}'", ct);
 
         foreach (var destProp in destProps)
         {
@@ -476,14 +498,18 @@ internal static class ProfileAnalyzer
             if (configByDest.TryGetValue(destProp.Name, out var cfg))
             {
                 // Priority 1: explicitly configured via ForMember.
+                var converter = cfg.converter is null || cfg.isIgnore
+                    ? null
+                    : converters.Add(cfg.converter, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'", ct);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
                     isIgnored: cfg.isIgnore,
-                    converterType: cfg.converterType,
+                    converterType: converter?.FullName,
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
-                    isInitOnly: isInitOnly));
+                    isInitOnly: isInitOnly,
+                    converterIsCached: converter?.IsCached ?? false));
             }
             // Priority 2: direct name-match.
             else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
@@ -517,6 +543,13 @@ internal static class ProfileAnalyzer
             // Unmatched destination properties are silently skipped in profile-based mapping.
         }
 
+        // A converter type that did not resolve: the compiler reports it at UseConverter/ConvertUsing; skip the mapping.
+        if (converters.HasUnresolvedType) return null;
+
+        // A converter that the generated code cannot create (IM0015): the mapping is not generated.
+        if (!converters.CanGenerate)
+            return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(converters.Diagnostics));
+
         return new MappingDescriptor(
             sourceTypeName: sourceSymbol.Name,
             sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
@@ -526,14 +559,15 @@ internal static class ProfileAnalyzer
             diagnostics: diagnostics.ToImmutable(),
             hasCustomConverter: false,
             whenConditionBody: whenCondition,
-            wholeObjectConverterType: wholeObjectConverterType,
+            wholeObjectConverterType: wholeObject?.FullName,
             wholeObjectLambdaBody: wholeObjectLambdaBody,
             beforeMapLambdaBody: beforeMapBody,
             afterMapLambdaBody: afterMapBody,
             valueTransformers: transformers,
             sourceFullName: sourceFullName,
             destFullName: destFullName,
-            methodAccessibility: methodAccessibility);
+            methodAccessibility: methodAccessibility,
+            wholeObjectConverterIsCached: wholeObject?.IsCached ?? false);
     }
 
     // -----------------------------------------------------------------------
@@ -567,8 +601,10 @@ internal static class ProfileAnalyzer
     private static (INamedTypeSymbol? source, INamedTypeSymbol? dest) ExtractCreateMapTypes(
         InvocationExpressionSyntax inv,
         SemanticModel model,
+        out bool unresolved,
         CancellationToken ct)
     {
+        unresolved = false;
         // CreateMap<TSource, TDest>() — type args on the generic name.
         var methodSymbol = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
         if (methodSymbol is null) return (null, null);
@@ -576,6 +612,14 @@ internal static class ProfileAnalyzer
 
         var source = methodSymbol.TypeArguments[0] as INamedTypeSymbol;
         var dest = methodSymbol.TypeArguments[1] as INamedTypeSymbol;
+        // CreateMap<Source, Missing>(): the compiler reports it at the call; skip the mapping.
+        if (source is null || dest is null) return (null, null);
+        if (SymbolHelpers.ContainsErrorType(source) || SymbolHelpers.ContainsErrorType(dest))
+        {
+            unresolved = true;
+            return (null, null);
+        }
+
         return (source, dest);
     }
 

@@ -141,9 +141,20 @@ public class GeneratedCodeSnapshotTests
             public PriceDto Convert(Price source) => new PriceDto { Text = source.Amount + " " + source.Currency };
         }
 
+        // Has state: created with new on every call (stateless converters are cached).
+        public sealed class Sequence : ITypeConverter<int, int>
+        {
+            private int _next;
+            public int Convert(int source) => source + _next++;
+        }
+
         [MapTo(typeof(TagDto))]
-        public class Tag { [MapConverter(typeof(Upper))] public string Label { get; set; } = ""; }
-        public class TagDto { public string Label { get; set; } = ""; }
+        public class Tag
+        {
+            [MapConverter(typeof(Upper))] public string Label { get; set; } = "";
+            [MapConverter(typeof(Sequence))] public int Order { get; set; }
+        }
+        public class TagDto { public string Label { get; set; } = ""; public int Order { get; set; } }
 
         public class Item { public string Code { get; set; } = ""; }
         public class ItemDto { public string Code { get; set; } = ""; }

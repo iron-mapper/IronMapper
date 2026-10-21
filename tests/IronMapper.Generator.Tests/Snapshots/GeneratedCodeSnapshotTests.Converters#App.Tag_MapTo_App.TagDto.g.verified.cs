@@ -14,7 +14,8 @@ namespace IronMapper.Generated
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.TagDto
             {
-                Label = new global::App.Upper().Convert(source.Label),
+                Label = ConverterCache<global::App.Upper>.Instance.Convert(source.Label),
+                Order = new global::App.Sequence().Convert(source.Order),
             };
         }
 
@@ -25,7 +26,8 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            destination.Label = new global::App.Upper().Convert(source.Label);
+            destination.Label = ConverterCache<global::App.Upper>.Instance.Convert(source.Label);
+            destination.Order = new global::App.Sequence().Convert(source.Order);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.TagDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>

@@ -47,9 +47,10 @@ public sealed class IronMapperOptions
     }
 
     /// <summary>
-    /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service.
-    /// The generated mapping code does not resolve converters from DI: it creates them with
-    /// <c>new TConverter()</c>, so converters still need a public parameterless constructor.
+    /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service. This does not affect
+    /// mapping: the generated mapping code does not resolve converters from DI, it creates them itself (one instance of a
+    /// converter without state, a new instance per call otherwise), so converters still need a public or internal
+    /// parameterless constructor (IM0015 otherwise).
     /// </summary>
     /// <typeparam name="TConverter">A concrete type implementing <see cref="ITypeConverter"/>.</typeparam>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>

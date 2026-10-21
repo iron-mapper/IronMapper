@@ -12,7 +12,7 @@ namespace IronMapper.Generated
         public static global::App.PriceDto MapToPriceDto(this global::App.Price source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return new global::App.MoneyConverter().Convert(source);
+            return ConverterCache<global::App.MoneyConverter>.Instance.Convert(source);
         }
 
         /// <summary>Maps <see cref="global::App.Price"/> into an existing <see cref="global::App.PriceDto"/> instance.</summary>

@@ -35,6 +35,15 @@
   the generated methods the app does not call. With the switch off, creating `RuntimeMapper` throws
   `InvalidOperationException` that names the property, and `MapperRegistry`'s `MappingException` says the same. See
   [Registration for IMapper](docs/configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps).
+- Diagnostic `IM0015` (error): a converter of `[MapConverter]`, `UseConverter<T>()` or `ConvertUsing<T>()` cannot be
+  created by the generated code (no parameterless constructor, a `private`/`protected` one, an abstract class, an
+  interface, a static class, an open generic type, a `private` nested type). The mapping is not generated; other
+  mappings are. Up to 1.1.4 the build failed with `CS7036`, `CS1729`, `CS0122` or `CS0144` inside the generated file.
+  See [IM0015](docs/diagnostics.md#im0015--converter-cannot-be-created-by-generated-code).
+- Diagnostic `IM0003` (error) is reported: `[MapTo]`/`[MapFrom]` with a type that compiles but cannot be mapped, an
+  open generic type (`typeof(Box<>)`) or an array. Up to 1.1.4 such a mapping was dropped without any message. Its
+  title and message changed (it was declared, never reported). A type that does not resolve is not reported by
+  `IM0003` (see Fixed).
 
 ### Changed
 
@@ -95,9 +104,24 @@
   the same). The elements are mapped during the call: a `null` source throws `ArgumentNullException` and a `null`
   element or a missing mapping throws at the call, not when the result is enumerated; enumerating the result again
   does not map again. Up to 1.1.4 it was a lazy sequence that mapped on every enumeration.
+- **A converter without state is created once and reused** (`[MapConverter]`, `UseConverter<T>()`,
+  `ConvertUsing<T>()`). A converter is without state when it is a class with a public parameterless constructor, no
+  instance fields anywhere in its hierarchy except `object` (auto-property backing fields and field-like events
+  included), no finalizer, constructors without code, and every type of the hierarchy declared in the same project.
+  Its single instance is created on first use, once per converter type for the assembly (`ConverterCache<T>` in
+  `GeneratedMappers.g.cs`, initialized once by the runtime even when several threads race). Every other converter is
+  still created with `new` on every call. The difference can only be observed through state kept outside the converter
+  (for example a static field that records instances). See
+  [Converter instances](docs/configuration.md#converter-instances).
 
 ### Fixed
 
+- **A type that does not resolve no longer breaks the generated code.** `typeof(Missing)` in `[MapTo]`/`[MapFrom]`
+  (also an inaccessible type, an unknown namespace or type argument), `CreateMap<Source, Missing>()` and an unresolved
+  converter type: the compiler reports the error at the user's code (`CS0246` and similar), and the generator now skips
+  that mapping. Up to 1.1.4 it still emitted the mapping, which added `CS0400`/`CS0246`/`CS0122` errors inside the
+  generated file. Other mappings are generated. A profile whose only `CreateMap` is skipped this way does not get
+  `IM0005` (empty profile).
 - **Diagnostics are updated after an edit in the IDE.** An edit that changed only the diagnostics of a mapping (for
   example `[Ignore]` added to the destination property reported in `IM0001`, or one of two `private` members used in a
   profile lambda made `internal`, `IM0011`) kept the old diagnostics until the generator was restarted: the mapping
@@ -107,6 +131,9 @@
 ### Performance
 
 The numbers come with the release, from the full run of the comparison benchmarks.
+
+Converters (see Changed): a converter without state is no longer allocated on every call; its effect on time is
+measured by the full run.
 
 Generated code without LINQ and delegates (see Changed):
 

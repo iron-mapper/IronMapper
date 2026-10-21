@@ -14,7 +14,7 @@ namespace IronMapper.Generated
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             return new global::App.ItemDto
             {
-                Code = new global::App.Upper().Convert(source.Code),
+                Code = ConverterCache<global::App.Upper>.Instance.Convert(source.Code),
             };
         }
 
@@ -25,7 +25,7 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            destination.Code = new global::App.Upper().Convert(source.Code);
+            destination.Code = ConverterCache<global::App.Upper>.Instance.Convert(source.Code);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.ItemDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>

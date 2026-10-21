@@ -18,6 +18,12 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <summary>Fully-qualified name of the ITypeConverter implementation, or null if not set.</summary>
     public string? ConverterType { get; }
 
+    /// <summary>
+    /// When <see langword="true"/>, the converter has no state and the generated code reuses one instance
+    /// (<c>ConverterCache&lt;T&gt;.Instance</c>); otherwise it creates one with <c>new</c> on every call.
+    /// </summary>
+    public bool ConverterIsCached { get; }
+
     /// <summary>When true, the generated code should null-check the source member before reading.</summary>
     public bool NeedsNullCheck { get; }
 
@@ -93,6 +99,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="sourcePropertyTypeFqn">The <c>global::</c>-prefixed FQN of the source property type, or <see langword="null"/> for ForMember-configured properties.</param>
     /// <param name="includedMemberTypeFqn">The FQN of the nested property type when this property was resolved via IncludeMembers, or <see langword="null"/> otherwise.</param>
     /// <param name="collection">The element mapping when source and destination are collections of different element types, or <see langword="null"/>.</param>
+    /// <param name="converterIsCached">When <see langword="true"/> the generated code reuses one instance of <paramref name="converterType"/>.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -103,12 +110,14 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         bool isInitOnly = false,
         string? sourcePropertyTypeFqn = null,
         string? includedMemberTypeFqn = null,
-        CollectionMapping? collection = null)
+        CollectionMapping? collection = null,
+        bool converterIsCached = false)
     {
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
         IsIgnored = isIgnored;
         ConverterType = converterType;
+        ConverterIsCached = converterIsCached;
         NeedsNullCheck = needsNullCheck;
         LambdaBody = lambdaBody;
         IsInitOnly = isInitOnly;
@@ -131,6 +140,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && DestPropertyName == other.DestPropertyName
             && IsIgnored == other.IsIgnored
             && ConverterType == other.ConverterType
+            && ConverterIsCached == other.ConverterIsCached
             && NeedsNullCheck == other.NeedsNullCheck
             && LambdaBody == other.LambdaBody
             && IsInitOnly == other.IsInitOnly
@@ -155,6 +165,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + DestPropertyName.GetHashCode();
         hash = hash * 31 + IsIgnored.GetHashCode();
         hash = hash * 31 + (ConverterType?.GetHashCode() ?? 0);
+        hash = hash * 31 + ConverterIsCached.GetHashCode();
         hash = hash * 31 + NeedsNullCheck.GetHashCode();
         hash = hash * 31 + (LambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + IsInitOnly.GetHashCode();

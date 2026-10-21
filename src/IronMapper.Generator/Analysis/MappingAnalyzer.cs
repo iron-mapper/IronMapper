@@ -36,9 +36,10 @@ internal static class MappingAnalyzer
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
-            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol destSymbol) continue;
+            var destSymbol = GetMappedType(attr, "MapTo", sourceSymbol, builder);
+            if (destSymbol is null) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct)?.WithOrigin(
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapTo", sourceSymbol, destSymbol, index++),
                 $"[MapTo] on '{sourceSymbol.ToDisplayString()}'",
                 originRank: 2,
@@ -68,9 +69,10 @@ internal static class MappingAnalyzer
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
-            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol sourceSymbol) continue;
+            var sourceSymbol = GetMappedType(attr, "MapFrom", destSymbol, builder);
+            if (sourceSymbol is null) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ct)?.WithOrigin(
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapFrom", sourceSymbol, destSymbol, index++),
                 $"[MapFrom] on '{destSymbol.ToDisplayString()}'",
                 originRank: 3,
@@ -80,6 +82,33 @@ internal static class MappingAnalyzer
         }
 
         return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// The type in <c>typeof(...)</c> of a [MapTo]/[MapFrom] attribute, or <see langword="null"/> when there is no mapping
+    /// to generate: a type that does not resolve (<c>typeof(Missing)</c>) is skipped without a diagnostic, because the
+    /// compiler reports it at the attribute; a type that resolves but cannot be mapped (open generic, array, pointer)
+    /// gets IM0003, which the compiler does not report (the mapping would otherwise be dropped silently).
+    /// </summary>
+    private static INamedTypeSymbol? GetMappedType(
+        AttributeData attr, string attribute, INamedTypeSymbol annotated, ImmutableArray<MappingDescriptor>.Builder builder)
+    {
+        if (attr.ConstructorArguments[0].Value is not ITypeSymbol type) return null;
+
+        string problem;
+        // Checked before the error types: the type arguments of typeof(Box<>) are error types.
+        if (type is INamedTypeSymbol { IsUnboundGenericType: true })
+            problem = "an open generic type cannot be mapped; use a constructed type such as typeof(Box<int>)";
+        else if (SymbolHelpers.ContainsErrorType(type))
+            return null;
+        else if (type is INamedTypeSymbol named)
+            return named;
+        else
+            problem = "only classes, structs and records can be mapped";
+
+        builder.Add(CreateDiagnosticOnlyDescriptor(ImmutableArray.Create(new DiagnosticInfo(
+            DiagnosticDescriptors.UnsupportedAttributeType, attribute, type.ToDisplayString(), annotated.ToDisplayString(), problem))));
+        return null;
     }
 
     private static string CreateAttributeOrigin(string attribute, INamedTypeSymbol source, INamedTypeSymbol dest, int index)
@@ -92,6 +121,7 @@ internal static class MappingAnalyzer
     private static MappingDescriptor? BuildDescriptor(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
+        Compilation compilation,
         CancellationToken ct)
     {
         // IM0010: generated methods cannot reference private/protected nested types.
@@ -185,6 +215,8 @@ internal static class MappingAnalyzer
             }
         }
 
+        var converters = new ConverterAnalyzer(compilation, sourceSymbol, destSymbol);
+
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
@@ -195,34 +227,24 @@ internal static class MappingAnalyzer
             bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
 
             // Priority 1: explicit [MapProperty("DestName")] on a source property.
-            if (sourceByDestName.TryGetValue(destProp.Name, out var mappedProp))
-            {
-                var collection = SymbolHelpers.DetectCollectionMapping(mappedProp.Type, destProp.Type);
-                propertyMappings.Add(new PropertyMappingDescriptor(
-                    sourcePropertyName: mappedProp.Name,
-                    destPropertyName: destProp.Name,
-                    isIgnored: HasIgnoreAttribute(mappedProp),
-                    converterType: GetConverterTypeName(mappedProp),
-                    needsNullCheck: mappedProp.Type.IsReferenceType,
-                    lambdaBody: null,
-                    isInitOnly: isInitOnly,
-                    collection: collection));
-                continue;
-            }
-
             // Priority 2: matching name (case-insensitive).
-            if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
+            if (sourceByDestName.TryGetValue(destProp.Name, out var sourceProp)
+                || sourcePropsByName.TryGetValue(destProp.Name, out sourceProp))
             {
-                var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
+                var collection = SymbolHelpers.DetectCollectionMapping(sourceProp.Type, destProp.Type);
+                var isIgnored = HasIgnoreAttribute(sourceProp);
+                // An ignored property does not use its converter, so the converter is not checked.
+                var converter = isIgnored ? null : GetConverter(sourceProp, converters, ct);
                 propertyMappings.Add(new PropertyMappingDescriptor(
-                    sourcePropertyName: namedProp.Name,
+                    sourcePropertyName: sourceProp.Name,
                     destPropertyName: destProp.Name,
-                    isIgnored: HasIgnoreAttribute(namedProp),
-                    converterType: GetConverterTypeName(namedProp),
-                    needsNullCheck: namedProp.Type.IsReferenceType,
+                    isIgnored: isIgnored,
+                    converterType: converter?.FullName,
+                    needsNullCheck: sourceProp.Type.IsReferenceType,
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
-                    collection: collection));
+                    collection: collection,
+                    converterIsCached: converter?.IsCached ?? false));
                 continue;
             }
 
@@ -232,6 +254,16 @@ internal static class MappingAnalyzer
                 destProp.Name,
                 destSymbol.Name,
                 sourceSymbol.Name));
+        }
+
+        // A converter type that did not resolve: the compiler reports it at [MapConverter]; skip the mapping.
+        if (converters.HasUnresolvedType) return null;
+
+        // A converter that the generated code cannot create (IM0015): the mapping is not generated.
+        if (!converters.CanGenerate)
+        {
+            diagnostics.AddRange(converters.Diagnostics);
+            return CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
 
         return new MappingDescriptor(
@@ -304,7 +336,11 @@ internal static class MappingAnalyzer
         return false;
     }
 
-    private static string? GetConverterTypeName(IPropertySymbol prop)
+    /// <summary>
+    /// The converter of <c>[MapConverter]</c> on <paramref name="prop"/>, checked by <paramref name="converters"/>
+    /// (fully qualified, so nested and generic converter types work: <c>global::App.Outer.Converter</c>).
+    /// </summary>
+    private static ConverterUse? GetConverter(IPropertySymbol prop, ConverterAnalyzer converters, CancellationToken ct)
     {
         foreach (var attr in prop.GetAttributes())
         {
@@ -312,8 +348,8 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol converterSymbol)
             {
-                // Fully qualified, so nested and generic converter types work (global::App.Outer.Converter).
-                return SymbolHelpers.GetFullyQualifiedName(converterSymbol);
+                return converters.Add(
+                    converterSymbol, $"[MapConverter] on '{prop.ContainingType.ToDisplayString()}.{prop.Name}'", ct);
             }
         }
         return null;

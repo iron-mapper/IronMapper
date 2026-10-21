@@ -45,6 +45,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public string? WholeObjectConverterType { get; }
 
     /// <summary>
+    /// When <see langword="true"/>, <see cref="WholeObjectConverterType"/> has no state and the generated code reuses one
+    /// instance (<c>ConverterCache&lt;T&gt;.Instance</c>); otherwise it creates one with <c>new</c> on every call.
+    /// </summary>
+    public bool WholeObjectConverterIsCached { get; }
+
+    /// <summary>
     /// When non-null, the generated method body is this verbatim C# expression (using "source").
     /// Produced by <c>ConvertUsing(src =&gt; ...)</c> in a MappingProfile.
     /// </summary>
@@ -113,6 +119,20 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <summary>Type-argument part of a qualified method name by full names (e.g. <c>OfSystem_Int32</c>); empty for non-generic types.</summary>
     public string DestTypeArgsFull { get; }
 
+    /// <summary>
+    /// The generated code of this mapping uses <c>ConverterCache&lt;T&gt;</c> (declared once in <c>GeneratedMappers.g.cs</c>).
+    /// </summary>
+    public bool UsesConverterCache
+    {
+        get
+        {
+            if (WholeObjectConverterIsCached) return true;
+            foreach (var property in PropertyMappings)
+                if (property.ConverterIsCached) return true;
+            return false;
+        }
+    }
+
     /// <summary>Key of the type pair: <c>{SourceFullName}-&gt;{DestFullName}</c>.</summary>
     public string PairKey => $"{SourceFullName}->{DestFullName}";
 
@@ -139,6 +159,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="destQualifier">Namespace and containing types of the destination (see <see cref="DestQualifier"/>).</param>
     /// <param name="destTypeArgsShort">Type-argument name part by simple names (see <see cref="DestTypeArgsShort"/>).</param>
     /// <param name="destTypeArgsFull">Type-argument name part by full names (see <see cref="DestTypeArgsFull"/>).</param>
+    /// <param name="wholeObjectConverterIsCached">Whether one instance of <paramref name="wholeObjectConverterType"/> is reused.</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -161,7 +182,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         int originRank = 0,
         string destQualifier = "",
         string destTypeArgsShort = "",
-        string destTypeArgsFull = "")
+        string destTypeArgsFull = "",
+        bool wholeObjectConverterIsCached = false)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -172,6 +194,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         HasCustomConverter = hasCustomConverter;
         WhenConditionBody = whenConditionBody;
         WholeObjectConverterType = wholeObjectConverterType;
+        WholeObjectConverterIsCached = wholeObjectConverterIsCached;
         WholeObjectLambdaBody = wholeObjectLambdaBody;
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
@@ -198,7 +221,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
-                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull);
+                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -213,6 +236,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || HasCustomConverter != other.HasCustomConverter
             || WhenConditionBody != other.WhenConditionBody
             || WholeObjectConverterType != other.WholeObjectConverterType
+            || WholeObjectConverterIsCached != other.WholeObjectConverterIsCached
             || WholeObjectLambdaBody != other.WholeObjectLambdaBody
             || BeforeMapLambdaBody != other.BeforeMapLambdaBody
             || AfterMapLambdaBody != other.AfterMapLambdaBody
@@ -247,6 +271,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + HasCustomConverter.GetHashCode();
         hash = hash * 31 + (WhenConditionBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (WholeObjectConverterType?.GetHashCode() ?? 0);
+        hash = hash * 31 + WholeObjectConverterIsCached.GetHashCode();
         hash = hash * 31 + (WholeObjectLambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (BeforeMapLambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + (AfterMapLambdaBody?.GetHashCode() ?? 0);
