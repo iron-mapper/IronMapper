@@ -150,7 +150,7 @@ internal static class LambdaBodyRewriter
             var symbol = GetSymbol(node);
             if (symbol is INamedTypeSymbol type)
             {
-                ReportIfInaccessible(type, type);
+                ReportIfInaccessible(type, type, node);
                 return SyntaxFactory.ParseTypeName(SymbolHelpers.GetFullyQualifiedName(type)).WithTriviaFrom(node);
             }
 
@@ -170,29 +170,29 @@ internal static class LambdaBodyRewriter
 
                 case IParameterSymbol or ILocalSymbol or IRangeVariableSymbol:
                     if (!IsDeclaredInsideLambda(symbol))
-                        Report(DiagnosticDescriptors.LambdaCapturesState,
+                        Report(DiagnosticDescriptors.LambdaCapturesState, node,
                             symbol is IParameterSymbol ? "parameter" : "local variable", symbol.Name);
                     return null;
 
                 case IMethodSymbol { MethodKind: MethodKind.LocalFunction }:
                     if (!IsDeclaredInsideLambda(symbol))
-                        Report(DiagnosticDescriptors.LambdaCapturesState, "local function", symbol.Name);
+                        Report(DiagnosticDescriptors.LambdaCapturesState, node, "local function", symbol.Name);
                     return null;
 
                 case INamespaceSymbol ns:
                     return SyntaxFactory.ParseName(ns.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)).WithTriviaFrom(node);
 
                 case INamedTypeSymbol type:
-                    ReportIfInaccessible(type, type);
+                    ReportIfInaccessible(type, type, node);
                     return SyntaxFactory.ParseTypeName(SymbolHelpers.GetFullyQualifiedName(type)).WithTriviaFrom(node);
 
                 case IMethodSymbol or IFieldSymbol or IPropertySymbol or IEventSymbol:
                     if (!symbol.IsStatic)
                     {
-                        Report(DiagnosticDescriptors.LambdaCapturesState, "instance member", symbol.ToDisplayString());
+                        Report(DiagnosticDescriptors.LambdaCapturesState, node, "instance member", symbol.ToDisplayString());
                         return null;
                     }
-                    ReportIfInaccessible(symbol, symbol);
+                    ReportIfInaccessible(symbol, symbol, node);
                     var containing = SymbolHelpers.GetFullyQualifiedName(symbol.ContainingType);
                     return SyntaxFactory.ParseExpression(containing + "." + text).WithTriviaFrom(node);
 
@@ -210,7 +210,7 @@ internal static class LambdaBodyRewriter
             // The right-hand name is kept as written, but it must still be reachable from generated code.
             if (GetSymbol(node) is { } member
                 and (IMethodSymbol or IFieldSymbol or IPropertySymbol or IEventSymbol or INamedTypeSymbol))
-                ReportIfInaccessible(member, member);
+                ReportIfInaccessible(member, member, node.Name);
 
             return base.VisitMemberAccessExpression(node);
         }
@@ -230,7 +230,7 @@ internal static class LambdaBodyRewriter
                 && !StartsWithConditionalBinding(memberAccess.Expression))
             {
                 // receiver.Ext(args) → global::Ns.ExtClass.Ext(receiver, args)
-                ReportIfInaccessible(method, method);
+                ReportIfInaccessible(method, method, memberAccess.Name);
                 var receiver = (ExpressionSyntax)Visit(memberAccess.Expression)!;
                 var methodName = (SimpleNameSyntax)Visit(memberAccess.Name)!;
                 var arguments = (ArgumentListSyntax)Visit(node.ArgumentList)!;
@@ -248,13 +248,13 @@ internal static class LambdaBodyRewriter
 
         public override SyntaxNode? VisitThisExpression(ThisExpressionSyntax node)
         {
-            Report(DiagnosticDescriptors.LambdaCapturesState, "the profile instance", "this");
+            Report(DiagnosticDescriptors.LambdaCapturesState, node, "the profile instance", "this");
             return node;
         }
 
         public override SyntaxNode? VisitBaseExpression(BaseExpressionSyntax node)
         {
-            Report(DiagnosticDescriptors.LambdaCapturesState, "the profile instance", "base");
+            Report(DiagnosticDescriptors.LambdaCapturesState, node, "the profile instance", "base");
             return node;
         }
 
@@ -312,7 +312,7 @@ internal static class LambdaBodyRewriter
             => symbol.DeclaringSyntaxReferences.Any(r =>
                 r.SyntaxTree == _lambda.SyntaxTree && _lambda.Span.Contains(r.Span));
 
-        private void ReportIfInaccessible(ISymbol referenced, ISymbol start)
+        private void ReportIfInaccessible(ISymbol referenced, ISymbol start, SyntaxNode at)
         {
             for (var current = start; current is not null && current is not INamespaceSymbol; current = current.ContainingSymbol)
             {
@@ -321,7 +321,7 @@ internal static class LambdaBodyRewriter
                     case Accessibility.Private:
                     case Accessibility.Protected:
                     case Accessibility.ProtectedAndInternal:
-                        Report(DiagnosticDescriptors.LambdaMemberNotAccessible,
+                        Report(DiagnosticDescriptors.LambdaMemberNotAccessible, at,
                             referenced.ToDisplayString(),
                             current.ToDisplayString(),
                             SymbolHelpers.ToKeyword(current.DeclaredAccessibility));
@@ -330,10 +330,11 @@ internal static class LambdaBodyRewriter
             }
         }
 
-        private void Report(DiagnosticDescriptor descriptor, params string[] args)
+        /// <summary>Reports a problem once (at its first use), pointing to <paramref name="at"/> in the lambda.</summary>
+        private void Report(DiagnosticDescriptor descriptor, SyntaxNode at, params string[] args)
         {
             var info = new DiagnosticInfo(descriptor, new[] { _profileName }.Concat(args).ToArray());
-            if (_seen.Add(info)) Problems.Add(info);
+            if (_seen.Add(info)) Problems.Add(info.WithLocation(LocationInfo.From(at)));
         }
     }
 }

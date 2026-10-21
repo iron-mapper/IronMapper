@@ -1,6 +1,13 @@
 ﻿{
   Diagnostics: [
     {
+      Location: /*
+{
+    [MapTo(typeof(Admin.UserDto))]
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    [MapTo(typeof(Public.UserDto))]
+*/
+ : (4,5)-(4,33),
       Message: Several mappings from 'App.User' have a destination type named 'UserDto', so the mapping to 'App.Admin.UserDto' is generated as 'MapToAdminUserDto' instead of 'MapToUserDto'. Call it as source.MapToAdminUserDto(); the collection methods are MapToAdminUserDtoList and MapToAdminUserDtoArray.,
       Severity: Warning,
       WarningLevel: 1,
@@ -15,6 +22,13 @@
       }
     },
     {
+      Location: /*
+    [MapTo(typeof(Admin.UserDto))]
+    [MapTo(typeof(Public.UserDto))]
+     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    public class User { public string Name { get; set; } = ""; }
+*/
+ : (5,5)-(5,34),
       Message: Several mappings from 'App.User' have a destination type named 'UserDto', so the mapping to 'App.Public.UserDto' is generated as 'MapToPublicUserDto' instead of 'MapToUserDto'. Call it as source.MapToPublicUserDto(); the collection methods are MapToPublicUserDtoList and MapToPublicUserDtoArray.,
       Severity: Warning,
       WarningLevel: 1,

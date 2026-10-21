@@ -23,6 +23,10 @@
        runtimeconfig.json of every executable variant: not set by default and with the DI package, false with
        PublishTrimmed and without the DI package, true with IronMapperRegistration=true; a framework-dependent publish
        without the DI package keeps the registration (the registry finds the mapping by type).
+       IronMapperReportUnmappedInProfiles (CompilerVisibleProperty in buildTransitive/IronMapper.props): a profile
+       with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
+       (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
+       TreatWarningsAsErrors, none with it).
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
@@ -194,6 +198,20 @@ try {
         $path
     }
 
+    # A copy of Sources/ProfileUnmapped.cs in its own folder with an .editorconfig (applied by the path of the file).
+    function Export-WithEditorConfig([string] $name, [string] $severity) {
+        $folder = Join-Path $variantsRoot $name
+        New-Item -ItemType Directory -Force -Path $folder | Out-Null
+        Copy-Item (Join-Path $sources 'ProfileUnmapped.cs') $folder
+        "root = true`n`n[*.cs]`ndotnet_diagnostic.IM0001.severity = $severity`n" |
+            Set-Content -Path (Join-Path $folder '.editorconfig') -NoNewline -Encoding utf8
+        Join-Path $folder 'ProfileUnmapped.cs'
+    }
+
+    # IM0001 in the build output: at the CreateMap call of ProfileUnmapped.cs (file, line, column).
+    $createMapLine = (Select-String -Path (Join-Path $sources 'ProfileUnmapped.cs') -SimpleMatch 'CreateMap<').LineNumber
+    $unmappedError = "ProfileUnmapped\.cs\($createMapLine,\d+\): error IM0001: Property 'Missing' on destination type 'OrderDto'"
+
     $variants = @(
         @{ Name = 'no using, ImplicitUsings on'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true; Output = 'NoUsing: OK' }
         @{ Name = 'no using, only IronMapper.Extensions.DI referenced'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true
@@ -232,6 +250,19 @@ try {
         @{ Name = 'netstandard2.0 library, C# 8 (registration without module initializer)'; Source = "$sources/ExplicitUsing.cs"
            GlobalUsing = $false; Run = $false
            Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library', '-p:ImplicitUsings=disable', '-p:LangVersion=8') }
+        # IM0001 for profile mappings (IronMapperReportUnmappedInProfiles, off by default in 1.x). BuildError: the build
+        # must fail and its output must match this pattern.
+        @{ Name = 'profile with an unmapped property, IronMapperReportUnmappedInProfiles not set'
+           Source = "$sources/ProfileUnmapped.cs"; GlobalUsing = $true; Output = 'ProfileUnmapped: OK' }
+        @{ Name = 'IronMapperReportUnmappedInProfiles=true (IM0001 at the CreateMap line, TreatWarningsAsErrors)'
+           Source = "$sources/ProfileUnmapped.cs"; GlobalUsing = $true; BuildError = $unmappedError
+           Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
+        @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity error, TreatWarningsAsErrors=false'
+           Source = (Export-WithEditorConfig 'editorconfig-error' 'error'); GlobalUsing = $true; BuildError = $unmappedError
+           Properties = @('-p:IronMapperReportUnmappedInProfiles=true', '-p:TreatWarningsAsErrors=false') }
+        @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity none'
+           Source = (Export-WithEditorConfig 'editorconfig-none' 'none'); GlobalUsing = $true; Output = 'ProfileUnmapped: OK'
+           Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
     )
 
     $index = 0
@@ -245,6 +276,15 @@ try {
 
         Invoke-Dotnet restore $implicitConsumer --force --artifacts-path $artifacts --configfile $nugetConfig `
             "-p:RestorePackagesPath=$packagesPath" @properties
+        if ($variant.ContainsKey('BuildError')) {
+            $buildOutput = & dotnet build $implicitConsumer --no-restore -c $Configuration --artifacts-path $artifacts @properties 2>&1 |
+                Out-String
+            if ($LASTEXITCODE -eq 0 -or $buildOutput -notmatch $variant.BuildError) {
+                Write-Host $buildOutput
+                throw "Variant '$($variant.Name)': expected the build to fail with '$($variant.BuildError)' (exit code $LASTEXITCODE)"
+            }
+            continue
+        }
         Invoke-Dotnet build $implicitConsumer --no-restore -c $Configuration --artifacts-path $artifacts @properties
 
         $globalUsings = Get-ChildItem -Path $artifacts -Recurse -Filter '*.GlobalUsings.g.cs' | Select-Object -First 1

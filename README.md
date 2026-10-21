@@ -20,7 +20,7 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
 - **Configuration errors at build time, partly.** For `[MapTo]`/`[MapFrom]` an unmatched destination property is
   warning `IM0001`, a wrong `[MapProperty]` name is error `IM0006`, an inaccessible type is `IM0010`
   ([diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)). Profile mappings get
-  fewer checks (`IM0001` is not reported for them, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
+  fewer checks (`IM0001` for them is opt-in from 1.2.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
   the generated file.
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.6 ns per object. Nested objects are slower
   (×1.26), see [Performance](https://github.com/iron-mapper/IronMapper#performance).
@@ -227,8 +227,10 @@ compile time. Up to 1.1.4 `IMapper` used reflection, was ×2.7 slower on Flat an
   initializer. Records and classes with `init` properties work.
 - **No flattening by convention** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` is not filled from `Customer.Address.City`. Use
   `MapFrom`.
-- **`IM0001` is not reported for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
-  mapping keeps its default value without a warning.
+- **`IM0001` is off by default for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
+  mapping keeps its default value without a warning. From 1.2.0 turn it on with
+  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (planned to be on by default in 2.0);
+  the severity is set in `.editorconfig` (`dotnet_diagnostic.IM0001.severity = error`).
 - **A `null` source throws `ArgumentNullException`**, also when it is declared nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
@@ -236,7 +238,7 @@ compile time. Up to 1.1.4 `IMapper` used reflection, was ×2.7 slower on Flat an
   use `MapFrom` or a converter. Declared diagnostics `IM0002` and `IM0004` are not reported yet.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Also: diagnostics have no source location; `IMapper` has no per-call context
+Also: up to 1.1.4 diagnostics have no source location (from 1.2.0 they point to the line); `IMapper` has no per-call context
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
 `ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public
 or internal parameterless constructor (`IM0015`); private/protected nested types
@@ -266,8 +268,8 @@ Open issues:
 
 Next release, 1.2.0. Done (not released yet): generated collection code without LINQ, `IMapper` without
 reflection that works under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) and maps collections with `Map<List<T>>`
-([#8](https://github.com/iron-mapper/IronMapper/issues/8)). Planned: `IM0001` for profiles behind an opt-in switch ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), diagnostics with
-source locations. The
+([#8](https://github.com/iron-mapper/IronMapper/issues/8)), stateless converters created once, diagnostics with source locations and working code
+fixes, `IM0001` for profiles behind an opt-in switch ([#22](https://github.com/iron-mapper/IronMapper/issues/22)). The
 working plan (in Russian) is [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
 it may change.
 

@@ -185,6 +185,51 @@ trimming или NativeAOT эта регистрация удерживала б�
 
 ---
 
+## Несопоставленные свойства в профилях
+
+Для `[MapTo]`/`[MapFrom]` несопоставленное свойство destination даёт предупреждение
+[`IM0001`](diagnostics.ru.md#im0001--несопоставленное-свойство-destination). Для маппингов профилей (`CreateMap`) в 1.x
+оно по умолчанию выключено, как в 1.1 (несопоставленное свойство остаётся со значением по умолчанию без предупреждения;
+issue [#22](https://github.com/iron-mapper/IronMapper/issues/22)), и включается MSBuild-свойством (начиная с 1.2.0):
+
+```xml
+<PropertyGroup>
+  <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>
+</PropertyGroup>
+```
+
+Свойство задаётся в проекте или в `Directory.Build.props`. Пакет передаёт его генератору (`CompilerVisibleProperty` в
+`buildTransitive/IronMapper.props`); любое значение, кроме `true` (без учёта регистра), оставляет проверку выключенной.
+В 2.0 планируется включить её по умолчанию.
+
+Предупреждение указывает на вызов `CreateMap`. Свойство destination считается сопоставленным, если:
+
+- его настраивает `ForMember`: `opt.MapFrom(...)`, `opt.Ignore()`, `opt.UseConverter<T>()` (и отдельный
+  `.Ignore(d => d.X)`);
+- его даёт `IncludeMembers` или source-свойство с тем же именем (без учёта регистра);
+- на нём стоит `[Ignore]` (как в маппингах атрибутами).
+
+Маппинг с `ConvertUsing<T>()` или `ConvertUsing(src => ...)` IM0001 не получает: converter создаёт весь объект
+destination. Обратный маппинг `ReverseMap()` не проверяется: он сопоставляет только по именам, и `ForMember` к нему не
+применяется (AutoMapper обратные маппинги тоже не проверяет — у них `MemberList.None`). Чтобы он проверялся, объявите
+его отдельным `CreateMap`. Code fix «Ignore '...' in this mapping (ForMember)» добавляет
+`.ForMember(dest => dest.X, opt => opt.Ignore())` после `CreateMap`.
+
+### Уровень
+
+Отдельного свойства IronMapper для уровня нет: используйте стандартные настройки любой диагностики. В `.editorconfig`
+(действует на файлы, которые он покрывает) или `.globalconfig`:
+
+```ini
+[*.cs]
+dotnet_diagnostic.IM0001.severity = error
+```
+
+`<WarningsAsErrors>$(WarningsAsErrors);IM0001</WarningsAsErrors>` и `<NoWarn>` в файле проекта тоже работают. Уровень
+действует и на маппинги атрибутами, и на профили (это один идентификатор диагностики).
+
+---
+
 ## Атрибуты
 
 ### `[MapTo(typeof(TDest))]`

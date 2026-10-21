@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 using IronMapper.Generator.Analysis.Models;
 using IronMapper.Generator.Diagnostics;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace IronMapper.Generator.Analysis;
 
@@ -13,6 +15,12 @@ internal static class MappingAnalyzer
     private const string MapPropertyAttributeFqn = "IronMapper.Attributes.MapPropertyAttribute";
     private const string IgnoreAttributeFqn = "IronMapper.Attributes.IgnoreAttribute";
     private const string MapConverterAttributeFqn = "IronMapper.Attributes.MapConverterAttribute";
+
+    /// <summary>Diagnostic property of IM0006 read by its code fix: the destination property names, separated by ';'.</summary>
+    internal const string DestinationPropertiesKey = "DestinationProperties";
+
+    /// <summary>Diagnostic property of IM0001: the name of the unmapped destination property.</summary>
+    internal const string PropertyNameKey = "PropertyName";
 
     // -----------------------------------------------------------------------
     // Entry points called from the generator pipeline
@@ -36,14 +44,16 @@ internal static class MappingAnalyzer
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
-            var destSymbol = GetMappedType(attr, "MapTo", sourceSymbol, builder);
+            var location = LocationInfo.From(attr.ApplicationSyntaxReference?.GetSyntax(ct));
+            var destSymbol = GetMappedType(attr, "MapTo", sourceSymbol, location, builder);
             if (destSymbol is null) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, ct)?.WithOrigin(
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, location, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapTo", sourceSymbol, destSymbol, index++),
                 $"[MapTo] on '{sourceSymbol.ToDisplayString()}'",
                 originRank: 2,
-                SymbolHelpers.GetDestinationNaming(destSymbol));
+                SymbolHelpers.GetDestinationNaming(destSymbol),
+                location);
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
@@ -69,14 +79,16 @@ internal static class MappingAnalyzer
         {
             ct.ThrowIfCancellationRequested();
             if (attr.ConstructorArguments.Length == 0) continue;
-            var sourceSymbol = GetMappedType(attr, "MapFrom", destSymbol, builder);
+            var location = LocationInfo.From(attr.ApplicationSyntaxReference?.GetSyntax(ct));
+            var sourceSymbol = GetMappedType(attr, "MapFrom", destSymbol, location, builder);
             if (sourceSymbol is null) continue;
 
-            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, ct)?.WithOrigin(
+            var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, location, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapFrom", sourceSymbol, destSymbol, index++),
                 $"[MapFrom] on '{destSymbol.ToDisplayString()}'",
                 originRank: 3,
-                SymbolHelpers.GetDestinationNaming(destSymbol));
+                SymbolHelpers.GetDestinationNaming(destSymbol),
+                location);
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
@@ -90,8 +102,8 @@ internal static class MappingAnalyzer
     /// compiler reports it at the attribute; a type that resolves but cannot be mapped (open generic, array, pointer)
     /// gets IM0003, which the compiler does not report (the mapping would otherwise be dropped silently).
     /// </summary>
-    private static INamedTypeSymbol? GetMappedType(
-        AttributeData attr, string attribute, INamedTypeSymbol annotated, ImmutableArray<MappingDescriptor>.Builder builder)
+    private static INamedTypeSymbol? GetMappedType(AttributeData attr, string attribute, INamedTypeSymbol annotated,
+        LocationInfo? location, ImmutableArray<MappingDescriptor>.Builder builder)
     {
         if (attr.ConstructorArguments[0].Value is not ITypeSymbol type) return null;
 
@@ -107,7 +119,8 @@ internal static class MappingAnalyzer
             problem = "only classes, structs and records can be mapped";
 
         builder.Add(CreateDiagnosticOnlyDescriptor(ImmutableArray.Create(new DiagnosticInfo(
-            DiagnosticDescriptors.UnsupportedAttributeType, attribute, type.ToDisplayString(), annotated.ToDisplayString(), problem))));
+            DiagnosticDescriptors.UnsupportedAttributeType, attribute, type.ToDisplayString(), annotated.ToDisplayString(), problem)
+            .WithLocation(location))));
         return null;
     }
 
@@ -118,17 +131,23 @@ internal static class MappingAnalyzer
     // Core analysis logic
     // -----------------------------------------------------------------------
 
+    /// <param name="sourceSymbol">The source type.</param>
+    /// <param name="destSymbol">The destination type.</param>
+    /// <param name="compilation">The compilation (converter checks).</param>
+    /// <param name="origin">The [MapTo]/[MapFrom] attribute: where diagnostics of the whole mapping point.</param>
+    /// <param name="ct">Cancellation.</param>
     private static MappingDescriptor? BuildDescriptor(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
         Compilation compilation,
+        LocationInfo? origin,
         CancellationToken ct)
     {
         // IM0010: generated methods cannot reference private/protected nested types.
         var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
             sourceSymbol, destSymbol, out var inaccessibleType);
         if (methodAccessibility is null)
-            return CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!);
+            return CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!, origin);
 
         var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
         var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
@@ -144,7 +163,7 @@ internal static class MappingAnalyzer
         {
             diagnostics.Add(new DiagnosticInfo(
                 DiagnosticDescriptors.AbstractDestinationType,
-                destSymbol.Name));
+                destSymbol.Name).WithLocation(origin));
             return new MappingDescriptor(
                 sourceTypeName: sourceSymbol.Name,
                 sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
@@ -164,15 +183,20 @@ internal static class MappingAnalyzer
         foreach (var p in sourceProps)
             sourcePropsByName[p.Name] = p;
 
-        // Build reverse index: destination property name → source property (via [MapProperty]).
+        // Build reverse index: destination property name → source property (via [MapProperty]), and where each
+        // [MapProperty] is (IM0006 points to it).
         var sourceByDestName = new Dictionary<string, IPropertySymbol>(
             System.StringComparer.OrdinalIgnoreCase);
+        var mapPropertyLocations = new Dictionary<string, LocationInfo?>(System.StringComparer.OrdinalIgnoreCase);
         foreach (var sourceProp in sourceProps)
         {
             ct.ThrowIfCancellationRequested();
-            var destName = GetMapPropertyDestName(sourceProp);
+            var destName = GetMapPropertyDestName(sourceProp, out var mapProperty);
             if (destName is not null)
+            {
                 sourceByDestName[destName] = sourceProp;
+                mapPropertyLocations[destName] = LocationInfo.From(mapProperty?.ApplicationSyntaxReference?.GetSyntax(ct));
+            }
         }
 
         // Build set of destination property names for IM0006 validation.
@@ -181,16 +205,19 @@ internal static class MappingAnalyzer
         foreach (var p in destProps)
             destPropNames.Add(p.Name);
 
-        // IM0006: validate that every [MapProperty] destination name actually exists.
+        // IM0006: validate that every [MapProperty] destination name actually exists. The code fix suggests one of
+        // the destination properties, passed as a diagnostic property.
         foreach (var kv in sourceByDestName)
         {
             ct.ThrowIfCancellationRequested();
             if (!destPropNames.Contains(kv.Key))
             {
                 diagnostics.Add(new DiagnosticInfo(
-                    DiagnosticDescriptors.MapPropertyDestinationNotFound,
-                    kv.Key,
-                    destSymbol.Name));
+                        DiagnosticDescriptors.MapPropertyDestinationNotFound,
+                        kv.Key,
+                        destSymbol.Name)
+                    .WithLocation(mapPropertyLocations[kv.Key] ?? origin)
+                    .WithProperty(DestinationPropertiesKey, string.Join(";", destProps.Select(p => p.Name))));
             }
         }
 
@@ -209,7 +236,7 @@ internal static class MappingAnalyzer
                         diagnostics.Add(new DiagnosticInfo(
                             DiagnosticDescriptors.RecordParameterNotMapped,
                             param.Name,
-                            destSymbol.Name));
+                            destSymbol.Name).WithLocation(LocationInfo.From(param) ?? origin));
                     }
                 }
             }
@@ -248,12 +275,15 @@ internal static class MappingAnalyzer
                 continue;
             }
 
-            // Priority 3: no match → IM0001 warning.
+            // Priority 3: no match → IM0001 warning, at the destination property (the code fix adds [Ignore] there),
+            // or at the attribute when the property is not in source (a type from another assembly).
             diagnostics.Add(new DiagnosticInfo(
-                DiagnosticDescriptors.UnmappedDestinationProperty,
-                destProp.Name,
-                destSymbol.Name,
-                sourceSymbol.Name));
+                    DiagnosticDescriptors.UnmappedDestinationProperty,
+                    destProp.Name,
+                    destSymbol.Name,
+                    sourceSymbol.Name)
+                .WithLocation(LocationInfo.From(destProp) ?? origin)
+                .WithProperty(PropertyNameKey, destProp.Name));
         }
 
         // A converter type that did not resolve: the compiler reports it at [MapConverter]; skip the mapping.
@@ -286,13 +316,14 @@ internal static class MappingAnalyzer
     internal static MappingDescriptor CreateInaccessibleTypeDescriptor(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
-        INamedTypeSymbol inaccessibleType)
+        INamedTypeSymbol inaccessibleType,
+        LocationInfo? origin)
         => CreateDiagnosticOnlyDescriptor(ImmutableArray.Create(new DiagnosticInfo(
             DiagnosticDescriptors.InaccessibleMappingType,
             sourceSymbol.ToDisplayString(),
             destSymbol.ToDisplayString(),
             inaccessibleType.ToDisplayString(),
-            SymbolHelpers.ToKeyword(inaccessibleType.DeclaredAccessibility))));
+            SymbolHelpers.ToKeyword(inaccessibleType.DeclaredAccessibility)).WithLocation(origin)));
 
     /// <summary>
     /// Builds a descriptor that only reports <paramref name="diagnostics"/> and emits no source
@@ -312,7 +343,7 @@ internal static class MappingAnalyzer
     // Symbol helpers
     // -----------------------------------------------------------------------
 
-    private static string? GetMapPropertyDestName(IPropertySymbol prop)
+    private static string? GetMapPropertyDestName(IPropertySymbol prop, out AttributeData? attribute)
     {
         foreach (var attr in prop.GetAttributes())
         {
@@ -320,13 +351,15 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is string destName)
             {
+                attribute = attr;
                 return destName;
             }
         }
+        attribute = null;
         return null;
     }
 
-    private static bool HasIgnoreAttribute(IPropertySymbol prop)
+    internal static bool HasIgnoreAttribute(IPropertySymbol prop)
     {
         foreach (var attr in prop.GetAttributes())
         {
@@ -348,8 +381,14 @@ internal static class MappingAnalyzer
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol converterSymbol)
             {
+                // IM0015 points to the type in typeof(...), or to the attribute.
+                var syntax = attr.ApplicationSyntaxReference?.GetSyntax(ct);
+                var type = (syntax as AttributeSyntax)?.ArgumentList?.Arguments.FirstOrDefault()?.Expression is TypeOfExpressionSyntax typeOf
+                    ? typeOf.Type
+                    : syntax;
                 return converters.Add(
-                    converterSymbol, $"[MapConverter] on '{prop.ContainingType.ToDisplayString()}.{prop.Name}'", ct);
+                    converterSymbol, $"[MapConverter] on '{prop.ContainingType.ToDisplayString()}.{prop.Name}'",
+                    LocationInfo.From(type), ct);
             }
         }
         return null;

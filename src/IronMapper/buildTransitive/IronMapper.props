@@ -14,4 +14,14 @@
     <Using Include="IronMapper.Generated" />
   </ItemGroup>
 
+  <!--
+    MSBuild properties the source generator reads (as build_property.* analyzer config options):
+    IronMapperReportUnmappedInProfiles - true reports IM0001 for destination properties of profile (CreateMap) mappings
+    that nothing maps; off by default in 1.x. Severity as for any diagnostic, e.g. in .editorconfig:
+    dotnet_diagnostic.IM0001.severity = error
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="IronMapperReportUnmappedInProfiles" />
+  </ItemGroup>
+
 </Project>

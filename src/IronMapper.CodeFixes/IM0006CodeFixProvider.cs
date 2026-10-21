@@ -15,13 +15,15 @@ namespace IronMapper.CodeFixes;
 
 /// <summary>
 /// Code fix for IM0006 — <c>[MapProperty]</c> destination name does not exist on the destination type.
-/// Suggests the closest existing destination property name (Levenshtein distance ≤ 2).
+/// Suggests the closest destination property names (Levenshtein distance ≤ 2), taken from the diagnostic
+/// (property <c>DestinationProperties</c>); the diagnostic points to the attribute.
 /// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(IM0006CodeFixProvider))]
 [Shared]
 public sealed class IM0006CodeFixProvider : CodeFixProvider
 {
     private const string DiagnosticId = "IM0006";
+    private const string DestinationPropertiesKey = "DestinationProperties";
 
     /// <inheritdoc/>
     public override ImmutableArray<string> FixableDiagnosticIds =>
@@ -37,56 +39,40 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
             .ConfigureAwait(false);
         if (root is null) return;
 
-        var semanticModel = await context.Document.GetSemanticModelAsync(context.CancellationToken)
-            .ConfigureAwait(false);
-        if (semanticModel is null) return;
-
-        var diagnostic = context.Diagnostics.First();
-        var (wrongName, destTypeName) = ExtractNamesFromMessage(diagnostic);
-        if (wrongName is null || destTypeName is null) return;
-
-        // Find the destination type symbol.
-        var destTypeSymbol = semanticModel.Compilation.GetSymbolsWithName(
-            n => n == destTypeName, SymbolFilter.Type)
-            .OfType<INamedTypeSymbol>()
-            .FirstOrDefault();
-
-        if (destTypeSymbol is null) return;
-
-        // Collect public, settable property names.
-        var candidateNames = destTypeSymbol.GetMembers()
-            .OfType<IPropertySymbol>()
-            .Where(p => p.DeclaredAccessibility == Accessibility.Public
-                     && !p.IsStatic
-                     && p.SetMethod is not null)
-            .Select(p => p.Name)
-            .ToList();
-
-        // Find the best match within Levenshtein distance ≤ 2.
-        var suggestions = candidateNames
-            .Select(n => (name: n, dist: LevenshteinDistance(wrongName, n)))
-            .Where(t => t.dist <= 2)
-            .OrderBy(t => t.dist)
-            .Select(t => t.name)
-            .ToList();
-
-        if (!suggestions.Any()) return;
-
-        // Find the MapProperty attribute node with the wrong value.
-        var attributeNode = FindMapPropertyAttributeWithValue(root, wrongName);
-        if (attributeNode is null) return;
-
-        foreach (var suggestion in suggestions)
+        foreach (var diagnostic in context.Diagnostics)
         {
-            var localSuggestion = suggestion;
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    title: $"Did you mean '{localSuggestion}'?",
-                    createChangedDocument: ct =>
-                        ReplaceMapPropertyValueAsync(
-                            context.Document, attributeNode, wrongName, localSuggestion, ct),
-                    equivalenceKey: DiagnosticId + "_Suggest_" + localSuggestion),
-                diagnostic);
+            // The diagnostic points to the [MapProperty] attribute and carries the destination property names.
+            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) continue;
+            if (!diagnostic.Properties.TryGetValue(DestinationPropertiesKey, out var names) || string.IsNullOrEmpty(names)) continue;
+
+            var attributeNode = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true)
+                .AncestorsAndSelf().OfType<AttributeSyntax>().FirstOrDefault();
+            var wrongName = attributeNode?.ArgumentList?.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal
+                ? literal.Token.ValueText
+                : null;
+            if (attributeNode is null || wrongName is null) continue;
+
+            // The closest destination property names, Levenshtein distance <= 2 (case-insensitive).
+            var suggestions = names!.Split(';')
+                .Select(n => (name: n, dist: LevenshteinDistance(wrongName, n)))
+                .Where(t => t.dist <= 2)
+                .OrderBy(t => t.dist)
+                .ThenBy(t => t.name, StringComparer.Ordinal)
+                .Select(t => t.name)
+                .ToList();
+
+            foreach (var suggestion in suggestions)
+            {
+                var localSuggestion = suggestion;
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        title: $"Did you mean '{localSuggestion}'?",
+                        createChangedDocument: ct =>
+                            ReplaceMapPropertyValueAsync(
+                                context.Document, attributeNode, wrongName, localSuggestion, ct),
+                        equivalenceKey: DiagnosticId + "_Suggest_" + localSuggestion),
+                    diagnostic);
+            }
         }
     }
 
@@ -115,33 +101,6 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
 
         var newRoot = root.ReplaceNode(oldLiteral, newLiteral);
         return document.WithSyntaxRoot(newRoot);
-    }
-
-    private static AttributeSyntax? FindMapPropertyAttributeWithValue(SyntaxNode root, string value)
-        => root.DescendantNodes()
-            .OfType<AttributeSyntax>()
-            .FirstOrDefault(a =>
-                (a.Name.ToString() == "MapProperty" || a.Name.ToString() == "MapPropertyAttribute")
-                && a.ArgumentList?.Arguments.Count > 0
-                && a.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax lit
-                && lit.Token.ValueText == value);
-
-    private static (string? wrongName, string? destTypeName) ExtractNamesFromMessage(Diagnostic diagnostic)
-    {
-        // Message format: "[MapProperty] destination '{0}' does not exist in type '{1}'"
-        var msg = diagnostic.GetMessage();
-        var first = ExtractQuotedString(msg, 0);
-        var second = first is null ? null : ExtractQuotedString(msg, msg.IndexOf('\'') + first.Length + 2);
-        return (first, second);
-    }
-
-    private static string? ExtractQuotedString(string text, int startSearch)
-    {
-        var start = text.IndexOf('\'', startSearch);
-        if (start < 0) return null;
-        var end = text.IndexOf('\'', start + 1);
-        if (end <= start) return null;
-        return text.Substring(start + 1, end - start - 1);
     }
 
     /// <summary>Computes the Levenshtein edit distance between two strings.</summary>

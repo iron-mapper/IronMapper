@@ -4,6 +4,26 @@
 
 ### Added
 
+- **Diagnostics point to your code.** Every `IMxxxx` diagnostic has a source location: the destination property or the
+  `[MapTo]`/`[MapFrom]` attribute (IM0001), the `[MapProperty]` attribute (IM0006), the `CreateMap` or `ReverseMap()`
+  call, the profile name (IM0005), the member in a profile lambda (IM0011/IM0012), the converter type (IM0015), the
+  duplicate definition (IM0007, with the other definitions as additional locations); the full list is in
+  [diagnostics](docs/diagnostics.md). The IDE underlines the place and the build output shows file and line. Up to
+  1.1.4 all diagnostics were reported without a location: only listed in the Error List, the per-file `.editorconfig`
+  severities (`dotnet_diagnostic.IMxxxx.severity`) did not apply to them, and the code fixes were never offered.
+- **IM0001 for profile mappings, opt-in** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): with
+  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` a destination property of a
+  `CreateMap` mapping that nothing maps is reported at the `CreateMap` call. Mapped means `ForMember` (`MapFrom`,
+  `Ignore`, `UseConverter`), `IncludeMembers`, a source property with the same name, or `[Ignore]` on the destination
+  property; a mapping with `ConvertUsing` and the reverse mapping of `ReverseMap()` are not checked (as in AutoMapper,
+  where reverse maps use `MemberList.None`). Off by default in 1.x (planned on by default in 2.0). The severity is set
+  the standard way, e.g. `dotnet_diagnostic.IM0001.severity = error` in `.editorconfig`. See
+  [Unmapped properties in profiles](docs/configuration.md#unmapped-properties-in-profiles).
+- **Code fixes work.** IM0001: "Add [Ignore] to '...'" on the destination property (adds `using IronMapper.Attributes;`
+  when needed, `[property: Ignore]` on a positional record parameter) and, new, "Ignore '...' in this mapping
+  (ForMember)" for profile mappings; IM0006: "Did you mean '...'?" with the destination properties of the mapped type.
+  Fix All is supported. Both used to find their target by searching the message text in the document (the first
+  property with that name, a type found by simple name); they now use the diagnostic's location and properties.
 - **`global using IronMapper.Generated;` from the package.** C# projects with implicit usings
   (`<ImplicitUsings>enable</ImplicitUsings>`, the default in the .NET 6+ templates) no longer need
   `using IronMapper.Generated;` to call the generated `MapTo*` methods; a forgotten using failed with `CS1061` and no
@@ -160,6 +180,14 @@ Generated code without LINQ and delegates (see Changed):
 
 ### Build
 
+- `tests/IronMapper.CodeFixes.Tests` (in `IronMapper.slnx`): code fix tests with `Microsoft.CodeAnalysis.Testing`
+  (`CSharpCodeFixTest` with the generator attached). `eng/verify-package.ps1` builds a profile with an unmapped
+  property against the packed package: without the property it builds; with `IronMapperReportUnmappedInProfiles=true`
+  the build fails with IM0001 at the `CreateMap` line; `.editorconfig` severities `error` and `none` apply.
+- Diagnostics are reported by their own generator output, which resolves the locations in the current syntax trees (so
+  `.editorconfig` severities and code fixes apply); the generated files are produced from pipeline data without
+  diagnostics and locations, so an edit that only moves a mapping leaves every source output cached (test
+  `LinesAddedAboveMappings_SourceOutputsCached_DiagnosticLocationsUpdated`).
 - Generator pipeline data is compared by value (`EquatableArray<T>` for every collection, diagnostics included). The
   result of each analysis step was an `ImmutableArray` (compared by reference), so it counted as modified on every
   edit; now an equal result is `Unchanged`. The strict incremental caching tests are enabled (no `Skip`); new tests

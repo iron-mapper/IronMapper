@@ -18,6 +18,9 @@ namespace IronMapper.Generator.Tests;
 /// <c>compilationAndGroupedNodes_ForAttributeWithMetadataName</c>, …) hold the new compilation and are always
 /// <c>Modified</c>; only the generator's named steps and the outputs are checked. That an edit which changes only a
 /// diagnostic is not cached is checked in <see cref="IncrementalDiagnosticsTests"/>.
+/// The diagnostics output is the exception: it resolves the diagnostics' locations in the current compilation's syntax
+/// trees (so .editorconfig severities and code fixes apply), so it runs for every compilation; it generates no code.
+/// Source outputs must not depend on locations: moving a mapping (lines added above it) leaves them cached.
 /// </summary>
 public class GeneratorCachingTests
 {
@@ -90,7 +93,41 @@ public class GeneratorCachingTests
         TrackingNames.MapFromTransform, TrackingNames.MapFrom,
         TrackingNames.ProfileTransform, TrackingNames.Profiles,
         TrackingNames.Plan, TrackingNames.ClassAccessibility, TrackingNames.CodeOptions, TrackingNames.Registrations,
+        TrackingNames.SourcePlan, TrackingNames.MapToSource, TrackingNames.MapFromSource, TrackingNames.ProfilesSource,
+        TrackingNames.Settings, TrackingNames.Diagnostics,
     };
+
+    /// <summary>Steps that only carry data used to generate code; they stay cached when a mapping only moves.</summary>
+    private static readonly string[] SourceSteps =
+    {
+        TrackingNames.SourcePlan, TrackingNames.MapToSource, TrackingNames.MapFromSource, TrackingNames.ProfilesSource,
+        TrackingNames.ClassAccessibility, TrackingNames.CodeOptions, TrackingNames.Registrations,
+    };
+
+    private const string MovedMappings = """
+        using IronMapper.Attributes;
+        using IronMapper.Configuration;
+
+        namespace App;
+        //LINES
+        [MapTo(typeof(UserDto))]
+        [MapTo(typeof(Other.UserDto))]
+        public class User { public int Id { get; set; } }
+        public class UserDto { public int Id { get; set; } public int Extra { get; set; } }
+
+        public class Order { public int Id { get; set; } }
+        public class OrderDto { public int Id { get; set; } }
+        public class OrderProfile : MappingProfile
+        {
+            public OrderProfile() { CreateMap<Order, OrderDto>().ReverseMap(); }
+        }
+        public class EmptyProfile : MappingProfile { public EmptyProfile() { } }
+        """;
+
+    private const string OtherUserDto = """
+        namespace App.Other;
+        public class UserDto { public int Id { get; set; } }
+        """;
 
     [Fact]
     public void SecondRunWithoutChanges_AllStepsCached()
@@ -99,6 +136,77 @@ public class GeneratorCachingTests
     [Fact]
     public void EditOfUnrelatedFile_AllStepsCached()
         => AssertCached(RunTwice(edit: true), GeneratorSteps);
+
+    [Fact]
+    public void LinesAddedAboveMappings_SourceOutputsCached_DiagnosticLocationsUpdated()
+    {
+        // Diagnostics of each origin: IM0001 (attribute), IM0005 (profile), IM0013 (plan).
+        var options = CSharpParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose);
+        var compilation = GeneratorTestHelper.CreateCompilation(System.Array.Empty<string>()).AddSyntaxTrees(
+            CSharpSyntaxTree.ParseText(MovedMappings.Replace("//LINES", ""), options, "/src/Mappings.cs"),
+            CSharpSyntaxTree.ParseText(OtherUserDto, options, "/src/Other.cs"));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new[] { new IronMapperGenerator().AsSourceGenerator() },
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+        driver = driver.RunGenerators(compilation);
+        var before = driver.GetRunResult().Diagnostics;
+
+        var tree = compilation.SyntaxTrees.First();
+        var moved = compilation.ReplaceSyntaxTree(tree,
+            CSharpSyntaxTree.ParseText(MovedMappings.Replace("//LINES", "\n\n"), options, "/src/Mappings.cs"));
+        var run = driver.RunGenerators(moved).GetRunResult();
+
+        AssertSourceOutputsCached(Assert.Single(run.Results));
+
+        // Every diagnostic is in the new tree, two lines further down.
+        var after = run.Diagnostics;
+        Assert.Equal(new[] { "IM0001", "IM0005", "IM0013", "IM0013" }, after.Select(d => d.Id).OrderBy(id => id));
+        Assert.Equal(before.Length, after.Length);
+        foreach (var diagnostic in after)
+        {
+            Assert.True(diagnostic.Location.IsInSource, diagnostic.ToString());
+            Assert.Same(moved.SyntaxTrees.First(), diagnostic.Location.SourceTree);
+            var previous = before.Single(d => d.GetMessage() == diagnostic.GetMessage());
+            Assert.Equal(previous.Location.GetLineSpan().StartLinePosition.Line + 2,
+                diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+        }
+    }
+
+    private void AssertSourceOutputsCached(GeneratorRunResult result)
+    {
+        var notCached = new List<string>();
+        foreach (var name in SourceSteps)
+        {
+            if (!result.TrackedSteps.TryGetValue(name, out var runs)) continue;
+            foreach (var (_, reason) in runs.SelectMany(r => r.Outputs))
+            {
+                _output.WriteLine($"{name}: {reason}");
+                if (!CachedReasons.Contains(reason)) notCached.Add($"{name}: {reason}");
+            }
+        }
+
+        var sourceOutputs = result.TrackedOutputSteps.SelectMany(s => s.Value).Where(step => !IsDiagnosticsOutput(step)).ToList();
+        Assert.NotEmpty(sourceOutputs);
+        foreach (var (_, reason) in sourceOutputs.SelectMany(r => r.Outputs))
+            if (!CachedReasons.Contains(reason)) notCached.Add($"SourceOutput: {reason}");
+
+        Assert.True(notCached.Count == 0, "Steps not cached:\n" + string.Join("\n", notCached.Distinct()));
+    }
+
+    /// <summary>The diagnostics output: the only output fed by the <see cref="TrackingNames.Diagnostics"/> step.</summary>
+    private static bool IsDiagnosticsOutput(IncrementalGeneratorRunStep step)
+    {
+        var pending = new Stack<IncrementalGeneratorRunStep>(new[] { step });
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if (current.Name == TrackingNames.Diagnostics) return true;
+            if (current.Name is not null && current != step) continue; // another named step: a different branch
+            foreach (var (input, _) in current.Inputs) pending.Push(input);
+        }
+
+        return false;
+    }
 
     private static GeneratorRunResult RunTwice(bool edit)
     {
@@ -133,9 +241,11 @@ public class GeneratorCachingTests
             }
         }
 
-        // Every source output (mapping files, GeneratedMappers.g.cs, plan diagnostics) is cached.
-        Assert.NotEmpty(result.TrackedOutputSteps);
-        foreach (var (_, reason) in result.TrackedOutputSteps.SelectMany(s => s.Value).SelectMany(r => r.Outputs))
+        // Every source output (mapping files, GeneratedMappers.g.cs, the registration) is cached. The diagnostics output
+        // runs for every compilation (see the class remarks).
+        var sourceOutputs = result.TrackedOutputSteps.SelectMany(s => s.Value).Where(step => !IsDiagnosticsOutput(step)).ToList();
+        Assert.NotEmpty(sourceOutputs);
+        foreach (var (_, reason) in sourceOutputs.SelectMany(r => r.Outputs))
             if (!CachedReasons.Contains(reason)) notCached.Add($"SourceOutput: {reason}");
 
         Assert.True(result.TrackedSteps.ContainsKey(TrackingNames.Plan), "Plan step is not tracked.");

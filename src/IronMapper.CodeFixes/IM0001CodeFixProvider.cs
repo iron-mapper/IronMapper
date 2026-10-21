@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -8,89 +9,198 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace IronMapper.CodeFixes;
 
 /// <summary>
-/// Code fix for IM0001 — unmapped destination property.
-/// Offers to add an <c>[Ignore]</c> attribute to the destination property so the warning is suppressed.
+/// Code fix for IM0001 — unmapped destination property. The diagnostic points to the destination property of an
+/// attribute mapping (the fix adds <c>[Ignore]</c> to it) or to the <c>CreateMap</c> call of a profile mapping (the fix
+/// adds <c>.ForMember(dest =&gt; dest.X, opt =&gt; opt.Ignore())</c>: <c>[Ignore]</c> is not read in profiles).
 /// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(IM0001CodeFixProvider))]
 [Shared]
 public sealed class IM0001CodeFixProvider : CodeFixProvider
 {
     private const string DiagnosticId = "IM0001";
+    private const string PropertyNameKey = "PropertyName";
+    private const string AddIgnoreKey = DiagnosticId + "_AddIgnore";
+    private const string ForMemberIgnoreKey = DiagnosticId + "_ForMemberIgnore";
+    private const string AttributesNamespace = "IronMapper.Attributes";
 
     /// <inheritdoc/>
     public override ImmutableArray<string> FixableDiagnosticIds =>
         ImmutableArray.Create(DiagnosticId);
 
     /// <inheritdoc/>
-    public override FixAllProvider? GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
+    /// <remarks>
+    /// Several diagnostics of one profile mapping change the same <c>CreateMap</c> call, which the batch fixer would
+    /// treat as conflicting changes, so all diagnostics of a document are fixed in one pass.
+    /// </remarks>
+    public override FixAllProvider GetFixAllProvider()
+        => FixAllProvider.Create(static async (context, document, diagnostics)
+            => await FixAsync(document, diagnostics, context.CancellationToken).ConfigureAwait(false));
 
     /// <inheritdoc/>
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
-        var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken)
-            .ConfigureAwait(false);
+        var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         if (root is null) return;
 
-        var diagnostic = context.Diagnostics.First();
+        foreach (var diagnostic in context.Diagnostics)
+        {
+            var name = GetPropertyName(diagnostic);
+            if (name is null) continue;
 
-        // The diagnostic message contains the property name as the first argument.
-        // We look for a property declaration whose name matches anywhere in the document.
-        var propertyName = ExtractPropertyNameFromMessage(diagnostic);
-        if (propertyName is null) return;
+            switch (FindTarget(root, diagnostic))
+            {
+                case PropertyDeclarationSyntax or ParameterSyntax:
+                    context.RegisterCodeFix(
+                        CodeAction.Create(
+                            title: $"Add [Ignore] to '{name}'",
+                            createChangedDocument: ct => FixAsync(context.Document, ImmutableArray.Create(diagnostic), ct),
+                            equivalenceKey: AddIgnoreKey),
+                        diagnostic);
+                    break;
 
-        // Find the destination property declaration in the document.
-        var propertyDecl = root.DescendantNodes()
-            .OfType<PropertyDeclarationSyntax>()
-            .FirstOrDefault(p => p.Identifier.Text == propertyName);
-
-        if (propertyDecl is null) return;
-
-        context.RegisterCodeFix(
-            CodeAction.Create(
-                title: $"Add [Ignore] to '{propertyName}'",
-                createChangedDocument: ct =>
-                    AddIgnoreAttributeAsync(context.Document, propertyDecl, ct),
-                equivalenceKey: DiagnosticId + "_AddIgnore_" + propertyName),
-            diagnostic);
+                case InvocationExpressionSyntax:
+                    context.RegisterCodeFix(
+                        CodeAction.Create(
+                            title: $"Ignore '{name}' in this mapping (ForMember)",
+                            createChangedDocument: ct => FixAsync(context.Document, ImmutableArray.Create(diagnostic), ct),
+                            equivalenceKey: ForMemberIgnoreKey),
+                        diagnostic);
+                    break;
+            }
+        }
     }
 
-    private static async Task<Document> AddIgnoreAttributeAsync(
-        Document document,
-        PropertyDeclarationSyntax propertyDecl,
-        CancellationToken ct)
+    /// <summary>Fixes <paramref name="diagnostics"/> of <paramref name="document"/>; returns the document unchanged if none applies.</summary>
+    private static async Task<Document> FixAsync(Document document, ImmutableArray<Diagnostic> diagnostics, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         if (root is null) return document;
 
-        var ignoreAttribute = SyntaxFactory.Attribute(
-            SyntaxFactory.IdentifierName("Ignore"));
+        // Destination properties to mark, and profile mappings with the properties to ignore in them.
+        var ignored = new HashSet<SyntaxNode>();
+        var forMembers = new Dictionary<ExpressionSyntax, List<string>>();
+        foreach (var diagnostic in diagnostics)
+        {
+            var name = GetPropertyName(diagnostic);
+            if (name is null) continue;
 
-        var attributeList = SyntaxFactory.AttributeList(
-            SyntaxFactory.SingletonSeparatedList(ignoreAttribute))
-            .WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+            switch (FindTarget(root, diagnostic))
+            {
+                case PropertyDeclarationSyntax property:
+                    ignored.Add(property);
+                    break;
+                case ParameterSyntax parameter:
+                    ignored.Add(parameter);
+                    break;
+                case InvocationExpressionSyntax createMap:
+                    var anchor = LastForMember(createMap);
+                    if (!forMembers.TryGetValue(anchor, out var names)) forMembers[anchor] = names = new List<string>();
+                    if (!names.Contains(name)) names.Add(name);
+                    break;
+            }
+        }
 
-        var updatedProperty = propertyDecl
-            .AddAttributeLists(attributeList);
+        if (ignored.Count == 0 && forMembers.Count == 0) return document;
 
-        var newRoot = root.ReplaceNode(propertyDecl, updatedProperty);
+        var newRoot = root.ReplaceNodes(ignored.Concat(forMembers.Keys), (original, _) => original switch
+        {
+            PropertyDeclarationSyntax property => property.AddAttributeLists(IgnoreAttribute(propertyTarget: false)),
+            ParameterSyntax parameter => parameter.AddAttributeLists(IgnoreAttribute(propertyTarget: true)),
+            ExpressionSyntax anchor when forMembers.TryGetValue(anchor, out var names) => AddForMemberIgnore(anchor, names),
+            _ => original,
+        });
+
+        if (ignored.Count > 0 && !await IgnoreAttributeIsInScopeAsync(document, root, ignored.First(), ct).ConfigureAwait(false)
+            && newRoot is CompilationUnitSyntax unit)
+        {
+            newRoot = unit.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(AttributesNamespace))
+                .WithAdditionalAnnotations(Formatter.Annotation));
+        }
+
         return document.WithSyntaxRoot(newRoot);
     }
 
-    /// <summary>Extracts the first single-quoted token from the diagnostic message as the property name.</summary>
-    /// <param name="diagnostic">The IM0001 diagnostic whose message contains the property name.</param>
-    /// <returns>The property name, or <see langword="null"/> if the message format is not recognised.</returns>
-    private static string? ExtractPropertyNameFromMessage(Diagnostic diagnostic)
+    /// <summary><c>[Ignore]</c>, or <c>[property: Ignore]</c> for a positional record parameter.</summary>
+    private static AttributeListSyntax IgnoreAttribute(bool propertyTarget)
     {
-        // Message format: "Property '{0}' on destination type '{1}' has no corresponding…"
-        var msg = diagnostic.GetMessage();
-        var start = msg.IndexOf('\'');
-        if (start < 0) return null;
-        var end = msg.IndexOf('\'', start + 1);
-        if (end <= start) return null;
-        return msg.Substring(start + 1, end - start - 1);
+        var list = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
+            SyntaxFactory.Attribute(SyntaxFactory.IdentifierName("Ignore"))));
+        if (propertyTarget)
+            list = list.WithTarget(SyntaxFactory.AttributeTargetSpecifier(SyntaxFactory.Token(SyntaxKind.PropertyKeyword)));
+        return list.WithAdditionalAnnotations(Formatter.Annotation);
     }
+
+    /// <summary>
+    /// The <c>CreateMap</c> call, or the last <c>.ForMember(...)</c> chained directly to it: new <c>ForMember</c> calls go
+    /// there, so one fix at a time and Fix All add them in the same order, and before <c>ReverseMap()</c> (in AutoMapper a
+    /// <c>ForMember</c> after <c>ReverseMap()</c> configures the reverse mapping).
+    /// </summary>
+    private static ExpressionSyntax LastForMember(InvocationExpressionSyntax createMap)
+    {
+        ExpressionSyntax anchor = createMap;
+        while (anchor.Parent is MemberAccessExpressionSyntax { Name.Identifier.Text: "ForMember" } access
+               && access.Expression == anchor
+               && access.Parent is InvocationExpressionSyntax forMember)
+            anchor = forMember;
+        return anchor;
+    }
+
+    /// <summary><c>….ForMember(dest =&gt; dest.X, opt =&gt; opt.Ignore())</c> appended to <paramref name="anchor"/> for each name.</summary>
+    private static ExpressionSyntax AddForMemberIgnore(ExpressionSyntax anchor, List<string> names)
+    {
+        ExpressionSyntax result = anchor.WithoutTrailingTrivia();
+        foreach (var name in names)
+        {
+            result = SyntaxFactory.ParseExpression(
+                $"{result}.ForMember(dest => dest.{name}, opt => opt.Ignore())");
+        }
+
+        return result.WithTriviaFrom(anchor).WithAdditionalAnnotations(Formatter.Annotation);
+    }
+
+    /// <summary>Whether <c>Ignore</c> already binds to <c>IronMapper.Attributes.IgnoreAttribute</c> at <paramref name="node"/>.</summary>
+    private static async Task<bool> IgnoreAttributeIsInScopeAsync(Document document, SyntaxNode root, SyntaxNode node, CancellationToken ct)
+    {
+        var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        if (model is null) return true;
+
+        var position = root.FindNode(node.Span).SpanStart;
+        var type = model.GetSpeculativeTypeInfo(position, SyntaxFactory.ParseTypeName("IgnoreAttribute"),
+            SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
+        return type?.ToDisplayString() == AttributesNamespace + ".IgnoreAttribute";
+    }
+
+    /// <summary>
+    /// The node the diagnostic points to: the destination property (or record parameter) of an attribute mapping, or the
+    /// <c>CreateMap</c> call of a profile mapping. <see langword="null"/> for other locations (a destination type from
+    /// another assembly: the diagnostic points to the <c>[MapTo]</c>/<c>[MapFrom]</c> attribute and there is nothing to fix).
+    /// </summary>
+    private static SyntaxNode? FindTarget(SyntaxNode root, Diagnostic diagnostic)
+    {
+        if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) return null;
+
+        var node = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true);
+        return node.AncestorsAndSelf().FirstOrDefault(n => n is PropertyDeclarationSyntax or ParameterSyntax
+            || (n is InvocationExpressionSyntax invocation && n.Span == diagnostic.Location.SourceSpan && IsCreateMap(invocation))
+            || n is AttributeSyntax or TypeDeclarationSyntax) switch
+        {
+            AttributeSyntax or TypeDeclarationSyntax => null,
+            var target => target,
+        };
+    }
+
+    private static bool IsCreateMap(InvocationExpressionSyntax invocation) => invocation.Expression switch
+    {
+        GenericNameSyntax { Identifier.Text: "CreateMap" } => true,
+        MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "CreateMap" } } => true,
+        _ => false,
+    };
+
+    private static string? GetPropertyName(Diagnostic diagnostic)
+        => diagnostic.Properties.TryGetValue(PropertyNameKey, out var name) && !string.IsNullOrEmpty(name) ? name : null;
 }

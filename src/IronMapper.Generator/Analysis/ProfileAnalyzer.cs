@@ -114,7 +114,7 @@ internal static class ProfileAnalyzer
                 propertyMappings: ImmutableArray<PropertyMappingDescriptor>.Empty,
                 diagnostics: ImmutableArray.Create(new DiagnosticInfo(
                     DiagnosticDescriptors.EmptyMappingProfile,
-                    classSymbol.Name)),
+                    classSymbol.Name).WithLocation(LocationInfo.From(classDecl.Identifier.GetLocation()))),
                 hasCustomConverter: false);
             return ImmutableArray.Create(sentinel);
         }
@@ -166,14 +166,17 @@ internal static class ProfileAnalyzer
 
         // Walk calls from innermost (CreateMap) outward, collecting config.
         // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
-        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)>();
+        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)>();
         var includedMembers = new List<string>();
         string? whenConditionBody = null;
-        INamedTypeSymbol? wholeObjectConverter = null;
+        ConverterReference? wholeObjectConverter = null;
         string? wholeObjectLambdaBody = null;
         string? beforeMapBody = null;
         string? afterMapBody = null;
         bool reverseMap = false;
+        // Where the mappings are defined: diagnostics of the whole mapping point here.
+        var createMapLocation = LocationInfo.From(innermost);
+        LocationInfo? reverseMapLocation = null;
 
         // calls[Count-1] = CreateMap, calls[0] = outermost
         for (int i = calls.Count - 2; i >= 0; i--)
@@ -231,6 +234,7 @@ internal static class ProfileAnalyzer
 
                 case "ReverseMap":
                     reverseMap = true;
+                    reverseMapLocation = LocationInfo.From(memberAccess.Name.GetLocation());
                     break;
             }
         }
@@ -247,12 +251,16 @@ internal static class ProfileAnalyzer
         var forward = BuildDescriptorFromProfile(
             sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
             wholeObjectConverter, wholeObjectLambdaBody,
-            beforeMapBody, afterMapBody, transformers, profileName, model, ct);
+            beforeMapBody, afterMapBody, transformers, profileName, createMapLocation,
+            // ConvertUsing replaces the whole mapping: no property is left unmapped.
+            reportUnmapped: wholeObjectConverter is null && wholeObjectLambdaBody is null,
+            model, ct);
         // Null only when a converter type did not resolve.
         if (forward is null) skippedUnresolved = true;
         else
             results.Add(forward.WithOrigin(
-                origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol)));
+                origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol),
+                createMapLocation));
 
         if (reverseMap)
         {
@@ -260,18 +268,22 @@ internal static class ProfileAnalyzer
             // IncludeMembers is intentionally not propagated to the reverse mapping.
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
-                new List<(string, string?, bool, INamedTypeSymbol?)>(),
+                new List<(string, string?, bool, ConverterReference?)>(),
                 ImmutableArray<string>.Empty,
                 whenCondition: null,
                 wholeObjectConverter: null,
                 wholeObjectLambdaBody: null,
                 beforeMapBody: null,
                 afterMapBody: null,
-                transformers, profileName, model, ct);
+                transformers, profileName, reverseMapLocation ?? createMapLocation,
+                // Not checked, as in AutoMapper (a reverse map is created with MemberList.None): it maps by name only and
+                // ForMember does not apply to it. Declare it with CreateMap to have it checked.
+                reportUnmapped: false,
+                model, ct);
             if (reverse is not null)
                 results.Add(reverse.WithOrigin(
                     origin + ":reverse", $"ReverseMap() in MappingProfile '{profileName}'", originRank: 1,
-                    SymbolHelpers.GetDestinationNaming(sourceSymbol)));
+                    SymbolHelpers.GetDestinationNaming(sourceSymbol), reverseMapLocation ?? createMapLocation));
         }
 
         return results;
@@ -279,7 +291,7 @@ internal static class ProfileAnalyzer
 
     private static void ParseForMember(
         InvocationExpressionSyntax inv,
-        List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)> configs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)> configs,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -328,14 +340,34 @@ internal static class ProfileAnalyzer
     /// (the type argument does not resolve), the type is read from the type argument itself, so the mapping can be skipped
     /// instead of generated without its converter.
     /// </summary>
-    private static INamedTypeSymbol? GetConverterTypeArgument(InvocationExpressionSyntax inv, SemanticModel model, CancellationToken ct)
+    private static ConverterReference? GetConverterTypeArgument(InvocationExpressionSyntax inv, SemanticModel model, CancellationToken ct)
     {
-        if (model.GetSymbolInfo(inv, ct).Symbol is IMethodSymbol { TypeArguments.Length: > 0 } method)
-            return method.TypeArguments[0] as INamedTypeSymbol;
-
-        return (inv.Expression as MemberAccessExpressionSyntax)?.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name
-            ? model.GetTypeInfo(name.TypeArgumentList.Arguments[0], ct).Type as INamedTypeSymbol
+        // IM0015 points to the type argument, or to the call when it cannot be found.
+        var typeArgument = (inv.Expression as MemberAccessExpressionSyntax)?.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name
+            ? name.TypeArgumentList.Arguments[0]
             : null;
+        var location = LocationInfo.From((SyntaxNode?)typeArgument ?? inv);
+
+        if (model.GetSymbolInfo(inv, ct).Symbol is IMethodSymbol { TypeArguments.Length: > 0 } method)
+            return method.TypeArguments[0] is INamedTypeSymbol type ? new ConverterReference(type, location) : null;
+
+        return typeArgument is not null && model.GetTypeInfo(typeArgument, ct).Type is INamedTypeSymbol resolved
+            ? new ConverterReference(resolved, location)
+            : null;
+    }
+
+    /// <summary>A converter type of <c>UseConverter&lt;T&gt;()</c>/<c>ConvertUsing&lt;T&gt;()</c> and where it is written.</summary>
+    private readonly struct ConverterReference
+    {
+        public ConverterReference(INamedTypeSymbol type, LocationInfo? location)
+        {
+            Type = type;
+            Location = location;
+        }
+
+        public INamedTypeSymbol Type { get; }
+
+        public LocationInfo? Location { get; }
     }
 
     private static void ParseIncludeMembers(
@@ -400,15 +432,17 @@ internal static class ProfileAnalyzer
     private static MappingDescriptor? BuildDescriptorFromProfile(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
-        List<(string destProp, string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)> forMemberConfigs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)> forMemberConfigs,
         ImmutableArray<string> includedMembers,
         string? whenCondition,
-        INamedTypeSymbol? wholeObjectConverter,
+        ConverterReference? wholeObjectConverter,
         string? wholeObjectLambdaBody,
         string? beforeMapBody,
         string? afterMapBody,
         ImmutableArray<ValueTransformerDescriptor> transformers,
         string profileName,
+        LocationInfo? origin,
+        bool reportUnmapped,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -416,7 +450,7 @@ internal static class ProfileAnalyzer
         var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
             sourceSymbol, destSymbol, out var inaccessibleType);
         if (methodAccessibility is null)
-            return MappingAnalyzer.CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!);
+            return MappingAnalyzer.CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!, origin);
 
         var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
         var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
@@ -428,7 +462,7 @@ internal static class ProfileAnalyzer
         {
             diagnostics.Add(new DiagnosticInfo(
                 DiagnosticDescriptors.AbstractDestinationType,
-                destSymbol.Name));
+                destSymbol.Name).WithLocation(origin));
             return new MappingDescriptor(
                 sourceTypeName: sourceSymbol.Name,
                 sourceNamespace: SymbolHelpers.GetNamespace(sourceSymbol),
@@ -453,7 +487,7 @@ internal static class ProfileAnalyzer
             sourcePropsByName[p.Name] = p;
 
         // Index ForMember configs by dest property name.
-        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, INamedTypeSymbol? converter)>(
+        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, ConverterReference? converter)>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
             configByDest[dp] = (lb, ign, cvt);
@@ -487,7 +521,8 @@ internal static class ProfileAnalyzer
         var converters = new ConverterAnalyzer(model.Compilation, sourceSymbol, destSymbol);
         var wholeObject = wholeObjectConverter is null
             ? null
-            : converters.Add(wholeObjectConverter, $"ConvertUsing in MappingProfile '{profileName}'", ct);
+            : converters.Add(wholeObjectConverter.Value.Type, $"ConvertUsing in MappingProfile '{profileName}'",
+                wholeObjectConverter.Value.Location, ct);
 
         foreach (var destProp in destProps)
         {
@@ -500,7 +535,8 @@ internal static class ProfileAnalyzer
                 // Priority 1: explicitly configured via ForMember.
                 var converter = cfg.converter is null || cfg.isIgnore
                     ? null
-                    : converters.Add(cfg.converter, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'", ct);
+                    : converters.Add(cfg.converter.Value.Type, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'",
+                        cfg.converter.Value.Location, ct);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
@@ -540,7 +576,20 @@ internal static class ProfileAnalyzer
                     isInitOnly: isInitOnly,
                     includedMemberTypeFqn: included.typeFqn));
             }
-            // Unmatched destination properties are silently skipped in profile-based mapping.
+            // Priority 4: nothing maps the property. IM0001 at the CreateMap call; reported only with
+            // <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles> (filtered in
+            // IronMapperGenerator.CollectDiagnostics, so changing the property does not re-run this analysis).
+            // [Ignore] on the destination property counts as mapped, as in attribute mappings.
+            else if (reportUnmapped && !MappingAnalyzer.HasIgnoreAttribute(destProp))
+            {
+                diagnostics.Add(new DiagnosticInfo(
+                        DiagnosticDescriptors.UnmappedDestinationProperty,
+                        destProp.Name,
+                        destSymbol.Name,
+                        sourceSymbol.Name)
+                    .WithLocation(origin)
+                    .WithProperty(MappingAnalyzer.PropertyNameKey, destProp.Name));
+            }
         }
 
         // A converter type that did not resolve: the compiler reports it at UseConverter/ConvertUsing; skip the mapping.

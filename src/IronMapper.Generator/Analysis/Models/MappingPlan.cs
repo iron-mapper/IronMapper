@@ -27,6 +27,12 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
         Diagnostics = diagnostics;
     }
 
+    /// <summary>
+    /// The copy used to generate code: the entries without <see cref="Diagnostics"/>. The diagnostics carry locations,
+    /// which change when lines are added above a mapping; the generated files do not depend on them.
+    /// </summary>
+    public MappingPlan WithoutDiagnostics() => Diagnostics.Length == 0 ? this : new(Entries, EquatableArray<DiagnosticInfo>.Empty);
+
     /// <summary>Returns the entry for the definition <paramref name="origin"/>, or <see langword="null"/>.</summary>
     public MappingPlanEntry? Find(string origin)
     {
