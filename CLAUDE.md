@@ -71,7 +71,8 @@ The **runtime** package. Contains:
 The package also ships `IronMapper.Generator.dll` and `IronMapper.CodeFixes.dll` in `analyzers/dotnet/cs`
 (see `src/IronMapper/IronMapper.csproj`, target `IncludeAnalyzersInPackage`), and `buildTransitive/IronMapper.props`:
 `global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`,
-and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`);
+and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`,
+`IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`);
 `buildTransitive/IronMapper.targets`: the feature switch `IronMapper.Registration.IsSupported` (see
 [The DI path](#the-di-path-imapper)), with `ILLink.Substitutions.xml` embedded in `IronMapper.dll`.
 
@@ -82,6 +83,14 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   - `MapToX(this Source source)` — new destination object;
   - `MapToX(this Source source, X destination)` — in-place update (skips `init` properties);
   - `MapToXList(this IEnumerable<Source>? source)` and `MapToXArray(...)` — collections.
+  The last three are optional (`GeneratedMethods`: MSBuild `IronMapperGenerateInPlace/List/Array`, per mapping
+  `GenerateInPlace/List/Array` on the attributes or `GenerateMethods(...)` in a profile, `MappingDescriptor.MethodOverrides`).
+  A turned-off in-place overload stays as `private static void MapInto{scope}(source, destination)` for the registration;
+  a turned-off List/Array is passed as `null` to `MapperRegistry.Register`, and the registry loops over `map` itself
+  (`MapperEntry`). `MapToX(source)` is always generated (nested collections call it). The class declaration
+  (`EmitClassDeclaration`) carries `[GeneratedCode("IronMapper", <generator informational version>)]` and, with
+  `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` — once, for all partial parts. Snapshot tests scrub the
+  version. Tests: `GeneratedMethodsTests`, `tests/IronMapper.Integration.Tests/TurnedOffOverloadsTests.cs`.
 - **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` check
   for `T[]`, `List<T>`, `ICollection<T>` (loops with a known size). A nested collection property is mapped by a
   private helper `MapCollection_{Prop}{scope}` chosen by the declared source type (`SymbolHelpers.GetCollectionSourceKind`);
@@ -119,7 +128,10 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   apply to it). That output runs for every compilation; `GeneratorCachingTests` exempts it. Where each diagnostic points:
   `docs/diagnostics.md`, `DiagnosticLocationTests`. MSBuild properties come through `GeneratorSettings`
   (`build_property.*`, `CompilerVisibleProperty` in `buildTransitive/IronMapper.props`): `IronMapperReportUnmappedInProfiles`
-  (IM0001 for profiles; filtered in `CollectDiagnostics`, not in the analysis).
+  (IM0001 for profiles; filtered in `CollectDiagnostics`, not in the analysis), `IronMapperGenerate*` (step
+  `MethodSettings`: mapping files and registration), `IronMapperExcludeFromCodeCoverage` (step `CoverageSettings`: the
+  class declaration only). Tests that run code through the process-wide registry are in the xUnit collection
+  `RegistryCollection` (`RegistrationGeneratorTests` turns the feature switch off process-wide).
 
 ### `src/IronMapper.CodeFixes` (netstandard2.0)
 Code fixes for IM0001 (`[Ignore]` on the destination property; `ForMember(..., opt => opt.Ignore())` in a profile) and

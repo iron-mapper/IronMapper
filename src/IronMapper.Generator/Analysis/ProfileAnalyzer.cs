@@ -6,6 +6,7 @@ using IronMapper.Generator.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace IronMapper.Generator.Analysis;
 
@@ -174,6 +175,9 @@ internal static class ProfileAnalyzer
         string? beforeMapBody = null;
         string? afterMapBody = null;
         bool reverseMap = false;
+        // GenerateMethods(...): overloads of this mapping; a non-constant argument is IM0016 and keeps the assembly value.
+        var methodOverrides = default(GeneratedMethodOverrides);
+        var optionDiagnostics = new List<DiagnosticInfo>();
         // Where the mappings are defined: diagnostics of the whole mapping point here.
         var createMapLocation = LocationInfo.From(innermost);
         LocationInfo? reverseMapLocation = null;
@@ -232,6 +236,10 @@ internal static class ProfileAnalyzer
                     ParseIncludeMembers(inv, includedMembers);
                     break;
 
+                case "GenerateMethods":
+                    methodOverrides = ParseGenerateMethods(inv, model, profileName, optionDiagnostics, ct);
+                    break;
+
                 case "ReverseMap":
                     reverseMap = true;
                     reverseMapLocation = LocationInfo.From(memberAccess.Name.GetLocation());
@@ -260,7 +268,11 @@ internal static class ProfileAnalyzer
         else
             results.Add(forward.WithOrigin(
                 origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol),
-                createMapLocation));
+                createMapLocation).WithMethodOverrides(methodOverrides));
+
+        // IM0016 does not stop the mapping: it is generated with the assembly value for that overload.
+        if (optionDiagnostics.Count > 0)
+            results.Add(MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(optionDiagnostics)));
 
         if (reverseMap)
         {
@@ -368,6 +380,45 @@ internal static class ProfileAnalyzer
         public INamedTypeSymbol Type { get; }
 
         public LocationInfo? Location { get; }
+    }
+
+    /// <summary>
+    /// The arguments of <c>GenerateMethods(inPlace, list, array)</c>: a constant <see langword="true"/>/<see langword="false"/>
+    /// sets the overload, <see langword="null"/> or an omitted argument keeps the assembly value. Any other expression
+    /// cannot be read at compile time: IM0016 at the argument, and the assembly value applies.
+    /// </summary>
+    private static GeneratedMethodOverrides ParseGenerateMethods(InvocationExpressionSyntax inv, SemanticModel model,
+        string profileName, List<DiagnosticInfo> diagnostics, CancellationToken ct)
+    {
+        if (model.GetOperation(inv, ct) is not IInvocationOperation operation) return default;
+
+        bool? inPlace = null, list = null, array = null;
+        foreach (var argument in operation.Arguments)
+        {
+            if (argument.ArgumentKind == ArgumentKind.DefaultValue || argument.Parameter is null) continue;
+            var name = argument.Parameter.Name;
+            if (name is not ("inPlace" or "list" or "array")) continue;
+
+            // The argument is converted to bool?; its constant value is that of the expression the user wrote.
+            var value = argument.Value is IConversionOperation conversion ? conversion.Operand : argument.Value;
+            if (!value.ConstantValue.HasValue || value.ConstantValue.Value is not (null or bool))
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.NonConstantGenerateMethodsArgument,
+                        name, profileName, argument.Syntax.ToString())
+                    .WithLocation(LocationInfo.From(argument.Syntax)));
+                continue;
+            }
+
+            var set = (bool?)value.ConstantValue.Value;
+            switch (name)
+            {
+                case "inPlace": inPlace = set; break;
+                case "list": list = set; break;
+                default: array = set; break;
+            }
+        }
+
+        return new GeneratedMethodOverrides(inPlace, list, array);
     }
 
     private static void ParseIncludeMembers(

@@ -33,8 +33,10 @@ internal static class MapperCodeEmitter
     /// <param name="entry">The plan entry of <paramref name="descriptor"/>.</param>
     /// <param name="plan">The whole plan, used to resolve the method names of collection element mappings.</param>
     /// <param name="options">APIs available in the user's compilation (null checks).</param>
+    /// <param name="methods">The optional overloads to generate (assembly settings with the mapping's overrides).</param>
     /// <returns>The full C# text of the generated file; add it under <see cref="MappingPlanEntry.HintName"/>.</returns>
-    public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan, GeneratedCodeOptions options)
+    public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan, GeneratedCodeOptions options,
+        GeneratedMethods methods)
     {
         var sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
         var destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
@@ -120,11 +122,20 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         // Method 2: MapToDestType(this SourceType source, DestType destination) → void  [in-place]
         // ------------------------------------------------------------------
+        // Turned off (IronMapperGenerateInPlace / GenerateInPlace = false): the same body as a private method that only
+        // the IMapper registration calls, so IMapper.Map(source, destination) keeps working.
         sb.AppendLine();
-        sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
-        sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
-        sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
-        sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
+        if (methods.InPlace)
+        {
+            sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
+            sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
+            sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
+            sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
+        }
+        else
+        {
+            sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
+        }
         sb.AppendLine("        {");
         sb.AppendLine($"            {options.NullCheck("source", "return;")}");
         sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
@@ -141,64 +152,72 @@ internal static class MapperCodeEmitter
         // They call Method 1 by simple name, not as an extension method: a referenced assembly may expose the same
         // MapToDestType(this SourceType) in IronMapper.Generated (CS0121 otherwise). The parameter stays
         // IEnumerable<T>; arrays, List<T> and ICollection<T> get loops over the concrete type with a known size.
+        // Either can be turned off (IronMapperGenerateList/Array, GenerateList/Array = false); nothing else calls them:
+        // nested collection properties call Method 1 per element, and IMapper's registry then loops itself.
         var list = $"global::System.Collections.Generic.List<{destFullName}>";
         var src = sourceFullName;
-        sb.AppendLine();
-        sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns a <see cref=\"global::System.Collections.Generic.List{{T}}\"/>.</summary>");
-        sb.AppendLine($"        {accessibility} static {list} {methodName}List(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            if (source is null) return new {list}();");
-        sb.AppendLine($"            if (source is {src}[] array)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {list}(array.Length);");
-        sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result.Add({methodName}(array[i]));");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {list}(list.Count);");
-        sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result.Add({methodName}(list[i]));");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = source is global::System.Collections.Generic.ICollection<{src}> collection");
-        sb.AppendLine($"                    ? new {list}(collection.Count)");
-        sb.AppendLine($"                    : new {list}();");
-        sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
+        if (methods.List)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns a <see cref=\"global::System.Collections.Generic.List{{T}}\"/>.</summary>");
+            sb.AppendLine($"        {accessibility} static {list} {methodName}List(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            if (source is null) return new {list}();");
+            sb.AppendLine($"            if (source is {src}[] array)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}(array.Length);");
+            sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result.Add({methodName}(array[i]));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}(list.Count);");
+            sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result.Add({methodName}(list[i]));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = source is global::System.Collections.Generic.ICollection<{src}> collection");
+            sb.AppendLine($"                    ? new {list}(collection.Count)");
+            sb.AppendLine($"                    : new {list}();");
+            sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+        }
 
-        sb.AppendLine();
-        sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns an array.</summary>");
-        sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            if (source is null) return global::System.Array.Empty<{destFullName}>();");
-        sb.AppendLine($"            if (source is {src}[] array)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "array.Length")};");
-        sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result[i] = {methodName}(array[i]);");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "list.Count")};");
-        sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result[i] = {methodName}(list[i]);");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine($"            if (source is global::System.Collections.Generic.ICollection<{src}> collection)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {ArrayOf(destFullName, "collection.Count")};");
-        sb.AppendLine("                var i = 0;");
-        sb.AppendLine($"                foreach (var item in collection) result[i++] = {methodName}(item);");
-        sb.AppendLine("                return result;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                var result = new {list}();");
-        sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
-        sb.AppendLine("                return result.ToArray();");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
+        if (methods.Array)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns an array.</summary>");
+            sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            if (source is null) return global::System.Array.Empty<{destFullName}>();");
+            sb.AppendLine($"            if (source is {src}[] array)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "array.Length")};");
+            sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result[i] = {methodName}(array[i]);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "list.Count")};");
+            sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result[i] = {methodName}(list[i]);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine($"            if (source is global::System.Collections.Generic.ICollection<{src}> collection)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "collection.Count")};");
+            sb.AppendLine("                var i = 0;");
+            sb.AppendLine($"                foreach (var item in collection) result[i++] = {methodName}(item);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}();");
+            sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
+            sb.AppendLine("                return result.ToArray();");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+        }
 
         // ------------------------------------------------------------------
         // Private collection helpers of nested collection properties
@@ -269,10 +288,16 @@ internal static class MapperCodeEmitter
     /// </param>
     /// <param name="usesConverterCache">A generated mapping uses a cached converter: the class declares
     /// <see cref="ConverterCacheName"/> once for all mapping files.</param>
+    /// <param name="excludeFromCodeCoverage"><c>IronMapperExcludeFromCodeCoverage</c>: mark the class with
+    /// <c>[ExcludeFromCodeCoverage]</c>.</param>
     /// <param name="options">When <c>ArgumentNullException.ThrowIfNull</c> is not available, the class also declares
     /// the throw helper used by the null checks of the generated methods.</param>
+    /// <remarks>
+    /// The attributes are declared here once and apply to every part of the partial class: the mapping files, the
+    /// registration for <c>IMapper</c> and <see cref="ConverterCacheName"/> (a second copy on another part would be CS0579).
+    /// </remarks>
     public static (string hintName, string source) EmitClassDeclaration(string accessibility, bool usesConverterCache,
-        GeneratedCodeOptions options)
+        bool excludeFromCodeCoverage, GeneratedCodeOptions options)
     {
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -281,6 +306,10 @@ internal static class MapperCodeEmitter
         sb.AppendLine("namespace IronMapper.Generated");
         sb.AppendLine("{");
         sb.AppendLine("    /// <summary>Mapping extension methods generated by IronMapper for this assembly.</summary>");
+        if (options.HasGeneratedCodeAttribute)
+            sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"IronMapper\", \"{GeneratorVersion}\")]");
+        if (excludeFromCodeCoverage && options.HasExcludeFromCodeCoverage)
+            sb.AppendLine("    [global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]");
         sb.AppendLine($"    {accessibility} static partial class GeneratedMappers");
         sb.AppendLine("    {");
         if (!options.UseThrowIfNull)
@@ -357,12 +386,15 @@ internal static class MapperCodeEmitter
         sb.AppendLine("        {");
         foreach (var registration in registrations)
         {
+            // A turned-off overload: in-place through the private method, List/Array as null (the registry loops itself).
             var method = registration.MethodName;
+            var methods = registration.Methods;
+            var mapInto = methods.InPlace ? method : PrivateInPlaceName(registration.HelperScope);
             sb.AppendLine($"            {registry}.Register<{registration.SourceFullName}, {registration.DestFullName}>(");
             sb.AppendLine($"                source => {method}(source),");
-            sb.AppendLine($"                (source, destination) => {method}(source, destination),");
-            sb.AppendLine($"                source => {method}List(source),");
-            sb.AppendLine($"                source => {method}Array(source));");
+            sb.AppendLine($"                (source, destination) => {mapInto}(source, destination),");
+            sb.AppendLine(methods.List ? $"                source => {method}List(source)," : "                null,");
+            sb.AppendLine(methods.Array ? $"                source => {method}Array(source));" : "                null);");
         }
         sb.AppendLine("        }");
         sb.AppendLine("    }");
@@ -446,6 +478,28 @@ internal static class MapperCodeEmitter
         }
 
         return raw;
+    }
+
+    /// <summary>
+    /// The in-place body when the public in-place overload is turned off: a private method that only the registration for
+    /// <c>IMapper</c> calls. The helper scope makes it unique in the class, like the hook and collection helpers.
+    /// </summary>
+    private static string PrivateInPlaceName(string scope) => $"MapInto{scope}";
+
+    /// <summary>
+    /// Version in <c>[GeneratedCode("IronMapper", version)]</c>: the informational version of the generator, which is the
+    /// package version (without the <c>+commit</c> suffix).
+    /// </summary>
+    private static readonly string GeneratorVersion = GetGeneratorVersion();
+
+    private static string GetGeneratorVersion()
+    {
+        var assembly = typeof(MapperCodeEmitter).Assembly;
+        var informational = (System.Reflection.AssemblyInformationalVersionAttribute?)System.Attribute.GetCustomAttribute(
+            assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+        var version = informational?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "0.0.0";
+        var plus = version.IndexOf('+');
+        return plus < 0 ? version : version.Substring(0, plus);
     }
 
     /// <summary>

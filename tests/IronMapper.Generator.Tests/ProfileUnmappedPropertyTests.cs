@@ -172,32 +172,7 @@ public class ProfileUnmappedPropertyTests
         return CSharpGeneratorDriver.Create(
             new[] { new IronMapperGenerator().AsSourceGenerator() },
             parseOptions: parseOptions,
-            optionsProvider: new OptionsProvider(globalOptions));
-    }
-
-    /// <summary>Global analyzer config options (the <c>build_property.*</c> values MSBuild passes).</summary>
-    private sealed class OptionsProvider : AnalyzerConfigOptionsProvider
-    {
-        private readonly Options _global;
-
-        public OptionsProvider(Dictionary<string, string> global) => _global = new Options(global);
-
-        public override AnalyzerConfigOptions GlobalOptions => _global;
-
-        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => Options.Empty;
-
-        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => Options.Empty;
-
-        private sealed class Options : AnalyzerConfigOptions
-        {
-            public static readonly Options Empty = new(new Dictionary<string, string>());
-
-            private readonly Dictionary<string, string> _values;
-
-            public Options(Dictionary<string, string> values) => _values = values;
-
-            public override bool TryGetValue(string key, out string value) => _values.TryGetValue(key, out value!);
-        }
+            optionsProvider: new TestOptionsProvider(globalOptions));
     }
 
     /// <summary>Per-tree diagnostic severities from <c>.editorconfig</c>, as the compiler's own provider passes them.</summary>

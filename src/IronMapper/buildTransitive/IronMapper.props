@@ -19,9 +19,16 @@
     IronMapperReportUnmappedInProfiles - true reports IM0001 for destination properties of profile (CreateMap) mappings
     that nothing maps; off by default in 1.x. Severity as for any diagnostic, e.g. in .editorconfig:
     dotnet_diagnostic.IM0001.severity = error
+    IronMapperGenerateInPlace, IronMapperGenerateList, IronMapperGenerateArray - false stops generating the public
+    in-place overload, MapToXList, MapToXArray of every mapping (a mapping can override it); true by default.
+    IronMapperExcludeFromCodeCoverage - true marks the generated class with [ExcludeFromCodeCoverage]; false by default.
   -->
   <ItemGroup>
     <CompilerVisibleProperty Include="IronMapperReportUnmappedInProfiles" />
+    <CompilerVisibleProperty Include="IronMapperGenerateInPlace" />
+    <CompilerVisibleProperty Include="IronMapperGenerateList" />
+    <CompilerVisibleProperty Include="IronMapperGenerateArray" />
+    <CompilerVisibleProperty Include="IronMapperExcludeFromCodeCoverage" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,7 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0015`. Они объявлены в
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0016`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Текущее состояние** (`main`, не выпущенная 1.2.0):
@@ -24,6 +24,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0013 | Warning | Имя метода маппинга уточнено из-за коллизии | Да — атрибуты и профили |
 | IM0014 | Error | Коллизию имён методов маппинга нельзя устранить | Да — атрибуты и профили |
 | IM0015 | Error | Converter нельзя создать в сгенерированном коде | Да — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
+| IM0016 | Warning | Аргумент `GenerateMethods` не константа | Да — профили |
 
 Каждая диагностика указывает на место в вашем коде (**Куда указывает** ниже): IDE подчёркивает его, в выводе сборки
 видны файл и строка. Уровень задаётся стандартно, в `.editorconfig` (или `.globalconfig`):
@@ -329,3 +330,22 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 нельзя: `AddConverter<T>()` не меняет способ создания converters (см.
 [Экземпляры converter](configuration.ru.md#экземпляры-converter)). Пропускается только этот маппинг, остальные
 генерируются. Свойство с `[Ignore]` не использует свой converter, поэтому такой converter не проверяется.
+
+---
+
+## IM0016 — Аргумент GenerateMethods не константа
+
+**Уровень:** Warning
+
+**Куда указывает:** аргумент.
+
+**Сообщение:** `Argument '{0}' of GenerateMethods in MappingProfile '{1}' is not a constant ('{2}'); the generator reads it at compile time, so the value for the assembly applies. Use true, false or null.`
+
+**Причина:** аргумент `GenerateMethods(inPlace, list, array)` в профиле — переменная, вызов метода или другое выражение,
+которое не является константой времени компиляции. Профили читает генератор, а не выполняет программа, поэтому при
+генерации кода значение неизвестно.
+
+**Поведение:** для этой перегрузки действует значение проекта (`IronMapperGenerateInPlace`/`List`/`Array`); маппинг и
+остальные аргументы генерируются как написано. См. [Генерируемые перегрузки](configuration.ru.md#генерируемые-перегрузки-и-покрытие-кода).
+
+**Как исправить:** передайте `true`, `false` или `null` (или `const`).

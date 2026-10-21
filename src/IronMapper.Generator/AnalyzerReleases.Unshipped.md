@@ -17,3 +17,4 @@ IM0012 | IronMapper | Error | LambdaCapturesState
 IM0013 | IronMapper | Warning | QualifiedMethodName
 IM0014 | IronMapper | Error | UnresolvableMethodNameCollision
 IM0015 | IronMapper | Error | ConverterCannotBeCreated
+IM0016 | IronMapper | Warning | NonConstantGenerateMethodsArgument

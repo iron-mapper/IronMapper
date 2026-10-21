@@ -185,6 +185,78 @@ Set the property in the application project when the automatic choice is wrong, 
 
 ---
 
+## Generated overloads and code coverage
+
+For every mapping the generator emits `MapToX(source)` and, by default, three more overloads: the in-place
+`MapToX(source, destination)`, `MapToXList(...)` and `MapToXArray(...)`. The optional ones can be turned off (from 1.2.0)
+when a project does not use them: less generated code, fewer methods in IntelliSense, and no uncovered methods in code
+coverage reports. Nothing changes by default.
+
+**For the whole project** (MSBuild properties, `true` by default; only `false`, case-insensitive, turns one off):
+
+```xml
+<PropertyGroup>
+  <IronMapperGenerateInPlace>false</IronMapperGenerateInPlace>   <!-- MapToX(source, destination) -->
+  <IronMapperGenerateList>false</IronMapperGenerateList>         <!-- MapToXList -->
+  <IronMapperGenerateArray>false</IronMapperGenerateArray>       <!-- MapToXArray -->
+</PropertyGroup>
+```
+
+**For one mapping** (overrides the project value in both directions):
+
+```csharp
+[MapTo(typeof(UserDto), GenerateList = false, GenerateArray = false)]
+public class User { ... }
+
+[MapFrom(typeof(Order), GenerateInPlace = true)]   // back on, although IronMapperGenerateInPlace is false
+public class OrderDto { ... }
+
+public class OrderProfile : MappingProfile
+{
+    public OrderProfile()
+    {
+        CreateMap<Order, OrderSummaryDto>().GenerateMethods(inPlace: false, list: false);
+    }
+}
+```
+
+- A property of the attribute that is not set uses the project value. The getter of `GenerateInPlace`/`GenerateList`/
+  `GenerateArray` returns `false` when the property is not set (that is what IntelliSense shows): a limitation of C#
+  attributes, not the behavior; the generator reads whether the property is set.
+- `GenerateMethods(inPlace, list, array)` is an extension method in `IronMapper.Configuration`; `null` or an omitted
+  argument uses the project value. The arguments must be constants (`true`, `false`, `null`, a `const`): the generator
+  reads them at compile time; anything else is warning
+  [`IM0016`](diagnostics.md#im0016--generatemethods-argument-is-not-a-constant) and the project value applies. It applies
+  to that mapping, not to the reverse mapping of `ReverseMap()`.
+- `MapToX(source)` is always generated: nested collection properties call it for each element, so they keep working when
+  the element mapping has no `MapToXList`/`MapToXArray`.
+- Turning overloads off does not change the names of the remaining methods or the collision rules
+  ([Method names and collisions](#method-names-and-collisions)).
+- **`IMapper`** keeps mapping everything: `Map<UserDto>(user)`, `Map<List<UserDto>>(users)`, `Map<UserDto[]>(users)`,
+  `MapCollection` and `Map(source, destination)` work for a mapping without the public overloads, with the same results.
+  Without `MapToXList`/`MapToXArray` the registry fills the list or array itself, calling `MapToX` once per element
+  through a delegate (`IMapper` calls delegates anyway; the extension methods are not involved).
+- **In-place:** turning it off removes only the public method. Its body stays as a private method that `IMapper` calls for
+  `Map(source, destination)`, so it hardly changes the amount of generated code or the coverage. For coverage, use
+  `IronMapperExcludeFromCodeCoverage` (below).
+
+### Attributes of the generated class
+
+`GeneratedMappers` is marked `[GeneratedCode("IronMapper", "<package version>")]`, so code analyzers and tools treat it
+as generated. With
+
+```xml
+<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>
+```
+
+it is also marked `[ExcludeFromCodeCoverage]` (coverlet, the Visual Studio code coverage and others skip it), `false` by
+default. Both attributes are declared once on the class and apply to all its parts: the mapping methods, the
+registration for `IMapper` and the converter cache. They are emitted only when the target framework has them (both exist
+in .NET Standard 2.0 and later). The mapping code is still checked by your tests: the attribute only removes it from the
+coverage percentage.
+
+---
+
 ## Unmapped properties in profiles
 
 For `[MapTo]`/`[MapFrom]` an unmatched destination property is warning

@@ -16,12 +16,14 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     public const string ThrowHelperName = "ThrowArgumentNullException";
 
     public GeneratedCodeOptions(bool useThrowIfNull, bool hasDoesNotReturn, bool supportsModuleInitializers,
-        bool hasModuleInitializerAttribute)
+        bool hasModuleInitializerAttribute, bool hasGeneratedCodeAttribute = true, bool hasExcludeFromCodeCoverage = true)
     {
         UseThrowIfNull = useThrowIfNull;
         HasDoesNotReturn = hasDoesNotReturn;
         SupportsModuleInitializers = supportsModuleInitializers;
         HasModuleInitializerAttribute = hasModuleInitializerAttribute;
+        HasGeneratedCodeAttribute = hasGeneratedCodeAttribute;
+        HasExcludeFromCodeCoverage = hasExcludeFromCodeCoverage;
     }
 
     /// <summary><c>ArgumentNullException.ThrowIfNull(object, string)</c> exists and is accessible.</summary>
@@ -41,6 +43,14 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     /// generator declares an internal copy (the compiler recognizes it by its full name).
     /// </summary>
     public bool HasModuleInitializerAttribute { get; }
+
+    /// <summary><c>System.CodeDom.Compiler.GeneratedCodeAttribute</c> exists and is accessible (.NET Standard 2.0+).</summary>
+    public bool HasGeneratedCodeAttribute { get; }
+
+    /// <summary>
+    /// <c>System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute</c> exists and is accessible (.NET Standard 2.0+).
+    /// </summary>
+    public bool HasExcludeFromCodeCoverage { get; }
 
     /// <summary>Reads the options from <paramref name="compilation"/>.</summary>
     public static GeneratedCodeOptions From(Compilation compilation)
@@ -77,7 +87,15 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
             }
         }
 
-        return new GeneratedCodeOptions(useThrowIfNull, hasDoesNotReturn, supportsModuleInitializers, hasModuleInitializerAttribute);
+        return new GeneratedCodeOptions(useThrowIfNull, hasDoesNotReturn, supportsModuleInitializers, hasModuleInitializerAttribute,
+            IsAccessible(compilation, "System.CodeDom.Compiler.GeneratedCodeAttribute"),
+            IsAccessible(compilation, "System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute"));
+    }
+
+    private static bool IsAccessible(Compilation compilation, string metadataName)
+    {
+        var type = compilation.GetTypeByMetadataName(metadataName);
+        return type is not null && compilation.IsSymbolAccessibleWithin(type, compilation.Assembly);
     }
 
     /// <summary>
@@ -98,7 +116,9 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
            && UseThrowIfNull == other.UseThrowIfNull
            && HasDoesNotReturn == other.HasDoesNotReturn
            && SupportsModuleInitializers == other.SupportsModuleInitializers
-           && HasModuleInitializerAttribute == other.HasModuleInitializerAttribute;
+           && HasModuleInitializerAttribute == other.HasModuleInitializerAttribute
+           && HasGeneratedCodeAttribute == other.HasGeneratedCodeAttribute
+           && HasExcludeFromCodeCoverage == other.HasExcludeFromCodeCoverage;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratedCodeOptions);
@@ -106,5 +126,5 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     /// <inheritdoc/>
     public override int GetHashCode()
         => (UseThrowIfNull ? 1 : 0) | (HasDoesNotReturn ? 2 : 0) | (SupportsModuleInitializers ? 4 : 0)
-           | (HasModuleInitializerAttribute ? 8 : 0);
+           | (HasModuleInitializerAttribute ? 8 : 0) | (HasGeneratedCodeAttribute ? 16 : 0) | (HasExcludeFromCodeCoverage ? 32 : 0);
 }

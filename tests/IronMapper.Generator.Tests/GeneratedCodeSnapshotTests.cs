@@ -239,6 +239,26 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task TurnedOffOverloads() => Verify("""
+        using IronMapper.Attributes;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        // Only MapToUserDto is public; the in-place body is a private method for IMapper, List/Array are not generated.
+        [MapTo(typeof(UserDto), GenerateInPlace = false, GenerateList = false, GenerateArray = false)]
+        public class User { public int Id { get; set; } public string Name { get; set; } = ""; }
+        public class UserDto { public int Id { get; set; } public string Name { get; set; } = ""; }
+
+        public class Order { public int Id { get; set; } }
+        public class OrderDto { public int Id { get; set; } }
+        public class OrderProfile : MappingProfile
+        {
+            public OrderProfile() { CreateMap<Order, OrderDto>().GenerateMethods(list: false); }
+        }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });
@@ -254,6 +274,11 @@ public class GeneratedCodeSnapshotTests
             .ToList();
         Assert.True(generatedWarnings.Count == 0, "Warnings in generated code:\n" + string.Join("\n", generatedWarnings));
 
-        return Verifier.Verify(driver).UseDirectory("Snapshots");
+        // The version in [GeneratedCode("IronMapper", "<version>")] is the package version: not part of the snapshot.
+        return Verifier.Verify(driver).UseDirectory("Snapshots")
+            .ScrubLinesWithReplace(line => GeneratedCodeVersion.Replace(line, "GeneratedCode(\"IronMapper\", \"{version}\")"));
     }
+
+    private static readonly System.Text.RegularExpressions.Regex GeneratedCodeVersion =
+        new("""GeneratedCode\("IronMapper", "[^"]*"\)""");
 }

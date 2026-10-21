@@ -190,6 +190,14 @@ entity.MapToUserDto(existingDto);                  // обновляет сущ�
 Свойства `List<T>` (`List<Comment>` → `List<CommentDto>`) маппятся автоматически, если есть маппинг для типов
 элементов.
 
+**Покрытие кода и неиспользуемые перегрузки.** Начиная с 1.2.0 сгенерированный класс помечен `[GeneratedCode]`, а
+`<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` добавляет `[ExcludeFromCodeCoverage]`,
+поэтому неиспользуемые сгенерированные методы (например, `MapToXList`, который никто не вызывает) больше не снижают
+покрытие вашего проекта. Неиспользуемые перегрузки можно отключить для проекта (`IronMapperGenerateInPlace`,
+`IronMapperGenerateList`, `IronMapperGenerateArray`) или для одного маппинга (`GenerateList = false` у `[MapTo]`,
+`.GenerateMethods(list: false)` в профиле); `IMapper` по-прежнему маппит списки, массивы и in-place
+([подробнее](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md#генерируемые-перегрузки-и-покрытие-кода)).
+
 **Внедрение зависимостей (необязательно)**
 
 ```bash

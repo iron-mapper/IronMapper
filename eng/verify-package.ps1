@@ -27,6 +27,9 @@
        with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
        (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
        TreatWarningsAsErrors, none with it).
+       IronMapperGenerateInPlace/List/Array and IronMapperExcludeFromCodeCoverage: the public overloads and the attributes
+       of GeneratedMappers ([GeneratedCode] with the package version, [ExcludeFromCodeCoverage]) with the defaults and
+       with everything turned off; the registry used by IMapper maps List, array and in-place either way.
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
@@ -263,6 +266,13 @@ try {
         @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity none'
            Source = (Export-WithEditorConfig 'editorconfig-none' 'none'); GlobalUsing = $true; Output = 'ProfileUnmapped: OK'
            Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
+        # Optional overloads and the attributes of the generated class (Sources/GeneratedOptions.cs checks them by reflection).
+        @{ Name = 'generated class attributes and overloads, defaults'; Source = "$sources/GeneratedOptions.cs"; GlobalUsing = $true
+           Output = 'GeneratedOptions: OK' }
+        @{ Name = 'IronMapperGenerateInPlace/List/Array=false, IronMapperExcludeFromCodeCoverage=true'
+           Source = "$sources/GeneratedOptions.cs"; GlobalUsing = $true; Output = 'GeneratedOptions: OK'
+           Properties = @('-p:IronMapperGenerateInPlace=false', '-p:IronMapperGenerateList=false', '-p:IronMapperGenerateArray=false',
+                          '-p:IronMapperExcludeFromCodeCoverage=true', '-p:DefineConstants=OVERLOADS_OFF') }
     )
 
     $index = 0
