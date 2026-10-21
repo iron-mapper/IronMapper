@@ -24,9 +24,9 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
   the generated file.
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.6 ns per object. Nested objects are slower
   (×1.26), see [Performance](https://github.com/iron-mapper/IronMapper#performance).
-- **NativeAOT checked in CI for the generated methods** (.NET 8 and .NET 10): they publish with no trim/AOT warnings
-  and run correctly. The optional `IMapper` service does not work under NativeAOT yet and says so on publish: IL2026
-  at your `AddIronMapper` call ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
+- **NativeAOT checked in CI** (.NET 8 and .NET 10): the generated methods and, from 1.2.0, the optional `IMapper`
+  service publish with no trim/AOT warnings and run correctly. Up to 1.1.4 `IMapper` used reflection and did not work
+  under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Cold start of about 2 ms** (process start plus the first mapping, over a console app without a mapper), the
   same order as hand-written code. AutoMapper and Mapster need tens of milliseconds there to build their mapping
   configuration ([results](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
@@ -112,7 +112,8 @@ How to read it:
 - Cold start: median wall-clock time of process start plus one mapping, minus the same console app without a mapper
   (30 runs). This metric is sensitive to noise; read it as an order of magnitude.
 - NativeAOT: "works" means the published executable ran and printed the correct result. The IronMapper `IMapper`
-  executable fails with `MappingException`. Mapster and AutoMapper build their mappers at run time and fail as well.
+  executable of 1.1.3 fails with `MappingException` (from 1.2.0 it works, checked in CI). Mapster and AutoMapper build
+  their mappers at run time and fail as well.
 - Sizes are the increase over the same console app without a mapper.
 - Collection differences of a few percent (×1.01–×1.05 here; 100 000 items in the full report) are within the run-to-run
   spread and do not mean one library is faster.
@@ -197,14 +198,22 @@ dotnet add package IronMapper.Extensions.DI
 using IronMapper.Extensions.DI;
 using IronMapper.Interfaces;
 
-builder.Services.AddIronMapper(typeof(Program).Assembly);   // registers IMapper and the profiles
+builder.Services.AddIronMapper(typeof(Program).Assembly);   // registers IMapper and this assembly's mappings
 
 app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUser(id)));
+app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()));
 ```
 
-`IMapper` finds and calls the generated methods through reflection. It is slower than the extension methods (see
-the table above) and does not work under NativeAOT (publishing reports IL2026 at `AddIronMapper`); prefer the
-extension methods when the types are known at compile time.
+From 1.2.0 `IMapper` calls the generated methods through delegates that the generator registers for every mapping
+(no reflection): it works with trimming and NativeAOT, and exceptions of your converters and hooks reach you as they
+are. `Map<List<UserDto>>`, `Map<UserDto[]>` and `Map<IEnumerable<UserDto>>` map collections. Pass every assembly
+that holds mappings to `AddIronMapper`; the mappings are registered when the first `IMapper` is created. An app that
+does not use `IMapper` only loads the IronMapper assembly for the generated module initializer, and a trimmed or
+NativeAOT app without `IronMapper.Extensions.DI` does not contain the registration at all
+([details](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps)).
+A call through `IMapper` still costs more than the extension method (the call of a generic interface method and a
+delegate, and a type lookup for `Map<TDest>(object)`); prefer the extension methods when the types are known at
+compile time. Up to 1.1.4 `IMapper` used reflection, was ×2.7 slower on Flat and did not work under NativeAOT.
 
 ---
 
@@ -220,11 +229,6 @@ extension methods when the types are known at compile time.
   `MapFrom`.
 - **`IM0001` is not reported for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
   mapping keeps its default value without a warning.
-- **`IMapper` (IronMapper.Extensions.DI) uses reflection and does not work under NativeAOT** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)): publishing with
-  trimming or NativeAOT reports IL2026 at your `AddIronMapper` call, and the app fails with `MappingException` at run
-  time. It also has no collection overload of `Map`
-  ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) and no per-call context
-  ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 - **A `null` source throws `ArgumentNullException`**, also when it is declared nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
@@ -232,7 +236,8 @@ extension methods when the types are known at compile time.
   use `MapFrom` or a converter. Declared diagnostics `IM0002`–`IM0004` are not reported yet.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Also: diagnostics have no source location; the in-place overload ignores `When`, `ConvertUsing` and hooks;
+Also: diagnostics have no source location; `IMapper` has no per-call context
+([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
 `ReverseMap()` maps by name only; converters need a public parameterless constructor; private/protected nested types
 cannot be mapped (`IM0010`); several projects in one solution have their own `GeneratedMappers` class. Details:
 [Advanced topics](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md),
@@ -255,12 +260,13 @@ cannot be mapped (`IM0010`); several projects in one solution have their own `Ge
 Open issues:
 
 - `ProjectTo<TDestination>()` for `IQueryable` — [#9](https://github.com/iron-mapper/IronMapper/issues/9)
-- `Map<List<T>>(source)` through `IMapper` — [#8](https://github.com/iron-mapper/IronMapper/issues/8)
 - Context data in `Map` calls (like `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
 - `net9.0` target — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
 
-Next release, 1.2.0: faster generated code for nested objects and collections, `IMapper` without reflection
-(NativeAOT, [#26](https://github.com/iron-mapper/IronMapper/issues/26)), `IM0001` for profiles behind an opt-in switch ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), diagnostics with source locations. The
+Next release, 1.2.0. Done (not released yet): generated collection code without LINQ, `IMapper` without
+reflection that works under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) and maps collections with `Map<List<T>>`
+([#8](https://github.com/iron-mapper/IronMapper/issues/8)). Planned: `IM0001` for profiles behind an opt-in switch ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), diagnostics with
+source locations. The
 working plan (in Russian) is [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
 it may change.
 

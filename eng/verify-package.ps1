@@ -17,7 +17,12 @@
        <!-- quickstart:begin --> / <!-- quickstart:end -->) and the cases
        where it must not be added or must not get in the way (ImplicitUsings off, LangVersion 9,
        IronMapperImplicitUsings=false, an explicit using next to the global one), and netstandard2.0/2.1 libraries
-       (the generated throw helper instead of ArgumentNullException.ThrowIfNull). Each executable variant is also run.
+       (the generated throw helper instead of ArgumentNullException.ThrowIfNull, the generated copy of
+       ModuleInitializerAttribute, C# 8 without a module initializer). Each executable variant is also run.
+       The feature switch IronMapper.Registration.IsSupported (buildTransitive/IronMapper.targets) is checked in the
+       runtimeconfig.json of every executable variant: not set by default and with the DI package, false with
+       PublishTrimmed and without the DI package, true with IronMapperRegistration=true; a framework-dependent publish
+       without the DI package keeps the registration (the registry finds the mapping by type).
 
 .EXAMPLE
     pwsh ./eng/verify-package.ps1
@@ -104,6 +109,7 @@ Assert-Entry $core 'lib/net10.0/IronMapper.dll'
 Assert-Entry $core 'analyzers/dotnet/cs/IronMapper.Generator.dll'
 Assert-Entry $core 'analyzers/dotnet/cs/IronMapper.CodeFixes.dll'
 Assert-Entry $core 'buildTransitive/IronMapper.props'
+Assert-Entry $core 'buildTransitive/IronMapper.targets'
 Assert-NoRoslynDependency $core
 foreach ($entry in $core.Entries) {
     if ($entry -like 'lib/*' -and $entry -notlike 'lib/*/IronMapper.dll' -and $entry -notlike 'lib/*/IronMapper.xml') {
@@ -117,6 +123,7 @@ foreach ($entry in $core.Entries) {
 $di = Read-Package 'IronMapper.Extensions.DI'
 Assert-Entry $di 'lib/netstandard2.1/IronMapper.Extensions.DI.dll'
 Assert-Entry $di 'lib/net10.0/IronMapper.Extensions.DI.dll'
+Assert-Entry $di 'buildTransitive/IronMapper.Extensions.DI.props'
 Assert-NoRoslynDependency $di
 foreach ($dep in $di.Dependencies | Where-Object { $_.id -eq 'IronMapper' }) {
     if ($dep.version -ne $Version -and $dep.version -ne "[$Version]") {
@@ -204,12 +211,27 @@ try {
            Output = 'ExplicitUsing: OK'; Properties = @('-p:ImplicitUsings=disable', '-p:LangVersion=9') }
         @{ Name = 'IronMapperImplicitUsings=false'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
            Output = 'ExplicitUsing: OK'; Properties = @('-p:IronMapperImplicitUsings=false') }
-        # Libraries on targets without ArgumentNullException.ThrowIfNull: the generated code uses its own throw helper,
-        # with [DoesNotReturn] on netstandard2.1 and without it on netstandard2.0. Built only (a library is not run).
-        @{ Name = 'netstandard2.0 library (throw helper)'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
-           Run = $false; Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library') }
+        # Feature switch IronMapper.Registration.IsSupported (Switch: its value in runtimeconfig.json, $null = not set).
+        @{ Name = 'framework-dependent publish without the DI package (registration stays)'; Source = "$sources/Registry.cs"
+           GlobalUsing = $true; Output = 'Registry: OK'; Publish = $true }
+        @{ Name = 'PublishTrimmed=true without the DI package (switch off)'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true
+           Output = 'NoUsing: OK'; Switch = 'false'; Properties = @('-p:PublishTrimmed=true') }
+        @{ Name = 'PublishTrimmed=true, only IronMapper.Extensions.DI referenced (switch not set)'; Source = "$sources/NoUsing.cs"
+           GlobalUsing = $true; Output = 'NoUsing: OK'
+           Properties = @('-p:PublishTrimmed=true', '-p:IronMapperPackage=IronMapper.Extensions.DI') }
+        @{ Name = 'PublishTrimmed=true, IronMapperRegistration=true'; Source = "$sources/Registry.cs"; GlobalUsing = $true
+           Output = 'Registry: OK'; Switch = 'true'; Properties = @('-p:PublishTrimmed=true', '-p:IronMapperRegistration=true') }
+        # Libraries on targets without ArgumentNullException.ThrowIfNull and ModuleInitializerAttribute: the generated
+        # code uses its own throw helper, with [DoesNotReturn] on netstandard2.1 and without it on netstandard2.0, and
+        # declares an internal ModuleInitializerAttribute for the IMapper registration; with C# 8 the registration has
+        # no [ModuleInitializer] at all. Built only (a library is not run).
+        @{ Name = 'netstandard2.0 library (throw helper, ModuleInitializerAttribute copy)'; Source = "$sources/ExplicitUsing.cs"
+           GlobalUsing = $true; Run = $false; Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library') }
         @{ Name = 'netstandard2.1 library (throw helper, DoesNotReturn)'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
            Run = $false; Properties = @('-p:TargetFramework=netstandard2.1', '-p:OutputType=Library') }
+        @{ Name = 'netstandard2.0 library, C# 8 (registration without module initializer)'; Source = "$sources/ExplicitUsing.cs"
+           GlobalUsing = $false; Run = $false
+           Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library', '-p:ImplicitUsings=disable', '-p:LangVersion=8') }
     )
 
     $index = 0
@@ -232,10 +254,24 @@ try {
             throw "Variant '$($variant.Name)': global using IronMapper.Generated expected $($variant.GlobalUsing), found $hasGlobalUsing"
         }
 
-        $dll = Get-ChildItem -Path (Join-Path $artifacts 'bin') -Recurse -Filter 'IronMapper.PackageConsumer.ImplicitUsings.dll' |
+        $outputDir = Join-Path $artifacts 'bin'
+        if ($variant.ContainsKey('Publish')) {
+            Invoke-Dotnet publish $implicitConsumer --no-restore --no-build -c $Configuration --artifacts-path $artifacts @properties
+            $outputDir = Join-Path $artifacts 'publish'
+        }
+        $dll = Get-ChildItem -Path $outputDir -Recurse -Filter 'IronMapper.PackageConsumer.ImplicitUsings.dll' |
             Select-Object -First 1
-        if (-not $dll) { throw "Variant '$($variant.Name)': no built assembly under $artifacts" }
+        if (-not $dll) { throw "Variant '$($variant.Name)': no built assembly under $outputDir" }
         if ($variant.ContainsKey('Run') -and -not $variant.Run) { continue }
+
+        $runtimeConfig = Join-Path $dll.DirectoryName 'IronMapper.PackageConsumer.ImplicitUsings.runtimeconfig.json'
+        $configProperties = (Get-Content -Raw $runtimeConfig | ConvertFrom-Json).runtimeOptions.PSObject.Properties['configProperties']
+        $switch = $configProperties ? $configProperties.Value.PSObject.Properties['IronMapper.Registration.IsSupported'] : $null
+        $actualSwitch = $switch ? "$($switch.Value)".ToLowerInvariant() : $null
+        $expectedSwitch = $variant.ContainsKey('Switch') ? $variant.Switch : $null
+        if ($actualSwitch -ne $expectedSwitch) {
+            throw "Variant '$($variant.Name)': IronMapper.Registration.IsSupported in runtimeconfig.json expected '$expectedSwitch', found '$actualSwitch'"
+        }
         $output = & dotnet $dll.FullName
         if ($LASTEXITCODE -ne 0 -or -not ($output -match [regex]::Escape($variant.Output))) {
             throw "Variant '$($variant.Name)': expected exit code 0 and '$($variant.Output)', got $LASTEXITCODE and '$output'"

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Library of probe C (eng/verify-aot.ps1): mappings (attribute and profile) in a project that references only the
+    IronMapper package, not IronMapper.Extensions.DI. Intentionally NOT part of IronMapper.slnx.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="IronMapper" Version="[$(IronMapperVersion)]" />
+  </ItemGroup>
+
+</Project>

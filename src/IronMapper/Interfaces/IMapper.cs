@@ -5,8 +5,9 @@ namespace IronMapper.Interfaces;
 /// <summary>
 /// Core mapper interface for mapping through an injected service instead of calling the generated
 /// <c>MapTo*</c> extension methods directly. The Source Generator does not implement this interface.
-/// The implementation shipped in <c>IronMapper.Extensions.DI</c> (<c>RuntimeMapper</c>) finds and invokes
-/// the generated methods via reflection. For reflection-free mapping call the generated extension methods.
+/// The implementation shipped in <c>IronMapper.Extensions.DI</c> (<c>RuntimeMapper</c>) calls the generated methods
+/// through the delegates of the generated registry (<see cref="Registration.MapperRegistry"/>), without reflection.
+/// A call through it costs a delegate call more than the generated extension method.
 /// </summary>
 public interface IMapper
 {

@@ -93,7 +93,7 @@ using IronMapper.Extensions.DI;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Registers IMapper and the MappingProfile subclasses from this assembly (as singletons).
+// Registers IMapper and the generated mappings of this assembly (attributes and profiles).
 // Mappings themselves are generated at compile time; registration does not change them.
 builder.Services.AddIronMapper(typeof(Program).Assembly);
 ```
@@ -124,5 +124,6 @@ public class UsersController : ControllerBase
 ```
 
 > **Tip:** The generated extension methods (`entity.MapToUserDto()`) work without DI and are always available.
-> `IMapper` is optional. It finds and calls those generated methods via reflection, so prefer the extension methods
-> where the types are known at compile time. See [IMapper vs. generated extension methods](advanced.md#imapper-vs-generated-extension-methods).
+> `IMapper` is optional. It calls those generated methods through delegates (no reflection, works with NativeAOT),
+> but a call through it still costs more than the extension method, so prefer the extension methods where the types
+> are known at compile time. See [IMapper vs. generated extension methods](advanced.md#imapper-vs-generated-extension-methods).

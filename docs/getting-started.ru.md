@@ -93,7 +93,7 @@ using IronMapper.Extensions.DI;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Регистрирует IMapper и подклассы MappingProfile из этой сборки (как singleton).
+// Регистрирует IMapper и сгенерированные маппинги этой сборки (атрибуты и профили).
 // Сами маппинги генерируются при компиляции; регистрация их не меняет.
 builder.Services.AddIronMapper(typeof(Program).Assembly);
 ```
@@ -124,5 +124,6 @@ public class UsersController : ControllerBase
 ```
 
 > **Совет:** Сгенерированные extension methods (`entity.MapToUserDto()`) работают без DI и доступны всегда.
-> `IMapper` опционален. Он находит и вызывает сгенерированные методы через reflection, поэтому там, где типы известны
-> при компиляции, лучше использовать extension-методы. См. [IMapper и сгенерированные extension-методы](advanced.ru.md#imapper-и-сгенерированные-extension-методы).
+> `IMapper` опционален. Он вызывает сгенерированные методы через делегаты (без reflection, работает в NativeAOT), но
+> вызов через него всё равно дороже extension-метода, поэтому там, где типы известны при компиляции, лучше
+> использовать extension-методы. См. [IMapper и сгенерированные extension-методы](advanced.ru.md#imapper-и-сгенерированные-extension-методы).

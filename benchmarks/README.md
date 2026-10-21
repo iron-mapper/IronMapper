@@ -12,7 +12,7 @@ The specification of this suite is [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md).
 |---|---|---|
 | `Manual` | — | Hand-written code, the **baseline** of every comparison |
 | `IronMapper` | IronMapper (NuGet) | Source generator: generated extension methods (`source.MapToXxx()`) |
-| `IronMapper_IMapper` | IronMapper + IronMapper.Extensions.DI | `IMapper` from dependency injection (reflection lookup, then `MethodInfo.Invoke` per call) |
+| `IronMapper_IMapper` | IronMapper + IronMapper.Extensions.DI | `IMapper` from dependency injection (up to 1.1.x: reflection lookup, then `MethodInfo.Invoke` per call; from 1.2.0: the delegates of the generated registry) |
 | `Mapperly` | Riok.Mapperly | Source generator: `[Mapper]` partial class |
 | `Mapster` | Mapster | Runtime: own `TypeAdapterConfig`, `Compile()` in setup, `Adapt<TSource, TDest>(config)` |
 | `AutoMapper` | AutoMapper | Runtime: `MapperConfiguration`, `CreateMapper()` in setup |
@@ -107,8 +107,12 @@ for the scripts (MSBuild reads environment variables as properties).
   `Manual`'s. In Collection the whole `MapNested` is inlined into the outer loop and the boxed `List<T>.Enumerator` is
   allocated again for every order: +40 B per order in `B/item`, and part of Mapperly's time difference to `Manual`
   there (JIT output checked with `DisassemblyDiagnoser`).
-- **`IronMapper_IMapper`** goes through reflection (`MethodInfo.Invoke` per call); collections use the lazy
-  `MapCollection` + `ToList()` (`Map<List<T>>` is not supported, issue #8). It does not work under NativeAOT.
+- **`IronMapper_IMapper`** up to 1.1.x goes through reflection (`MethodInfo.Invoke` per call) and does not work under
+  NativeAOT; from 1.2.0 it calls the generated methods through the delegates of the generated registry and works under
+  NativeAOT. Collections use `MapCollection` + `ToList()` with both (`Map<List<T>>` works from 1.2.0, issue #8).
+- **`Manual_DI`** (cold start only: `StartupBenchmark` and `probes/StartupProbe.Manual_DI`) is `Manual` resolved from
+  the same Microsoft.Extensions.DependencyInjection container as `IronMapper_IMapper`. `IronMapper_IMapper` minus
+  `Manual_DI` is what IronMapper adds on top of the container.
 - **Mapster calls `Compile()` in setup.** All mappings are compiled up front, as recommended for production. Without
   `Compile()` Mapster compiles each type pair lazily on first use, so its cold start (and the first call of each
   pair) would be different from what is measured here.

@@ -12,8 +12,8 @@ IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not 
 |---|---|---|
 | Where mapping code comes from | Mapping plans built at runtime and compiled from expression trees ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C# generated at compile time |
 | Configuration errors | Reported by `AssertConfigurationIsValid()`, typically called in a unit test ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Some at build time: IM00xx diagnostics, or C# errors in the generated code. Several declared diagnostics are not reported yet, see [diagnostics](diagnostics.md) |
-| `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods via reflection |
-| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: IL2026 at the `AddIronMapper` call, fails at run time ([details](advanced.md#nativeaot-and-trimming)) |
+| `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods through delegates of a generated registry (up to 1.1.4 via reflection) |
+| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: no warnings, works from 1.2.0; up to 1.1.4 it failed at run time ([details](advanced.md#nativeaot-and-trimming)) |
 | License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
 
 Performance and size, IronMapper 1.1.3 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
@@ -36,10 +36,10 @@ limitations, or only the emitted code text is tested; **Not supported**.
 | `ForMember(d => d.X, o => o.Ignore())` | same | Supported | `ProfileTests.ForMemberIgnore_IgnoredProperty_RemainsDefault`, `ProfileGeneratorTests.ForMemberIgnore_IgnoredProperty_NotEmittedInGeneratedCode` |
 | `[AutoMap(typeof(Src))]` on the destination ([docs](https://docs.automapper.io/en/latest/Attribute-mapping.html)) | `[MapTo(typeof(Dest))]` on the source | Supported | `SimpleTypesTests.PrimitivesMapping_*`, `EdgeCaseTests.DogEntity_OwnAndInheritedProperties_AllMapped` |
 | `[AutoMap(typeof(Src))]` on the destination | `[MapFrom(typeof(Src))]` on the destination | Partial | Only the emitted code is tested: `BasicGeneratorTests.MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod` |
-| `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Supported | `DiIntegrationTests.AddIronMapper_RegistersIMapper`. Registers `IMapper` and the profile types; it does not build any mapping configuration |
-| `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Supported | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`. `IMapper` matches the exact runtime source type |
+| `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Supported | `DiIntegrationTests.AddIronMapper_RegistersIMapper`, `MapperRegistryAssemblyTests`. Registers `IMapper` and the generated mappings of the assemblies; it does not build any mapping configuration and does not add the profiles to the container |
+| `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Supported | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`, `MapperRegistryTests`. `IMapper` uses the runtime type of the source, then its base types |
 | `mapper.Map(source, destination)` | `source.MapToDest(destination)` **or** `mapper.Map<Src, Dest>(source, dest)` | Partial | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Ignores `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; skips `init` properties |
-| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Partial | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`. `mapper.Map<List<Dest>>(list)` compiles but throws `MappingException` ([#8](https://github.com/iron-mapper/IronMapper/issues/8)) |
+| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Partial | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` and `Map<IEnumerable<Dest>>` work from 1.2.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); up to 1.1.4 they threw `MappingException` |
 | `ReverseMap()` | `.ReverseMap()` | Partial | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. The reverse direction uses name matching only; `ForMember`, `When`, hooks and `IncludeMembers` are not reversed |
 | `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Supported | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` and other `HookTests`. Not called by the in-place overload |
 | `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Supported | `IncludeMembersTests` (e.g. `IncludeMembers_ForMemberWins_OverIncludedMember`, `IncludeMembers_FirstMemberWins_OnDuplicatePropertyName`) |
@@ -98,7 +98,7 @@ dotnet add package IronMapper.Extensions.DI
 + using IronMapper.Interfaces;
 ```
 
-The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)`. There is no collection overload of `Map` (`Map<List<Dest>>(list)` throws, [#8](https://github.com/iron-mapper/IronMapper/issues/8)) and no per-call options/context ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
+The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)`. Collections are mapped by the destination type (`Map<List<Dest>>(list)`, from 1.2.0, [#8](https://github.com/iron-mapper/IronMapper/issues/8)). There are no per-call options/context ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 
 ### 5. Optionally switch to extension methods
 

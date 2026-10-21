@@ -10,6 +10,14 @@
     <MappersDir>$(MSBuildThisFileDirectory)..\src\Comparison.Mappers\</MappersDir>
   </PropertyGroup>
 
+  <!--
+    The NativeAOT publish (scripts/run-startup.ps1 -Mode Aot) passes StartupProbeAot=true, not PublishAot: a global
+    PublishAot would reach the netstandard2.0 projects of ../src (UseLocalIronMapper=true) and fail there with NETSDK1207.
+  -->
+  <PropertyGroup Condition="'$(StartupProbeAot)' == 'true'">
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Comparison.Models\Comparison.Models.csproj" />
   </ItemGroup>

@@ -8,6 +8,7 @@
   <Folder Name="/probes/">
     <Project Path="probes/StartupProbe.Baseline/StartupProbe.Baseline.csproj" />
     <Project Path="probes/StartupProbe.Manual/StartupProbe.Manual.csproj" />
+    <Project Path="probes/StartupProbe.Manual_DI/StartupProbe.Manual_DI.csproj" />
     <Project Path="probes/StartupProbe.IronMapper/StartupProbe.IronMapper.csproj" />
     <Project Path="probes/StartupProbe.IronMapper_IMapper/StartupProbe.IronMapper_IMapper.csproj" />
     <Project Path="probes/StartupProbe.Mapperly/StartupProbe.Mapperly.csproj" />

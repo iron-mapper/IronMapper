@@ -21,6 +21,17 @@
   </ItemGroup>
 
   <!--
+    What the packages add through buildTransitive, for the local sources (project references get nothing from there):
+    the feature switch of the IMapper registration (off for a NativeAOT publish without the DI package), so the AOT
+    size of the local sources is measured as a package user gets it.
+  -->
+  <PropertyGroup Condition="'$(UsesIronMapperDI)' == 'true' And '$(UseLocalIronMapper)' == 'true'">
+    <_IronMapperExtensionsDIReferenced>true</_IronMapperExtensionsDIReferenced>
+  </PropertyGroup>
+  <Import Project="$(IronMapperSrcDir)IronMapper\buildTransitive\IronMapper.targets"
+          Condition="'$(UsesIronMapper)' == 'true' And '$(UseLocalIronMapper)' == 'true'" />
+
+  <!--
     The ../src projects are not part of IronMapper.Comparison.slnx. In a solution build MSBuild strips
     Configuration from references to projects outside the solution, so `-c Release` would build them
     as Debug. Keep Configuration on every reference into ../src (direct and transitive), and drop

@@ -112,9 +112,10 @@ public class GeneratedClassVisibilityTests
             .Where(line => line.Contains("partial class GeneratedMappers"))
             .Select(line => line.Trim())
             .ToList();
-        Assert.Equal(3, declarations.Count);
+        // Two mapping files and the registration for IMapper declare the class without a modifier.
+        Assert.Equal(4, declarations.Count);
         Assert.Single(declarations, "public static partial class GeneratedMappers");
-        Assert.Equal(2, declarations.Count(d => d == "static partial class GeneratedMappers"));
+        Assert.Equal(3, declarations.Count(d => d == "static partial class GeneratedMappers"));
     }
 
     [Fact]

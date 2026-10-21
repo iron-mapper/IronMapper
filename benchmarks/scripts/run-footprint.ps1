@@ -24,7 +24,7 @@ Import-Module (Join-Path $PSScriptRoot 'BenchmarkCommon.psm1') -Force
 
 $reportPath = Join-Path (Get-ResultsDir) 'footprint.md'
 $probes = Get-StartupProbeNames
-$libraryProbes = $probes | Where-Object { $_ -notin 'Baseline', 'Manual' }
+$libraryProbes = $probes | Where-Object { $_ -notin 'Baseline', 'Manual', 'Manual_DI' }
 
 function Get-GlobalPackagesDir {
     if ($env:NUGET_PACKAGES) { return $env:NUGET_PACKAGES }

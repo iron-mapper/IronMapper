@@ -24,6 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\IronMapper\IronMapper.csproj" />
     <ProjectReference Include="..\..\src\IronMapper.Extensions.DI\IronMapper.Extensions.DI.csproj" />
+    <!-- Multi-project IMapper test (MapperRegistryAssemblyTests): entities in Domain, mappings in Application. -->
+    <ProjectReference Include="..\IronMapper.Integration.Domain\IronMapper.Integration.Domain.csproj" />
+    <ProjectReference Include="..\IronMapper.Integration.Application\IronMapper.Integration.Application.csproj" />
     <!-- Generator runs at compile time so the test assembly contains the generated extension methods. -->
     <ProjectReference Include="..\..\src\IronMapper.Generator\IronMapper.Generator.csproj"
                       OutputItemType="Analyzer"

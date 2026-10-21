@@ -18,8 +18,9 @@ nested types and generic type arguments count too.
 
 `BeforeMap`/`AfterMap` and `AddTransformer` helpers are always `private`.
 
-Internal mappings work through `IMapper` (`IronMapper.Extensions.DI`) as well: it also looks up non-public generated
-methods. Code in other assemblies can use an internal mapping only through `[InternalsVisibleTo]`.
+Internal mappings work through `IMapper` (`IronMapper.Extensions.DI`) as well: the generated registration of the
+assembly registers them too. Code in other assemblies can call an internal mapping directly only through
+`[InternalsVisibleTo]`.
 
 ---
 
@@ -65,8 +66,8 @@ same source type) is used:
 | `Global` namespace: `Dto` and `App.Dto` | `MapToGlobalDto`, `MapToAppDto` |
 | `App.SummaryDto` (no collision) | `MapToSummaryDto`, unchanged |
 
-Generated code that maps nested collection elements and `IMapper` (`IronMapper.Extensions.DI`, which matches methods
-by signature) use the qualified names automatically. Code you write — including `MapFrom` lambdas — must call the
+Generated code that maps nested collection elements and `IMapper` (`IronMapper.Extensions.DI`, which uses the
+generated registration) use the qualified names automatically. Code you write — including `MapFrom` lambdas — must call the
 qualified name. If no rule gives unique names (they are all taken by other mappings), the mappings of that group are not
 generated and error [`IM0014`](diagnostics.md#im0014--mapping-method-name-collision-cannot-be-resolved) is reported.
 
@@ -145,8 +146,42 @@ Two limitations remain:
   ambiguous (`CS0121`). The same happens inside the generated code when a nested collection's element type is mapped
   in both projects. Keep the mapping in the project that owns the types.
 
-`IMapper` (`IronMapper.Extensions.DI`) finds generated methods in every loaded assembly, whether the class is public
-or internal.
+`IMapper` (`IronMapper.Extensions.DI`) uses the mappings of every assembly whose generated registration has run, whether
+the class is public or internal: pass the assemblies with mappings to `AddIronMapper` (see
+[IMapper vs. generated extension methods](advanced.md#imapper-vs-generated-extension-methods)). A library with mappings
+does not need the DI package itself: it is enough that the application references it.
+
+## Registration for `IMapper` in trimmed and NativeAOT apps
+
+For `IMapper`, every assembly with mappings registers them through a generated module initializer (see
+[IMapper vs. generated extension methods](advanced.md#imapper-vs-generated-extension-methods)). In a trimmed or
+NativeAOT app that registration would keep the registry and every generated method of the assembly, also in an app
+that only calls the extension methods. It is therefore behind the feature switch `IronMapper.Registration.IsSupported`
+(`MapperRegistry.IsSupported`), which the `IronMapper` package sets from the MSBuild property `IronMapperRegistration`
+of the application project (`buildTransitive/IronMapper.targets`):
+
+| Application | Switch | Registration |
+|---|---|---|
+| `PublishAot` or `PublishTrimmed`, no project references `IronMapper.Extensions.DI` | `false` | removed by the trimmer |
+| references `IronMapper.Extensions.DI`, directly or through one of its libraries | not set (on) | kept |
+| not trimmed (`dotnet run`, a publish without trimming) | not set (on) | kept |
+
+Set the property in the application project when the automatic choice is wrong, for example when a NativeAOT app uses
+`MapperRegistry` without the DI package (`true`), or references the DI package but does not use `IMapper` (`false`):
+
+```xml
+<PropertyGroup>
+  <IronMapperRegistration>true</IronMapperRegistration>
+</PropertyGroup>
+```
+
+- With the switch off, creating `IMapper` (`RuntimeMapper`) throws `InvalidOperationException` that names the
+  property, and the `MappingException` of `MapperRegistry` for a missing mapping says the same, instead of a plain "No
+  mapping registered".
+- The generated extension methods do not depend on the switch.
+- The property matters only in the application project (it becomes a `RuntimeHostConfigurationOption`); in a library
+  it has no effect. With project references to the IronMapper sources instead of the package nothing is set and the
+  registration is kept.
 
 ---
 
@@ -389,7 +424,8 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 
 `IronMapperOptions.AddConverter<T>()` registers the converter type in the DI container as a transient service.
 This does **not** affect mapping: the generated code does not resolve converters from DI and always creates them with
-`new TConverter()`.
+`new TConverter()`. `AddProfilesFromAssembly` and `AddProfile<T>()` register the generated mappings of the assembly
+for `IMapper`; the profiles themselves are not added to the container (up to 1.1.4 they were, as singletons).
 
 ```csharp
 services.AddIronMapper(opt =>

@@ -104,6 +104,30 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 : MapperCodeEmitter.EmitClassDeclaration(accessibility, options);
             spc.AddSource(hintName, source);
         });
+
+        // Registration of the generated mappings for IMapper (module initializer → MapperRegistry). Re-emitted only
+        // when the set of generated mappings, their method names or the options change.
+        var registrations = plan.Select(static (mappingPlan, _) => GetRegistrations(mappingPlan))
+            .WithTrackingName(TrackingNames.Registrations);
+
+        context.RegisterSourceOutput(registrations.Combine(codeOptions), static (spc, item) =>
+        {
+            var (mappings, options) = item;
+            if (mappings.Count == 0) return;
+            var (hintName, source) = MapperCodeEmitter.EmitRegistration(mappings, options);
+            spc.AddSource(hintName, source);
+        });
+    }
+
+    private static EquatableArray<MappingRegistration> GetRegistrations(MappingPlan plan)
+    {
+        var builder = ImmutableArray.CreateBuilder<MappingRegistration>();
+        foreach (var entry in plan.Entries)
+        {
+            if (entry.Emit) builder.Add(new MappingRegistration(entry.SourceFullName, entry.DestFullName, entry.MethodName));
+        }
+
+        return builder.ToImmutable();
     }
 
     private static string? GetClassAccessibility(MappingPlan plan)

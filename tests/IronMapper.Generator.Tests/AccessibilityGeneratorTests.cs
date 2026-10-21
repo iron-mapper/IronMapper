@@ -114,7 +114,9 @@ public class AccessibilityGeneratorTests
         AssertCompiles(errors);
         var code = Join(generated);
         Assert.Contains("public static global::App.UserDto MapToUserDto(this global::App.UserEntity source)", code);
-        Assert.DoesNotContain("internal static", code);
+        // The mapping methods; the registration for IMapper (RegisterIronMapperMappings) is always internal.
+        Assert.DoesNotContain("internal static global::", code);
+        Assert.DoesNotContain("internal static void MapTo", code);
     }
 
     // ------------------------------------------------------------------
