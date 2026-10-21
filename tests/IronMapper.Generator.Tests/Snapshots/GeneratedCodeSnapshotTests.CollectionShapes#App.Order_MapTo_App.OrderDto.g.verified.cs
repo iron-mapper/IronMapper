@@ -38,57 +38,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.OrderDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.OrderDto> MapToOrderDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Order>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.OrderDto>();
-            if (source is global::App.Order[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.OrderDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToOrderDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Order> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.OrderDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToOrderDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Order> collection
-                    ? new global::System.Collections.Generic.List<global::App.OrderDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.OrderDto>();
-                foreach (var item in source) result.Add(MapToOrderDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Order, global::App.OrderDto, ElementMapper_Order_OrderDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.OrderDto"/> and returns an array.</summary>
         public static global::App.OrderDto[] MapToOrderDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Order>? source)
+            => MapElementsToArray<global::App.Order, global::App.OrderDto, ElementMapper_Order_OrderDto>(source);
+
+        private readonly struct ElementMapper_Order_OrderDto : IElementMapper<global::App.Order, global::App.OrderDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.OrderDto>();
-            if (source is global::App.Order[] array)
-            {
-                var result = new global::App.OrderDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToOrderDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Order> list)
-            {
-                var result = new global::App.OrderDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToOrderDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Order> collection)
-            {
-                var result = new global::App.OrderDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToOrderDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.OrderDto>();
-                foreach (var item in source) result.Add(MapToOrderDto(item));
-                return result.ToArray();
-            }
+            public global::App.OrderDto Map(global::App.Order source) => MapToOrderDto(source);
         }
 
         private static global::System.Collections.Generic.List<global::App.LineDto> MapCollection_Indexed_Order_OrderDto(global::System.Collections.Generic.IList<global::App.Line>? source)

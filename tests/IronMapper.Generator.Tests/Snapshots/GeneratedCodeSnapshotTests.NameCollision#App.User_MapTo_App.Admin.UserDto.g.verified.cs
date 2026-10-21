@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.Admin.UserDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.Admin.UserDto> MapToAdminUserDtoList(this global::System.Collections.Generic.IEnumerable<global::App.User>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.Admin.UserDto>();
-            if (source is global::App.User[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Admin.UserDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToAdminUserDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.User> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Admin.UserDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToAdminUserDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.User> collection
-                    ? new global::System.Collections.Generic.List<global::App.Admin.UserDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.Admin.UserDto>();
-                foreach (var item in source) result.Add(MapToAdminUserDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.User, global::App.Admin.UserDto, ElementMapper_App_User_App_Admin_UserDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.Admin.UserDto"/> and returns an array.</summary>
         public static global::App.Admin.UserDto[] MapToAdminUserDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.User>? source)
+            => MapElementsToArray<global::App.User, global::App.Admin.UserDto, ElementMapper_App_User_App_Admin_UserDto>(source);
+
+        private readonly struct ElementMapper_App_User_App_Admin_UserDto : IElementMapper<global::App.User, global::App.Admin.UserDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.Admin.UserDto>();
-            if (source is global::App.User[] array)
-            {
-                var result = new global::App.Admin.UserDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToAdminUserDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.User> list)
-            {
-                var result = new global::App.Admin.UserDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToAdminUserDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.User> collection)
-            {
-                var result = new global::App.Admin.UserDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToAdminUserDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Admin.UserDto>();
-                foreach (var item in source) result.Add(MapToAdminUserDto(item));
-                return result.ToArray();
-            }
+            public global::App.Admin.UserDto Map(global::App.User source) => MapToAdminUserDto(source);
         }
     }
 }

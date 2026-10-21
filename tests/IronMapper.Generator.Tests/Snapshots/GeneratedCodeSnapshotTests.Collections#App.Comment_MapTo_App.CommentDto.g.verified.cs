@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.CommentDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.CommentDto> MapToCommentDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Comment>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.CommentDto>();
-            if (source is global::App.Comment[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.CommentDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToCommentDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Comment> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.CommentDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToCommentDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Comment> collection
-                    ? new global::System.Collections.Generic.List<global::App.CommentDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.CommentDto>();
-                foreach (var item in source) result.Add(MapToCommentDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Comment, global::App.CommentDto, ElementMapper_Comment_CommentDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.CommentDto"/> and returns an array.</summary>
         public static global::App.CommentDto[] MapToCommentDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Comment>? source)
+            => MapElementsToArray<global::App.Comment, global::App.CommentDto, ElementMapper_Comment_CommentDto>(source);
+
+        private readonly struct ElementMapper_Comment_CommentDto : IElementMapper<global::App.Comment, global::App.CommentDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.CommentDto>();
-            if (source is global::App.Comment[] array)
-            {
-                var result = new global::App.CommentDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToCommentDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Comment> list)
-            {
-                var result = new global::App.CommentDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToCommentDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Comment> collection)
-            {
-                var result = new global::App.CommentDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToCommentDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.CommentDto>();
-                foreach (var item in source) result.Add(MapToCommentDto(item));
-                return result.ToArray();
-            }
+            public global::App.CommentDto Map(global::App.Comment source) => MapToCommentDto(source);
         }
     }
 }

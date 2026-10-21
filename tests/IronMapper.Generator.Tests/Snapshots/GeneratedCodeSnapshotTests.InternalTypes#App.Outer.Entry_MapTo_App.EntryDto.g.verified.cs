@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.EntryDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         internal static global::System.Collections.Generic.List<global::App.EntryDto> MapToEntryDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Outer.Entry>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.EntryDto>();
-            if (source is global::App.Outer.Entry[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.EntryDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToEntryDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Outer.Entry> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.EntryDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToEntryDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Outer.Entry> collection
-                    ? new global::System.Collections.Generic.List<global::App.EntryDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.EntryDto>();
-                foreach (var item in source) result.Add(MapToEntryDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Outer.Entry, global::App.EntryDto, ElementMapper_Entry_EntryDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.EntryDto"/> and returns an array.</summary>
         internal static global::App.EntryDto[] MapToEntryDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Outer.Entry>? source)
+            => MapElementsToArray<global::App.Outer.Entry, global::App.EntryDto, ElementMapper_Entry_EntryDto>(source);
+
+        private readonly struct ElementMapper_Entry_EntryDto : IElementMapper<global::App.Outer.Entry, global::App.EntryDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.EntryDto>();
-            if (source is global::App.Outer.Entry[] array)
-            {
-                var result = new global::App.EntryDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToEntryDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Outer.Entry> list)
-            {
-                var result = new global::App.EntryDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToEntryDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Outer.Entry> collection)
-            {
-                var result = new global::App.EntryDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToEntryDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.EntryDto>();
-                foreach (var item in source) result.Add(MapToEntryDto(item));
-                return result.ToArray();
-            }
+            public global::App.EntryDto Map(global::App.Outer.Entry source) => MapToEntryDto(source);
         }
     }
 }

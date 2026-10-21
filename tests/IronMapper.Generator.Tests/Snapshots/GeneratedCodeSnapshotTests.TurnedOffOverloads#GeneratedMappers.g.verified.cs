@@ -8,5 +8,41 @@ namespace IronMapper.Generated
     [global::System.CodeDom.Compiler.GeneratedCode("IronMapper", "{version}")]
     public static partial class GeneratedMappers
     {
+        /// <summary>Maps one element; implemented by a private struct of each mapping that has MapToXList or MapToXArray.</summary>
+        private interface IElementMapper<TSource, TDest>
+        {
+            TDest Map(TSource source);
+        }
+
+        private static TDest[] MapElementsToArray<TSource, TDest, TMapper>(global::System.Collections.Generic.IEnumerable<TSource>? source)
+            where TMapper : struct, IElementMapper<TSource, TDest>
+        {
+            var mapper = default(TMapper);
+            if (source is null) return global::System.Array.Empty<TDest>();
+            if (source is TSource[] array)
+            {
+                var result = new TDest[array.Length];
+                for (var i = 0; i < array.Length; i++) result[i] = mapper.Map(array[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.List<TSource> list)
+            {
+                var result = new TDest[list.Count];
+                for (var i = 0; i < list.Count; i++) result[i] = mapper.Map(list[i]);
+                return result;
+            }
+            if (source is global::System.Collections.Generic.ICollection<TSource> collection)
+            {
+                var result = new TDest[collection.Count];
+                var i = 0;
+                foreach (var item in collection) result[i++] = mapper.Map(item);
+                return result;
+            }
+            {
+                var result = new global::System.Collections.Generic.List<TDest>();
+                foreach (var item in source) result.Add(mapper.Map(item));
+                return result.ToArray();
+            }
+        }
     }
 }

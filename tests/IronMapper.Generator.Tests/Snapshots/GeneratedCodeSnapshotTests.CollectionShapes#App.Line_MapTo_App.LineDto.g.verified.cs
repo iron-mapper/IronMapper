@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.LineDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.LineDto> MapToLineDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Line>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.LineDto>();
-            if (source is global::App.Line[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LineDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToLineDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Line> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LineDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToLineDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Line> collection
-                    ? new global::System.Collections.Generic.List<global::App.LineDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.LineDto>();
-                foreach (var item in source) result.Add(MapToLineDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Line, global::App.LineDto, ElementMapper_Line_LineDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.LineDto"/> and returns an array.</summary>
         public static global::App.LineDto[] MapToLineDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Line>? source)
+            => MapElementsToArray<global::App.Line, global::App.LineDto, ElementMapper_Line_LineDto>(source);
+
+        private readonly struct ElementMapper_Line_LineDto : IElementMapper<global::App.Line, global::App.LineDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.LineDto>();
-            if (source is global::App.Line[] array)
-            {
-                var result = new global::App.LineDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToLineDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Line> list)
-            {
-                var result = new global::App.LineDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToLineDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Line> collection)
-            {
-                var result = new global::App.LineDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToLineDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LineDto>();
-                foreach (var item in source) result.Add(MapToLineDto(item));
-                return result.ToArray();
-            }
+            public global::App.LineDto Map(global::App.Line source) => MapToLineDto(source);
         }
     }
 }

@@ -36,57 +36,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PostDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.PostDto> MapToPostDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Post>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.PostDto>();
-            if (source is global::App.Post[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.PostDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToPostDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Post> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.PostDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToPostDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Post> collection
-                    ? new global::System.Collections.Generic.List<global::App.PostDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.PostDto>();
-                foreach (var item in source) result.Add(MapToPostDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Post, global::App.PostDto, ElementMapper_Post_PostDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PostDto"/> and returns an array.</summary>
         public static global::App.PostDto[] MapToPostDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Post>? source)
+            => MapElementsToArray<global::App.Post, global::App.PostDto, ElementMapper_Post_PostDto>(source);
+
+        private readonly struct ElementMapper_Post_PostDto : IElementMapper<global::App.Post, global::App.PostDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.PostDto>();
-            if (source is global::App.Post[] array)
-            {
-                var result = new global::App.PostDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToPostDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Post> list)
-            {
-                var result = new global::App.PostDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToPostDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Post> collection)
-            {
-                var result = new global::App.PostDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToPostDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.PostDto>();
-                foreach (var item in source) result.Add(MapToPostDto(item));
-                return result.ToArray();
-            }
+            public global::App.PostDto Map(global::App.Post source) => MapToPostDto(source);
         }
 
         private static global::System.Collections.Generic.List<global::App.CommentDto> MapCollection_Comments_Post_PostDto(global::System.Collections.Generic.List<global::App.Comment>? source)

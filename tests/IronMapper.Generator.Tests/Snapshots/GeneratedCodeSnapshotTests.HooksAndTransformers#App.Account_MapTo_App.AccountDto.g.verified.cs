@@ -32,57 +32,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.AccountDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.AccountDto> MapToAccountDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Account>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.AccountDto>();
-            if (source is global::App.Account[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.AccountDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToAccountDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Account> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.AccountDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToAccountDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Account> collection
-                    ? new global::System.Collections.Generic.List<global::App.AccountDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.AccountDto>();
-                foreach (var item in source) result.Add(MapToAccountDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Account, global::App.AccountDto, ElementMapper_Account_AccountDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.AccountDto"/> and returns an array.</summary>
         public static global::App.AccountDto[] MapToAccountDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Account>? source)
+            => MapElementsToArray<global::App.Account, global::App.AccountDto, ElementMapper_Account_AccountDto>(source);
+
+        private readonly struct ElementMapper_Account_AccountDto : IElementMapper<global::App.Account, global::App.AccountDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.AccountDto>();
-            if (source is global::App.Account[] array)
-            {
-                var result = new global::App.AccountDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToAccountDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Account> list)
-            {
-                var result = new global::App.AccountDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToAccountDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Account> collection)
-            {
-                var result = new global::App.AccountDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToAccountDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.AccountDto>();
-                foreach (var item in source) result.Add(MapToAccountDto(item));
-                return result.ToArray();
-            }
+            public global::App.AccountDto Map(global::App.Account source) => MapToAccountDto(source);
         }
 
         private static void BeforeMap_Account_AccountDto(global::App.Account source, global::App.AccountDto destination)
