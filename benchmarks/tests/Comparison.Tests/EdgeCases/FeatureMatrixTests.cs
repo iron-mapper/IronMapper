@@ -138,9 +138,12 @@ public class FeatureMatrixTests
             sb.AppendLine($"- {note}");
 
         // The committed matrix comes from the reference runtime (.NET 10); other runtimes write theirs to raw/.
+        // IRONMAPPER_RESULTS_DIR (set by run-all.ps1 -ResultsDir, relative to benchmarks/) moves it with the rest of the run.
+        var results = Environment.GetEnvironmentVariable("IRONMAPPER_RESULTS_DIR");
+        var resultsDir = Path.Combine(FindBenchmarksDirectory(), string.IsNullOrWhiteSpace(results) ? "results" : results);
         var path = Environment.Version.Major == 10
-            ? Path.Combine(FindBenchmarksDirectory(), "results", FileName)
-            : Path.Combine(FindBenchmarksDirectory(), "results", "raw", $"feature-matrix.net{Environment.Version.Major}.0.md");
+            ? Path.Combine(resultsDir, FileName)
+            : Path.Combine(resultsDir, "raw", $"feature-matrix.net{Environment.Version.Major}.0.md");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // LF only and no BOM, like the script-generated reports (benchmarks/.gitattributes: results/** eol=lf).
         File.WriteAllText(path, sb.ToString().Replace("\r\n", "\n").Replace("\r", ""), new UTF8Encoding(false));
