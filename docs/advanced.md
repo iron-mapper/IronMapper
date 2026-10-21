@@ -55,6 +55,12 @@ read with a `for` loop and the result is created with the exact size; another `I
 `Count` and is read with `foreach`; any other sequence is read with `foreach` into a growing list. No LINQ, no
 delegates: each element is mapped by a direct call of `MapToUserDto`.
 
+From 1.2.0 these loops are written once per project, in two generic methods of `GeneratedMappers`
+(`MapElementsToList`, `MapElementsToArray`); `MapToUserDtoList` is a one-line call of them with a small private struct
+of the mapping whose `Map` calls `MapToUserDto`. Because the struct is a type argument, the runtime compiles a separate
+copy of the loop for each mapping, in which the call is direct and can be inlined: a collection method takes a few
+lines per mapping instead of a few dozen, without an indirect call per element. The checks, capacities and results are the same.
+
 ### Nested collection properties
 
 When a source property is a collection and the destination property is a collection with a **different**

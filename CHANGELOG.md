@@ -123,6 +123,13 @@
 - `MappingValidator` is marked `[RequiresUnreferencedCode]` (it reads properties and constructors through
   reflection): calling it in a trimmed or NativeAOT app reports `IL2026`. On .NET 8 and other targets that get the
   `netstandard` assemblies, the attributes are internal copies with the same full names, which the trimmer recognizes.
+- **Less generated code for collections.** The loops of `MapToXList`/`MapToXArray` are written once per project, in
+  two private generic methods of `GeneratedMappers` (`MapElementsToList`, `MapElementsToArray`). Each mapping's
+  `MapToXList`/`MapToXArray` is a one-line call of them with a private struct of the mapping that calls `MapToX`
+  directly: a struct type argument makes the runtime compile a separate, specialized copy for each mapping, so there is
+  no delegate or interface dispatch per element. Signatures, the `null` semantics, the fast paths for `T[]`, `List<T>`,
+  `ICollection<T>` and the capacities are the same (the existing collection tests pass unchanged). Nested collection
+  properties keep their per-property helpers.
 - **Shape of the generated code: no LINQ, no delegates.** Public signatures, the `null` semantics and the exceptions
   are the same (pinned by new tests before the change).
   - `MapToXList`/`MapToXArray` still take `IEnumerable<T>?`, but check the runtime type first: `T[]` and `List<T>` are

@@ -32,57 +32,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.TagDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.TagDto> MapToTagDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Tag>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.TagDto>();
-            if (source is global::App.Tag[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.TagDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToTagDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Tag> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.TagDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToTagDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Tag> collection
-                    ? new global::System.Collections.Generic.List<global::App.TagDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.TagDto>();
-                foreach (var item in source) result.Add(MapToTagDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Tag, global::App.TagDto, ElementMapper_Tag_TagDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.TagDto"/> and returns an array.</summary>
         public static global::App.TagDto[] MapToTagDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Tag>? source)
+            => MapElementsToArray<global::App.Tag, global::App.TagDto, ElementMapper_Tag_TagDto>(source);
+
+        private readonly struct ElementMapper_Tag_TagDto : IElementMapper<global::App.Tag, global::App.TagDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.TagDto>();
-            if (source is global::App.Tag[] array)
-            {
-                var result = new global::App.TagDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToTagDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Tag> list)
-            {
-                var result = new global::App.TagDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToTagDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Tag> collection)
-            {
-                var result = new global::App.TagDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToTagDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.TagDto>();
-                foreach (var item in source) result.Add(MapToTagDto(item));
-                return result.ToArray();
-            }
+            public global::App.TagDto Map(global::App.Tag source) => MapToTagDto(source);
         }
     }
 }

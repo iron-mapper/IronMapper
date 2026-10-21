@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.LedgerDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         internal static global::System.Collections.Generic.List<global::App.LedgerDto> MapToLedgerDtoList(this global::System.Collections.Generic.IEnumerable<global::App.Ledger>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.LedgerDto>();
-            if (source is global::App.Ledger[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LedgerDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToLedgerDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Ledger> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LedgerDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToLedgerDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.Ledger> collection
-                    ? new global::System.Collections.Generic.List<global::App.LedgerDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.LedgerDto>();
-                foreach (var item in source) result.Add(MapToLedgerDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.Ledger, global::App.LedgerDto, ElementMapper_Ledger_LedgerDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.LedgerDto"/> and returns an array.</summary>
         internal static global::App.LedgerDto[] MapToLedgerDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.Ledger>? source)
+            => MapElementsToArray<global::App.Ledger, global::App.LedgerDto, ElementMapper_Ledger_LedgerDto>(source);
+
+        private readonly struct ElementMapper_Ledger_LedgerDto : IElementMapper<global::App.Ledger, global::App.LedgerDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.LedgerDto>();
-            if (source is global::App.Ledger[] array)
-            {
-                var result = new global::App.LedgerDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToLedgerDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.Ledger> list)
-            {
-                var result = new global::App.LedgerDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToLedgerDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.Ledger> collection)
-            {
-                var result = new global::App.LedgerDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToLedgerDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.LedgerDto>();
-                foreach (var item in source) result.Add(MapToLedgerDto(item));
-                return result.ToArray();
-            }
+            public global::App.LedgerDto Map(global::App.Ledger source) => MapToLedgerDto(source);
         }
     }
 }

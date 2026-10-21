@@ -30,57 +30,15 @@ namespace IronMapper.Generated
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.Public.UserDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.Public.UserDto> MapToPublicUserDtoList(this global::System.Collections.Generic.IEnumerable<global::App.User>? source)
-        {
-            if (source is null) return new global::System.Collections.Generic.List<global::App.Public.UserDto>();
-            if (source is global::App.User[] array)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Public.UserDto>(array.Length);
-                for (var i = 0; i < array.Length; i++) result.Add(MapToPublicUserDto(array[i]));
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.User> list)
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Public.UserDto>(list.Count);
-                for (var i = 0; i < list.Count; i++) result.Add(MapToPublicUserDto(list[i]));
-                return result;
-            }
-            {
-                var result = source is global::System.Collections.Generic.ICollection<global::App.User> collection
-                    ? new global::System.Collections.Generic.List<global::App.Public.UserDto>(collection.Count)
-                    : new global::System.Collections.Generic.List<global::App.Public.UserDto>();
-                foreach (var item in source) result.Add(MapToPublicUserDto(item));
-                return result;
-            }
-        }
+            => MapElementsToList<global::App.User, global::App.Public.UserDto, ElementMapper_App_User_App_Public_UserDto>(source);
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.Public.UserDto"/> and returns an array.</summary>
         public static global::App.Public.UserDto[] MapToPublicUserDtoArray(this global::System.Collections.Generic.IEnumerable<global::App.User>? source)
+            => MapElementsToArray<global::App.User, global::App.Public.UserDto, ElementMapper_App_User_App_Public_UserDto>(source);
+
+        private readonly struct ElementMapper_App_User_App_Public_UserDto : IElementMapper<global::App.User, global::App.Public.UserDto>
         {
-            if (source is null) return global::System.Array.Empty<global::App.Public.UserDto>();
-            if (source is global::App.User[] array)
-            {
-                var result = new global::App.Public.UserDto[array.Length];
-                for (var i = 0; i < array.Length; i++) result[i] = MapToPublicUserDto(array[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.List<global::App.User> list)
-            {
-                var result = new global::App.Public.UserDto[list.Count];
-                for (var i = 0; i < list.Count; i++) result[i] = MapToPublicUserDto(list[i]);
-                return result;
-            }
-            if (source is global::System.Collections.Generic.ICollection<global::App.User> collection)
-            {
-                var result = new global::App.Public.UserDto[collection.Count];
-                var i = 0;
-                foreach (var item in collection) result[i++] = MapToPublicUserDto(item);
-                return result;
-            }
-            {
-                var result = new global::System.Collections.Generic.List<global::App.Public.UserDto>();
-                foreach (var item in source) result.Add(MapToPublicUserDto(item));
-                return result.ToArray();
-            }
+            public global::App.Public.UserDto Map(global::App.User source) => MapToPublicUserDto(source);
         }
     }
 }

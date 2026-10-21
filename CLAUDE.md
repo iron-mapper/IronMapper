@@ -91,8 +91,13 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   (`EmitClassDeclaration`) carries `[GeneratedCode("IronMapper", <generator informational version>)]` and, with
   `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` — once, for all partial parts. Snapshot tests scrub the
   version. Tests: `GeneratedMethodsTests`, `tests/IronMapper.Integration.Tests/TurnedOffOverloadsTests.cs`.
-- **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` check
-  for `T[]`, `List<T>`, `ICollection<T>` (loops with a known size). A nested collection property is mapped by a
+- **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` are
+  one-line calls of the generic `MapElementsToList`/`MapElementsToArray<TSource, TDest, TMapper>` declared once in
+  `GeneratedMappers.g.cs` (`EmitElementLoops`, only when a mapping has the overload), with a private
+  `readonly struct ElementMapper{scope} : IElementMapper<S, D>` per mapping whose `Map` calls `MapToX` (the private
+  interface is generated, not in the runtime package; a struct type argument gives a specialized, inlinable call; no
+  static abstract members). The generic methods check for `T[]`, `List<T>`, `ICollection<T>` (loops with a known size).
+  Nested collection helpers (`MapCollection_*`) stay per property. Tests: `ElementLoopTests`, `CollectionShapeTests`. A nested collection property is mapped by a
   private helper `MapCollection_{Prop}{scope}` chosen by the declared source type (`SymbolHelpers.GetCollectionSourceKind`);
   an `IEnumerable<T>` destination stays lazy (iterator). Null checks: `ArgumentNullException.ThrowIfNull` when the
   user's compilation has it, otherwise the throw helper in `GeneratedMappers.g.cs` (`[DoesNotReturn]` if available) —

@@ -1,3 +1,4 @@
+using System;
 using IronMapper.Generator.Analysis;
 using IronMapper.Generator.Analysis.Models;
 using IronMapper.Generator.CodeGeneration;
@@ -122,20 +123,22 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
-        // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache when a
-        // generated mapping uses one. The final Select yields a value tuple, so the declaration is re-emitted only when
-        // the accessibility or the need for the cache actually changes.
-        var classAccessibility = sourcePlan.Select(static (mappingPlan, _) =>
-                (Accessibility: GetClassAccessibility(mappingPlan), UsesConverterCache: UsesConverterCache(mappingPlan)))
+        // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache and the
+        // generic loops of MapToXList/MapToXArray when a generated mapping uses them. The final Select yields a value
+        // tuple, so the declaration is re-emitted only when one of these actually changes.
+        var classAccessibility = sourcePlan.Combine(methods).Select(static (item, _) =>
+                (Accessibility: GetClassAccessibility(item.Left), UsesConverterCache: UsesConverterCache(item.Left),
+                    UsesList: UsesOverload(item.Left, item.Right, static m => m.List),
+                    UsesArray: UsesOverload(item.Left, item.Right, static m => m.Array)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
 
         context.RegisterSourceOutput(classAccessibility.Combine(codeOptions.Combine(excludeFromCodeCoverage)), static (spc, item) =>
         {
             // No generated mappings: there is no class to declare, only the namespace (for the global using).
-            var ((accessibility, usesConverterCache), (options, exclude)) = item;
+            var ((accessibility, usesConverterCache, usesList, usesArray), (options, exclude)) = item;
             var (hintName, source) = accessibility is null
                 ? MapperCodeEmitter.EmitEmptyNamespace()
-                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, options);
+                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, usesList, usesArray, options);
             spc.AddSource(hintName, source);
         });
 
@@ -216,6 +219,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         }
 
         return result;
+    }
+
+    /// <summary>A generated mapping has the overload chosen by <paramref name="overload"/> (with its overrides applied).</summary>
+    private static bool UsesOverload(MappingPlan plan, GeneratedMethods methods, Func<GeneratedMethods, bool> overload)
+    {
+        foreach (var entry in plan.Entries)
+            if (entry.Emit && overload(methods.With(entry.MethodOverrides))) return true;
+        return false;
     }
 
     private static bool UsesConverterCache(MappingPlan plan)

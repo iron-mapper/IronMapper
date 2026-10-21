@@ -26,6 +26,18 @@ internal static class MapperCodeEmitter
     public const string ConverterCacheName = "ConverterCache";
 
     /// <summary>
+    /// Private interface of the element mappers (<see cref="ElementMapperName"/>), declared once in
+    /// <c>GeneratedMappers.g.cs</c>; generated rather than in the runtime package, so it adds no public API.
+    /// </summary>
+    public const string ElementMapperInterface = "IElementMapper";
+
+    /// <summary>Generic loop of every <c>MapToXList</c> (see <see cref="EmitElementLoops"/>); no <c>MapTo</c> prefix, so it never collides with a mapping method.</summary>
+    public const string ListHelperName = "MapElementsToList";
+
+    /// <summary>Generic loop of every <c>MapToXArray</c> (see <see cref="EmitElementLoops"/>).</summary>
+    public const string ArrayHelperName = "MapElementsToArray";
+
+    /// <summary>
     /// Generates the source text for a single mapping. The method name, the helper-name scope and the hint name
     /// come from <paramref name="entry"/> (see <see cref="Analysis.MappingPlanner"/>).
     /// </summary>
@@ -149,40 +161,24 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         // Methods 3 and 4: MapToDestTypeList / MapToDestTypeArray(this IEnumerable<SourceType>? source)
         // ------------------------------------------------------------------
-        // They call Method 1 by simple name, not as an extension method: a referenced assembly may expose the same
-        // MapToDestType(this SourceType) in IronMapper.Generated (CS0121 otherwise). The parameter stays
-        // IEnumerable<T>; arrays, List<T> and ICollection<T> get loops over the concrete type with a known size.
-        // Either can be turned off (IronMapperGenerateList/Array, GenerateList/Array = false); nothing else calls them:
-        // nested collection properties call Method 1 per element, and IMapper's registry then loops itself.
+        // The loops are written once, in the generic MapElementsToList/MapElementsToArray of GeneratedMappers.g.cs
+        // (EmitClassDeclaration): checks for T[], List<T>, ICollection<T> with the exact capacity. Each mapping passes a
+        // private struct whose Map calls Method 1 directly (by simple name: a referenced assembly may expose the same
+        // MapToDestType(this SourceType) in IronMapper.Generated, CS0121 otherwise). A struct type argument makes the
+        // JIT and NativeAOT compile a separate instance of the generic method for each mapping, in which Map is a direct,
+        // inlinable call: no delegate, no interface dispatch. The parameter stays IEnumerable<T>.
+        // Either method can be turned off (IronMapperGenerateList/Array, GenerateList/Array = false); nothing else calls
+        // them: nested collection properties call Method 1 per element, and IMapper's registry then loops itself.
         var list = $"global::System.Collections.Generic.List<{destFullName}>";
         var src = sourceFullName;
+        var elementMapper = ElementMapperName(scope);
+        var typeArguments = $"{src}, {destFullName}, {elementMapper}";
         if (methods.List)
         {
             sb.AppendLine();
             sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns a <see cref=\"global::System.Collections.Generic.List{{T}}\"/>.</summary>");
             sb.AppendLine($"        {accessibility} static {list} {methodName}List(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            if (source is null) return new {list}();");
-            sb.AppendLine($"            if (source is {src}[] array)");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {list}(array.Length);");
-            sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result.Add({methodName}(array[i]));");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {list}(list.Count);");
-            sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result.Add({methodName}(list[i]));");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = source is global::System.Collections.Generic.ICollection<{src}> collection");
-            sb.AppendLine($"                    ? new {list}(collection.Count)");
-            sb.AppendLine($"                    : new {list}();");
-            sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine("        }");
+            sb.AppendLine($"            => {ListHelperName}<{typeArguments}>(source);");
         }
 
         if (methods.Array)
@@ -190,32 +186,15 @@ internal static class MapperCodeEmitter
             sb.AppendLine();
             sb.AppendLine($"        /// <summary>Maps each element of <paramref name=\"source\"/> to <see cref=\"{EscapeXml(destFullName)}\"/> and returns an array.</summary>");
             sb.AppendLine($"        {accessibility} static {destFullName}[] {methodName}Array(this global::System.Collections.Generic.IEnumerable<{src}>? source)");
+            sb.AppendLine($"            => {ArrayHelperName}<{typeArguments}>(source);");
+        }
+
+        if (methods.List || methods.Array)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private readonly struct {elementMapper} : {ElementMapperInterface}<{src}, {destFullName}>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            if (source is null) return global::System.Array.Empty<{destFullName}>();");
-            sb.AppendLine($"            if (source is {src}[] array)");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "array.Length")};");
-            sb.AppendLine($"                for (var i = 0; i < array.Length; i++) result[i] = {methodName}(array[i]);");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine($"            if (source is global::System.Collections.Generic.List<{src}> list)");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "list.Count")};");
-            sb.AppendLine($"                for (var i = 0; i < list.Count; i++) result[i] = {methodName}(list[i]);");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine($"            if (source is global::System.Collections.Generic.ICollection<{src}> collection)");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {ArrayOf(destFullName, "collection.Count")};");
-            sb.AppendLine("                var i = 0;");
-            sb.AppendLine($"                foreach (var item in collection) result[i++] = {methodName}(item);");
-            sb.AppendLine("                return result;");
-            sb.AppendLine("            }");
-            sb.AppendLine("            {");
-            sb.AppendLine($"                var result = new {list}();");
-            sb.AppendLine($"                foreach (var item in source) result.Add({methodName}(item));");
-            sb.AppendLine("                return result.ToArray();");
-            sb.AppendLine("            }");
+            sb.AppendLine($"            public {destFullName} Map({src} source) => {methodName}(source);");
             sb.AppendLine("        }");
         }
 
@@ -290,6 +269,8 @@ internal static class MapperCodeEmitter
     /// <see cref="ConverterCacheName"/> once for all mapping files.</param>
     /// <param name="excludeFromCodeCoverage"><c>IronMapperExcludeFromCodeCoverage</c>: mark the class with
     /// <c>[ExcludeFromCodeCoverage]</c>.</param>
+    /// <param name="usesList">A generated mapping has <c>MapToXList</c>: declare <see cref="ListHelperName"/>.</param>
+    /// <param name="usesArray">A generated mapping has <c>MapToXArray</c>: declare <see cref="ArrayHelperName"/>.</param>
     /// <param name="options">When <c>ArgumentNullException.ThrowIfNull</c> is not available, the class also declares
     /// the throw helper used by the null checks of the generated methods.</param>
     /// <remarks>
@@ -297,7 +278,7 @@ internal static class MapperCodeEmitter
     /// registration for <c>IMapper</c> and <see cref="ConverterCacheName"/> (a second copy on another part would be CS0579).
     /// </remarks>
     public static (string hintName, string source) EmitClassDeclaration(string accessibility, bool usesConverterCache,
-        bool excludeFromCodeCoverage, GeneratedCodeOptions options)
+        bool excludeFromCodeCoverage, bool usesList, bool usesArray, GeneratedCodeOptions options)
     {
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -331,11 +312,100 @@ internal static class MapperCodeEmitter
             sb.AppendLine("            public static readonly TConverter Instance = new TConverter();");
             sb.AppendLine("        }");
         }
+        if (usesList || usesArray) EmitElementLoops(sb, usesList, usesArray, needsSeparator: !options.UseThrowIfNull || usesConverterCache);
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
         // Per-mapping hint names always contain "_MapTo", so this one cannot collide with them.
         return ("GeneratedMappers.g.cs", sb.ToString());
+    }
+
+    /// <summary>
+    /// The loops of every <c>MapToXList</c>/<c>MapToXArray</c> of the assembly, written once: generic over the element types
+    /// and a struct <c>TMapper</c> that maps one element (one per mapping, <see cref="ElementMapperName"/>). For a struct
+    /// type argument the runtime compiles a separate instance (no shared generic code), so <c>mapper.Map</c> is a direct
+    /// call that the JIT can inline, as in the per-mapping loops of 1.2.0 PR 4. Fast paths and capacities are the same:
+    /// <c>T[]</c> and <c>List&lt;T&gt;</c> with <c>for</c>, other <c>ICollection&lt;T&gt;</c> with the size from
+    /// <c>Count</c>, any other sequence with <c>foreach</c> (an array through a <c>List&lt;T&gt;</c>); a <see langword="null"/>
+    /// source gives an empty list or <c>Array.Empty</c>. No static abstract interface members: every target framework.
+    /// </summary>
+    private static void EmitElementLoops(StringBuilder sb, bool usesList, bool usesArray, bool needsSeparator)
+    {
+        const string enumerable = "global::System.Collections.Generic.IEnumerable<TSource>";
+        const string list = "global::System.Collections.Generic.List<TDest>";
+        const string constraint = "            where TMapper : struct, " + ElementMapperInterface + "<TSource, TDest>";
+
+        if (needsSeparator) sb.AppendLine();
+        sb.AppendLine("        /// <summary>Maps one element; implemented by a private struct of each mapping that has MapToXList or MapToXArray.</summary>");
+        sb.AppendLine($"        private interface {ElementMapperInterface}<TSource, TDest>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            TDest Map(TSource source);");
+        sb.AppendLine("        }");
+
+        if (usesList)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private static {list} {ListHelperName}<TSource, TDest, TMapper>({enumerable}? source)");
+            sb.AppendLine(constraint);
+            sb.AppendLine("        {");
+            sb.AppendLine("            var mapper = default(TMapper);");
+            sb.AppendLine($"            if (source is null) return new {list}();");
+            sb.AppendLine("            if (source is TSource[] array)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}(array.Length);");
+            sb.AppendLine("                for (var i = 0; i < array.Length; i++) result.Add(mapper.Map(array[i]));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            if (source is global::System.Collections.Generic.List<TSource> list)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}(list.Count);");
+            sb.AppendLine("                for (var i = 0; i < list.Count; i++) result.Add(mapper.Map(list[i]));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var result = source is global::System.Collections.Generic.ICollection<TSource> collection");
+            sb.AppendLine($"                    ? new {list}(collection.Count)");
+            sb.AppendLine($"                    : new {list}();");
+            sb.AppendLine("                foreach (var item in source) result.Add(mapper.Map(item));");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+        }
+
+        if (usesArray)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        private static TDest[] {ArrayHelperName}<TSource, TDest, TMapper>({enumerable}? source)");
+            sb.AppendLine(constraint);
+            sb.AppendLine("        {");
+            sb.AppendLine("            var mapper = default(TMapper);");
+            sb.AppendLine("            if (source is null) return global::System.Array.Empty<TDest>();");
+            sb.AppendLine("            if (source is TSource[] array)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var result = new TDest[array.Length];");
+            sb.AppendLine("                for (var i = 0; i < array.Length; i++) result[i] = mapper.Map(array[i]);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            if (source is global::System.Collections.Generic.List<TSource> list)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var result = new TDest[list.Count];");
+            sb.AppendLine("                for (var i = 0; i < list.Count; i++) result[i] = mapper.Map(list[i]);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            if (source is global::System.Collections.Generic.ICollection<TSource> collection)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var result = new TDest[collection.Count];");
+            sb.AppendLine("                var i = 0;");
+            sb.AppendLine("                foreach (var item in collection) result[i++] = mapper.Map(item);");
+            sb.AppendLine("                return result;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                var result = new {list}();");
+            sb.AppendLine("                foreach (var item in source) result.Add(mapper.Map(item));");
+            sb.AppendLine("                return result.ToArray();");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+        }
     }
 
     /// <summary>
@@ -485,6 +555,12 @@ internal static class MapperCodeEmitter
     /// <c>IMapper</c> calls. The helper scope makes it unique in the class, like the hook and collection helpers.
     /// </summary>
     private static string PrivateInPlaceName(string scope) => $"MapInto{scope}";
+
+    /// <summary>
+    /// The private struct of a mapping that maps one element for <see cref="ListHelperName"/>/<see cref="ArrayHelperName"/>;
+    /// the helper scope makes it unique in the class.
+    /// </summary>
+    private static string ElementMapperName(string scope) => $"ElementMapper{scope}";
 
     /// <summary>
     /// Version in <c>[GeneratedCode("IronMapper", version)]</c>: the informational version of the generator, which is the
