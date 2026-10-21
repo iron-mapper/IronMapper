@@ -79,24 +79,33 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         var codeOptions = context.CompilationProvider
             .Select(static (compilation, _) => GeneratedCodeOptions.From(compilation))
             .WithTrackingName(TrackingNames.CodeOptions);
-        var planAndOptions = sourcePlan.Combine(codeOptions);
+
+        // MSBuild properties (build_property.*). Each output takes only the part it uses, so changing one property
+        // re-emits only what depends on it: the overloads (IronMapperGenerate*) the mapping files and the registration,
+        // IronMapperExcludeFromCodeCoverage the class declaration, IronMapperReportUnmappedInProfiles the diagnostics.
+        var settings = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
+            .WithTrackingName(TrackingNames.Settings);
+        var methods = settings.Select(static (value, _) => value.Methods)
+            .WithTrackingName(TrackingNames.MethodSettings);
+        var excludeFromCodeCoverage = settings.Select(static (value, _) => value.ExcludeFromCodeCoverage)
+            .WithTrackingName(TrackingNames.CoverageSettings);
+
+        var planAndOptions = sourcePlan.Combine(codeOptions.Combine(methods));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromMapTo, TrackingNames.MapToSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromMapFrom, TrackingNames.MapFromSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromProfiles, TrackingNames.ProfilesSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
 
         // Diagnostics of all mappings and of the plan, as one value (compared by value: cached until a diagnostic or its
         // location changes). The output resolves the locations in the current compilation's syntax trees: a location
         // in a tree is what the IDE underlines, what .editorconfig severities apply to and what code fixes need. That
         // output therefore runs for every compilation; it only reports, it generates no code.
-        var settings = context.AnalyzerConfigOptionsProvider
-            .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
-            .WithTrackingName(TrackingNames.Settings);
         var diagnostics = all.Combine(plan).Combine(settings)
             .Select(static (item, _) => CollectDiagnostics(
                 item.Left.Left.Left.Left, item.Left.Left.Left.Right, item.Left.Left.Right, item.Left.Right, item.Right))
@@ -120,19 +129,20 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 (Accessibility: GetClassAccessibility(mappingPlan), UsesConverterCache: UsesConverterCache(mappingPlan)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
 
-        context.RegisterSourceOutput(classAccessibility.Combine(codeOptions), static (spc, item) =>
+        context.RegisterSourceOutput(classAccessibility.Combine(codeOptions.Combine(excludeFromCodeCoverage)), static (spc, item) =>
         {
             // No generated mappings: there is no class to declare, only the namespace (for the global using).
-            var ((accessibility, usesConverterCache), options) = item;
+            var ((accessibility, usesConverterCache), (options, exclude)) = item;
             var (hintName, source) = accessibility is null
                 ? MapperCodeEmitter.EmitEmptyNamespace()
-                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, options);
+                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, options);
             spc.AddSource(hintName, source);
         });
 
         // Registration of the generated mappings for IMapper (module initializer → MapperRegistry). Re-emitted only
-        // when the set of generated mappings, their method names or the options change.
-        var registrations = sourcePlan.Select(static (mappingPlan, _) => GetRegistrations(mappingPlan))
+        // when the set of generated mappings, their method names, their overloads or the options change.
+        var registrations = sourcePlan.Combine(methods)
+            .Select(static (item, _) => GetRegistrations(item.Left, item.Right))
             .WithTrackingName(TrackingNames.Registrations);
 
         context.RegisterSourceOutput(registrations.Combine(codeOptions), static (spc, item) =>
@@ -182,12 +192,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         }
     }
 
-    private static EquatableArray<MappingRegistration> GetRegistrations(MappingPlan plan)
+    private static EquatableArray<MappingRegistration> GetRegistrations(MappingPlan plan, GeneratedMethods methods)
     {
         var builder = ImmutableArray.CreateBuilder<MappingRegistration>();
         foreach (var entry in plan.Entries)
         {
-            if (entry.Emit) builder.Add(new MappingRegistration(entry.SourceFullName, entry.DestFullName, entry.MethodName));
+            if (entry.Emit)
+                builder.Add(new MappingRegistration(entry.SourceFullName, entry.DestFullName, entry.MethodName,
+                    entry.HelperScope, methods.With(entry.MethodOverrides)));
         }
 
         return builder.ToImmutable();
@@ -244,10 +256,11 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// collision) produce no source. Diagnostics are reported by their own output (see <see cref="CollectDiagnostics"/>).
     /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor, MappingPlan plan,
-        GeneratedCodeOptions options)
+        GeneratedCodeOptions options, GeneratedMethods methods)
     {
         if (descriptor.SourceTypeName.Length == 0 || plan.Find(descriptor.Origin) is not { Emit: true } entry) return;
 
-        spc.AddSource(entry.HintName, MapperCodeEmitter.Emit(descriptor, entry, plan, options));
+        spc.AddSource(entry.HintName,
+            MapperCodeEmitter.Emit(descriptor, entry, plan, options, methods.With(entry.MethodOverrides)));
     }
 }

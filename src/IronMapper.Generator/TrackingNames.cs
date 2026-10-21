@@ -22,4 +22,6 @@ internal static class TrackingNames
     public const string ProfilesSource = nameof(ProfilesSource);
     public const string Settings = nameof(Settings);
     public const string Diagnostics = nameof(Diagnostics);
+    public const string MethodSettings = nameof(MethodSettings);
+    public const string CoverageSettings = nameof(CoverageSettings);
 }

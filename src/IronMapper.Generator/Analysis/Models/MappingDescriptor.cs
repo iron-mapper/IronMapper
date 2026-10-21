@@ -127,6 +127,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public LocationInfo? OriginLocation { get; }
 
     /// <summary>
+    /// Overloads set for this mapping (<c>GenerateInPlace</c>/<c>GenerateList</c>/<c>GenerateArray</c>,
+    /// <c>GenerateMethods(...)</c>); unset values come from the assembly (<see cref="GeneratorSettings.Methods"/>).
+    /// </summary>
+    public GeneratedMethodOverrides MethodOverrides { get; }
+
+    /// <summary>
     /// The generated code of this mapping uses <c>ConverterCache&lt;T&gt;</c> (declared once in <c>GeneratedMappers.g.cs</c>).
     /// </summary>
     public bool UsesConverterCache
@@ -168,6 +174,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="destTypeArgsFull">Type-argument name part by full names (see <see cref="DestTypeArgsFull"/>).</param>
     /// <param name="wholeObjectConverterIsCached">Whether one instance of <paramref name="wholeObjectConverterType"/> is reused.</param>
     /// <param name="originLocation">Where the mapping is defined (see <see cref="OriginLocation"/>).</param>
+    /// <param name="methodOverrides">Overloads set for this mapping (see <see cref="MethodOverrides"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -192,7 +199,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string destTypeArgsShort = "",
         string destTypeArgsFull = "",
         bool wholeObjectConverterIsCached = false,
-        LocationInfo? originLocation = null)
+        LocationInfo? originLocation = null,
+        GeneratedMethodOverrides methodOverrides = default)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -205,6 +213,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WholeObjectConverterType = wholeObjectConverterType;
         WholeObjectConverterIsCached = wholeObjectConverterIsCached;
         OriginLocation = originLocation;
+        MethodOverrides = methodOverrides;
         WholeObjectLambdaBody = wholeObjectLambdaBody;
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
@@ -232,7 +241,18 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
-                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation);
+                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation,
+                MethodOverrides);
+
+    /// <summary>A copy with the overloads set for this mapping (see <see cref="MethodOverrides"/>).</summary>
+    public MappingDescriptor WithMethodOverrides(GeneratedMethodOverrides overrides)
+        => SourceTypeName.Length == 0 || overrides.Equals(MethodOverrides)
+            ? this
+            : new(SourceTypeName, SourceNamespace, DestTypeName, DestNamespace, PropertyMappings, Diagnostics,
+                HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
+                BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
+                MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
+                DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides);
 
     /// <summary>
     /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
@@ -246,7 +266,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 EquatableArray<DiagnosticInfo>.Empty, HasCustomConverter, WhenConditionBody, WholeObjectConverterType,
                 WholeObjectLambdaBody, BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName,
                 DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
-                DestTypeArgsFull, WholeObjectConverterIsCached);
+                DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -274,7 +294,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestQualifier != other.DestQualifier
             || DestTypeArgsShort != other.DestTypeArgsShort
             || DestTypeArgsFull != other.DestTypeArgsFull
-            || !Nullable.Equals(OriginLocation, other.OriginLocation))
+            || !Nullable.Equals(OriginLocation, other.OriginLocation)
+            || !MethodOverrides.Equals(other.MethodOverrides))
             return false;
 
         // Diagnostics count too: an edit that only adds or removes a diagnostic must reach the output.
@@ -311,6 +332,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + DestTypeArgsShort.GetHashCode();
         hash = hash * 31 + DestTypeArgsFull.GetHashCode();
         hash = hash * 31 + OriginLocation.GetHashCode();
+        hash = hash * 31 + MethodOverrides.GetHashCode();
         hash = hash * 31 + PropertyMappings.GetHashCode();
         hash = hash * 31 + Diagnostics.GetHashCode();
         hash = hash * 31 + ValueTransformers.GetHashCode();

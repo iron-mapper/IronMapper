@@ -188,6 +188,14 @@ entity.MapToUserDto(existingDto);                  // updates an existing object
 `List<T>` properties (`List<Comment>` → `List<CommentDto>`) are mapped automatically when a mapping exists for the
 element types.
 
+**Code coverage and unused overloads.** From 1.2.0 the generated class is marked `[GeneratedCode]`, and
+`<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` adds `[ExcludeFromCodeCoverage]`, so unused
+generated methods (e.g. `MapToXList` that nothing calls) no longer lower the coverage of your project. Overloads you do
+not use can be turned off for the project (`IronMapperGenerateInPlace`, `IronMapperGenerateList`,
+`IronMapperGenerateArray`) or for one mapping (`GenerateList = false` on `[MapTo]`, `.GenerateMethods(list: false)` in a
+profile); `IMapper` keeps mapping lists, arrays and in-place
+([details](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md#generated-overloads-and-code-coverage)).
+
 **Dependency injection (optional)**
 
 ```bash

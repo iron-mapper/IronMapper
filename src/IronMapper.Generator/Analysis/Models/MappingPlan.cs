@@ -111,9 +111,13 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <summary>The generated code of the mapping uses <c>ConverterCache&lt;T&gt;</c>, as in <see cref="MappingDescriptor.UsesConverterCache"/>.</summary>
     public bool UsesConverterCache { get; }
 
+    /// <summary>Overloads set for the mapping, as in <see cref="MappingDescriptor.MethodOverrides"/>.</summary>
+    public GeneratedMethodOverrides MethodOverrides { get; }
+
     /// <summary>Initialises a new <see cref="MappingPlanEntry"/>.</summary>
     public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
-        string methodAccessibility, string sourceFullName, string destFullName, bool usesConverterCache = false)
+        string methodAccessibility, string sourceFullName, string destFullName, bool usesConverterCache = false,
+        GeneratedMethodOverrides methodOverrides = default)
     {
         Origin = origin;
         PairKey = pairKey;
@@ -125,6 +129,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         SourceFullName = sourceFullName;
         DestFullName = destFullName;
         UsesConverterCache = usesConverterCache;
+        MethodOverrides = methodOverrides;
     }
 
     /// <inheritdoc/>
@@ -139,7 +144,8 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && MethodAccessibility == other.MethodAccessibility
            && SourceFullName == other.SourceFullName
            && DestFullName == other.DestFullName
-           && UsesConverterCache == other.UsesConverterCache;
+           && UsesConverterCache == other.UsesConverterCache
+           && MethodOverrides.Equals(other.MethodOverrides);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -158,6 +164,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + SourceFullName.GetHashCode();
         hash = hash * 31 + DestFullName.GetHashCode();
         hash = hash * 31 + UsesConverterCache.GetHashCode();
+        hash = hash * 31 + MethodOverrides.GetHashCode();
         return hash;
     }
 }

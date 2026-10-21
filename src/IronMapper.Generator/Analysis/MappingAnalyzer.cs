@@ -53,7 +53,7 @@ internal static class MappingAnalyzer
                 $"[MapTo] on '{sourceSymbol.ToDisplayString()}'",
                 originRank: 2,
                 SymbolHelpers.GetDestinationNaming(destSymbol),
-                location);
+                location).WithMethodOverrides(GetMethodOverrides(attr));
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
@@ -88,7 +88,7 @@ internal static class MappingAnalyzer
                 $"[MapFrom] on '{destSymbol.ToDisplayString()}'",
                 originRank: 3,
                 SymbolHelpers.GetDestinationNaming(destSymbol),
-                location);
+                location).WithMethodOverrides(GetMethodOverrides(attr));
             if (descriptor is not null)
                 builder.Add(descriptor);
         }
@@ -122,6 +122,27 @@ internal static class MappingAnalyzer
             DiagnosticDescriptors.UnsupportedAttributeType, attribute, type.ToDisplayString(), annotated.ToDisplayString(), problem)
             .WithLocation(location))));
         return null;
+    }
+
+    /// <summary>
+    /// <c>GenerateInPlace</c>/<c>GenerateList</c>/<c>GenerateArray</c> set in the attribute usage; a property that is not
+    /// set stays <see langword="null"/>, so the value for the assembly applies (the property's getter cannot tell).
+    /// </summary>
+    private static GeneratedMethodOverrides GetMethodOverrides(AttributeData attr)
+    {
+        bool? inPlace = null, list = null, array = null;
+        foreach (var argument in attr.NamedArguments)
+        {
+            if (argument.Value.Value is not bool value) continue;
+            switch (argument.Key)
+            {
+                case "GenerateInPlace": inPlace = value; break;
+                case "GenerateList": list = value; break;
+                case "GenerateArray": array = value; break;
+            }
+        }
+
+        return new GeneratedMethodOverrides(inPlace, list, array);
     }
 
     private static string CreateAttributeOrigin(string attribute, INamedTypeSymbol source, INamedTypeSymbol dest, int index)

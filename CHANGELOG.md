@@ -4,6 +4,21 @@
 
 ### Added
 
+- **Optional overloads can be turned off.** For the project with the MSBuild properties `IronMapperGenerateInPlace`,
+  `IronMapperGenerateList`, `IronMapperGenerateArray` (`true` by default), for one mapping with `GenerateInPlace`,
+  `GenerateList`, `GenerateArray` on `[MapTo]`/`[MapFrom]` or `.GenerateMethods(inPlace, list, array)` in a profile
+  (overrides the project value; not applied to the reverse mapping of `ReverseMap()`). `MapToX(source)` is always
+  generated. `IMapper` keeps mapping a single object, `List<T>`, `T[]`, `MapCollection` and in-place for such a mapping,
+  with the same results: without `MapToXList`/`MapToXArray` the registry fills the collection itself; without the public
+  in-place overload its body stays as a private method for `IMapper` (so turning in-place off removes the public method,
+  not the code). Names of the remaining methods and the collision rules do not change. See
+  [Generated overloads and code coverage](docs/configuration.md#generated-overloads-and-code-coverage).
+- **`[GeneratedCode("IronMapper", "<version>")]` on the generated class**, and with
+  `<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` also `[ExcludeFromCodeCoverage]`: unused
+  generated methods (e.g. `MapToXList` that nothing calls) no longer lower the coverage of a project. Declared once on
+  `GeneratedMappers`, so they cover the mapping methods, the registration for `IMapper` and the converter cache.
+- Diagnostic `IM0016` (warning): an argument of `GenerateMethods(...)` is not a constant; the project value applies for
+  that overload.
 - **Diagnostics point to your code.** Every `IMxxxx` diagnostic has a source location: the destination property or the
   `[MapTo]`/`[MapFrom]` attribute (IM0001), the `[MapProperty]` attribute (IM0006), the `CreateMap` or `ReverseMap()`
   call, the profile name (IM0005), the member in a profile lambda (IM0011/IM0012), the converter type (IM0015), the
@@ -67,6 +82,8 @@
 
 ### Changed
 
+- `MapperRegistry.Register<TSource, TDest>`: `mapList` and `mapArray` may be `null` (the generated registration passes
+  `null` for a turned-off `MapToXList`/`MapToXArray`); the registry then maps the elements with `map`.
 - With implicit usings every file imports `IronMapper.Generated`. A file that imports another extension method with
   the same name and parameter type as a generated one (e.g. a hand-written `MapToUserDto`) now gets `CS0121` at
   that call; remove or rename the method, or set `IronMapperImplicitUsings` to `false`.
@@ -180,6 +197,11 @@ Generated code without LINQ and delegates (see Changed):
 
 ### Build
 
+- Tests of the optional overloads: every combination of the three, set by MSBuild property, attribute and profile, run
+  through the generated method and the registry (`GeneratedMethodsTests`); `IMapper` with the overloads turned off gives
+  the same results as with all of them (`TurnedOffOverloadsTests`). The tests that use the process-wide registry run in
+  one xUnit collection (one of them turns the registration's feature switch off). `eng/verify-package.ps1` checks the
+  overloads and the class attributes against the packed package, with the defaults and with everything turned off.
 - `tests/IronMapper.CodeFixes.Tests` (in `IronMapper.slnx`): code fix tests with `Microsoft.CodeAnalysis.Testing`
   (`CSharpCodeFixTest` with the generator attached). `eng/verify-package.ps1` builds a profile with an unmapped
   property against the packed package: without the property it builds; with `IronMapperReportUnmappedInProfiles=true`

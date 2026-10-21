@@ -150,7 +150,8 @@ internal static class MappingPlanner
                 hintName = $"{hintBase}_{n}.g.cs";
 
             entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodNames[mapping.Origin], hintName, helperScope,
-                mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!, mapping.UsesConverterCache));
+                mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!, mapping.UsesConverterCache,
+                mapping.MethodOverrides));
         }
 
         return new MappingPlan(

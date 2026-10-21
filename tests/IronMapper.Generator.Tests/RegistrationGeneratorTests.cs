@@ -9,6 +9,7 @@ namespace IronMapper.Generator.Tests;
 /// The registration of the generated mappings for <c>IMapper</c> (<c>GeneratedMappers.Registration.g.cs</c>,
 /// plan item 1.3): module initializer, C# 8, assemblies without mappings.
 /// </summary>
+[Collection(RegistryCollection.Name)]
 public class RegistrationGeneratorTests
 {
     private const string Source = """
@@ -56,7 +57,7 @@ public class RegistrationGeneratorTests
     [Fact]
     public void FeatureSwitchOff_ModuleInitializerRegistersNothing()
     {
-        // Process-wide: the other tests of this class (the only ones that need the registration) do not run in parallel
+        // Process-wide: the tests that need the registration are in RegistryCollection and do not run in parallel
         // with it. The module initializer of the compiled assembly runs when Program.Run is called.
         AppContext.SetSwitch(IronMapper.Registration.MapperRegistry.FeatureSwitchName, false);
         try

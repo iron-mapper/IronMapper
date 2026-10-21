@@ -191,4 +191,17 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         description: "Generated code creates converters itself; it does not resolve them from dependency injection. Use a non-abstract class or a struct that the generated class can access, with a public or internal parameterless constructor. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0016 — An argument of <c>GenerateMethods(...)</c> in a profile is not a constant, so the generator cannot read
+    /// it; the assembly value applies for that overload.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NonConstantGenerateMethodsArgument = new(
+        id: "IM0016",
+        title: "GenerateMethods argument is not a constant",
+        messageFormat: "Argument '{0}' of GenerateMethods in MappingProfile '{1}' is not a constant ('{2}'); the generator reads it at compile time, so the value for the assembly applies. Use true, false or null.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "GenerateMethods(inPlace, list, array) is read by the source generator, not executed. Pass literal true, false or null (or a constant); null or an omitted argument uses the MSBuild property IronMapperGenerateInPlace/List/Array.");
 }

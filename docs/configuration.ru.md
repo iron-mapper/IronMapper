@@ -185,6 +185,77 @@ trimming или NativeAOT эта регистрация удерживала б�
 
 ---
 
+## Генерируемые перегрузки и покрытие кода
+
+Для каждого маппинга генератор создаёт `MapToX(source)` и по умолчанию ещё три перегрузки: in-place
+`MapToX(source, destination)`, `MapToXList(...)` и `MapToXArray(...)`. Необязательные можно отключить (начиная с 1.2.0),
+если проект их не использует: меньше сгенерированного кода, меньше методов в IntelliSense и нет непокрытых методов в
+отчётах о покрытии. По умолчанию ничего не меняется.
+
+**Для всего проекта** (MSBuild-свойства, по умолчанию `true`; отключает только `false` без учёта регистра):
+
+```xml
+<PropertyGroup>
+  <IronMapperGenerateInPlace>false</IronMapperGenerateInPlace>   <!-- MapToX(source, destination) -->
+  <IronMapperGenerateList>false</IronMapperGenerateList>         <!-- MapToXList -->
+  <IronMapperGenerateArray>false</IronMapperGenerateArray>       <!-- MapToXArray -->
+</PropertyGroup>
+```
+
+**Для одного маппинга** (переопределяет значение проекта в обе стороны):
+
+```csharp
+[MapTo(typeof(UserDto), GenerateList = false, GenerateArray = false)]
+public class User { ... }
+
+[MapFrom(typeof(Order), GenerateInPlace = true)]   // снова включено, хотя IronMapperGenerateInPlace = false
+public class OrderDto { ... }
+
+public class OrderProfile : MappingProfile
+{
+    public OrderProfile()
+    {
+        CreateMap<Order, OrderSummaryDto>().GenerateMethods(inPlace: false, list: false);
+    }
+}
+```
+
+- Не заданное свойство атрибута берёт значение проекта. Геттер `GenerateInPlace`/`GenerateList`/`GenerateArray`
+  возвращает `false`, если свойство не задано (это и показывает IntelliSense): это ограничение атрибутов C#, а не
+  поведение; генератор смотрит, задано ли свойство.
+- `GenerateMethods(inPlace, list, array)` — extension-метод в `IronMapper.Configuration`; `null` или пропущенный аргумент
+  берёт значение проекта. Аргументы должны быть константами (`true`, `false`, `null`, `const`): генератор читает их при
+  компиляции; на другое выражение — предупреждение
+  [`IM0016`](diagnostics.ru.md#im0016--аргумент-generatemethods-не-константа), и действует значение проекта. Действует на
+  этот маппинг, а не на обратный маппинг `ReverseMap()`.
+- `MapToX(source)` генерируется всегда: вложенные свойства-коллекции вызывают его для каждого элемента, поэтому они
+  работают и без `MapToXList`/`MapToXArray` у маппинга элементов.
+- Отключение перегрузок не меняет имена оставшихся методов и правила коллизий
+  ([Имена методов и коллизии](#имена-методов-и-коллизии)).
+- **`IMapper`** по-прежнему маппит всё: `Map<UserDto>(user)`, `Map<List<UserDto>>(users)`, `Map<UserDto[]>(users)`,
+  `MapCollection` и `Map(source, destination)` работают для маппинга без публичных перегрузок и дают те же результаты.
+  Без `MapToXList`/`MapToXArray` реестр сам заполняет список или массив, вызывая `MapToX` для каждого элемента через
+  делегат (`IMapper` и так вызывает делегаты; extension-методы это не затрагивает).
+- **In-place:** отключение убирает только публичный метод. Его тело остаётся закрытым методом, который `IMapper` вызывает
+  для `Map(source, destination)`, поэтому на объём кода и покрытие это почти не влияет. Для покрытия используйте
+  `IronMapperExcludeFromCodeCoverage` (ниже).
+
+### Атрибуты сгенерированного класса
+
+`GeneratedMappers` помечен `[GeneratedCode("IronMapper", "<версия пакета>")]`, поэтому анализаторы и инструменты считают
+его сгенерированным. С
+
+```xml
+<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>
+```
+
+он помечается ещё и `[ExcludeFromCodeCoverage]` (coverlet, покрытие Visual Studio и другие его пропускают), по умолчанию
+`false`. Оба атрибута объявлены один раз на классе и действуют на все его части: методы маппинга, регистрацию для
+`IMapper` и кэш конвертеров. Они выпускаются, только если в целевой платформе они есть (оба есть в .NET Standard 2.0 и
+новее). Код маппинга по-прежнему проверяется вашими тестами: атрибут только убирает его из процента покрытия.
+
+---
+
 ## Несопоставленные свойства в профилях
 
 Для `[MapTo]`/`[MapFrom]` несопоставленное свойство destination даёт предупреждение

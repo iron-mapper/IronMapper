@@ -13,6 +13,7 @@ namespace IronMapper.Generator.Tests;
 /// (internal unless at least one generated method is public), and two projects that both use IronMapper,
 /// one referencing the other, build with <c>TreatWarningsAsErrors</c>.
 /// </summary>
+[Collection(RegistryCollection.Name)]
 public class GeneratedClassVisibilityTests
 {
     private const string ClassName = "IronMapper.Generated.GeneratedMappers";

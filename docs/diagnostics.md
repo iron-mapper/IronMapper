@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0015`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 1.2.0):
@@ -24,6 +24,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0015`. 
 | IM0013 | Warning | Mapping method name qualified to avoid a collision | Yes — attributes and profiles |
 | IM0014 | Error | Mapping method name collision cannot be resolved | Yes — attributes and profiles |
 | IM0015 | Error | Converter cannot be created by generated code | Yes — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
+| IM0016 | Warning | `GenerateMethods` argument is not a constant | Yes — profiles |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -329,3 +330,22 @@ struct the generated class can access. A converter that needs services from DI c
 `AddConverter<T>()` does not change how converters are created (see
 [Converter instances](configuration.md#converter-instances)). Only the affected mapping is skipped; other mappings are
 generated. A property marked `[Ignore]` does not use its converter, so its converter is not checked.
+
+---
+
+## IM0016 — GenerateMethods argument is not a constant
+
+**Severity:** Warning
+
+**Points to:** the argument.
+
+**Message:** `Argument '{0}' of GenerateMethods in MappingProfile '{1}' is not a constant ('{2}'); the generator reads it at compile time, so the value for the assembly applies. Use true, false or null.`
+
+**Cause:** an argument of `GenerateMethods(inPlace, list, array)` in a profile is a variable, a method call or another
+expression that is not a compile-time constant. Profiles are read by the source generator, not executed, so the value is
+unknown when the code is generated.
+
+**Behavior:** that overload uses the project value (`IronMapperGenerateInPlace`/`List`/`Array`); the mapping and the other
+arguments are generated as written. See [Generated overloads](configuration.md#generated-overloads-and-code-coverage).
+
+**Fix:** pass `true`, `false` or `null` (or a `const`).

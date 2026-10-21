@@ -105,18 +105,20 @@ public static class MapperRegistry
     /// <typeparam name="TDest">The destination type.</typeparam>
     /// <param name="map">Calls <c>MapToX(source)</c>.</param>
     /// <param name="mapInto">Calls <c>MapToX(source, destination)</c>.</param>
-    /// <param name="mapList">Calls <c>MapToXList(source)</c>.</param>
-    /// <param name="mapArray">Calls <c>MapToXArray(source)</c>.</param>
+    /// <param name="mapList">Calls <c>MapToXList(source)</c>; <see langword="null"/> when the method is not generated
+    /// (<c>IronMapperGenerateList</c>/<c>GenerateList = false</c>): the registry then maps the elements with
+    /// <paramref name="map"/>.</param>
+    /// <param name="mapArray">Calls <c>MapToXArray(source)</c>; <see langword="null"/> when the method is not generated
+    /// (<c>IronMapperGenerateArray</c>/<c>GenerateArray = false</c>): the registry then maps the elements with
+    /// <paramref name="map"/>.</param>
     public static void Register<TSource, TDest>(
         Func<TSource, TDest> map,
         Action<TSource, TDest> mapInto,
-        Func<IEnumerable<TSource>?, List<TDest>> mapList,
-        Func<IEnumerable<TSource>?, TDest[]> mapArray)
+        Func<IEnumerable<TSource>?, List<TDest>>? mapList,
+        Func<IEnumerable<TSource>?, TDest[]>? mapArray)
     {
         if (map is null) throw new ArgumentNullException(nameof(map));
         if (mapInto is null) throw new ArgumentNullException(nameof(mapInto));
-        if (mapList is null) throw new ArgumentNullException(nameof(mapList));
-        if (mapArray is null) throw new ArgumentNullException(nameof(mapArray));
 
         lock (s_lock)
         {
