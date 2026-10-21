@@ -66,10 +66,10 @@ internal sealed class ConverterAnalyzer
 
     /// <summary>
     /// Checks <paramref name="converter"/>, used as described by <paramref name="usage"/> (e.g. <c>[MapConverter] on
-    /// 'App.Order.Price'</c>). Returns <see langword="null"/> when the mapping cannot use it (see
+    /// 'App.Order.Price'</c>); IM0015 points to <paramref name="location"/> (the converter type in the user's code). Returns <see langword="null"/> when the mapping cannot use it (see
     /// <see cref="HasUnresolvedType"/> and <see cref="Diagnostics"/>).
     /// </summary>
-    public ConverterUse? Add(ITypeSymbol converter, string usage, CancellationToken ct)
+    public ConverterUse? Add(ITypeSymbol converter, string usage, LocationInfo? location, CancellationToken ct)
     {
         // The type arguments of typeof(Converter<>) are error types: that case is IM0015, not an unresolved type.
         if (converter is not INamedTypeSymbol { IsUnboundGenericType: true } && SymbolHelpers.ContainsErrorType(converter))
@@ -83,7 +83,8 @@ internal sealed class ConverterAnalyzer
         {
             var name = converter.ToDisplayString();
             (_diagnostics ??= new List<DiagnosticInfo>()).Add(new DiagnosticInfo(
-                DiagnosticDescriptors.ConverterCannotBeCreated, _sourceDisplay, _destDisplay, name, usage, problem));
+                DiagnosticDescriptors.ConverterCannotBeCreated, _sourceDisplay, _destDisplay, name, usage, problem)
+                .WithLocation(location));
             return null;
         }
 

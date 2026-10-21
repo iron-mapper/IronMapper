@@ -16,7 +16,7 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Add a matching property to the source type, use [MapProperty] to map from a differently-named property, or use [Ignore] on the destination property to suppress this warning.");
+        description: "Add a matching property to the source type, use [MapProperty] to map from a differently-named property, or use [Ignore] on the destination property to suppress this warning. For profile (CreateMap) mappings it is reported only with <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>; there use ForMember(d => d.X, o => o.Ignore()) or MapFrom.");
 
     /// <summary>
     /// IM0002 — Source and destination property types are incompatible and no converter is specified.

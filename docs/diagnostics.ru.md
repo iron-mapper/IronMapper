@@ -9,7 +9,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 
 | ID | Уровень | Название | Выдаётся? |
 |---|---|---|---|
-| IM0001 | Warning | Несопоставленное свойство destination | Да — только `[MapTo]`/`[MapFrom]` |
+| IM0001 | Warning | Несопоставленное свойство destination | Да — `[MapTo]`/`[MapFrom]`; профили с `IronMapperReportUnmappedInProfiles` |
 | IM0002 | Error | Несовместимые типы свойств | **Пока не выдаётся** |
 | IM0003 | Error | Тип в `[MapTo]`/`[MapFrom]` нельзя смапить | Да — открытые generic-типы и массивы; неразрешённый тип сообщает только компилятор |
 | IM0004 | Error | Обнаружен циклический маппинг | **Пока не выдаётся** |
@@ -25,8 +25,16 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0014 | Error | Коллизию имён методов маппинга нельзя устранить | Да — атрибуты и профили |
 | IM0015 | Error | Converter нельзя создать в сгенерированном коде | Да — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
 
-Сейчас все диагностики выдаются **без указания места в исходном коде**: IDE показывает их в списке ошибок,
-но не указывает строку в вашем коде.
+Каждая диагностика указывает на место в вашем коде (**Куда указывает** ниже): IDE подчёркивает его, в выводе сборки
+видны файл и строка. Уровень задаётся стандартно, в `.editorconfig` (или `.globalconfig`):
+
+```ini
+[*.cs]
+dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
+```
+
+`<NoWarn>` и `<WarningsAsErrors>` в файле проекта тоже работают. До 1.1.4 включительно все диагностики выдавались без
+места в коде (только в списке ошибок), поэтому ни уровни `.editorconfig` для файлов, ни code fix'ы к ним не применялись.
 
 Если для проблемы нет работающей диагностики (например, несовпадение типов свойств), сборка падает
 с обычной ошибкой C# (`CS0029`, `CS7036`, …) внутри сгенерированного файла `*.g.cs`.
@@ -41,19 +49,30 @@ Source generator IronMapper выдаёт диагностики с иденти�
 
 **Уровень:** Warning
 
+**Куда указывает:** свойство destination (его имя), если оно объявлено в вашем проекте: code fix ставит туда `[Ignore]`. Если тип destination из другой сборки — атрибут `[MapTo]`/`[MapFrom]`. В маппинге профиля — вызов `CreateMap` (code fix добавляет `.ForMember(dest => dest.X, opt => opt.Ignore())`).
+
 **Сообщение:** `Property '{0}' on destination type '{1}' has no corresponding source property in '{2}' and will be left at its default value`
 
 **Причина:** у публичного свойства destination с сеттером нет source-свойства с тем же именем
 (без учёта регистра) и нет `[MapProperty]`, указывающего на него.
 
-**Когда выдаётся:** только для маппингов `[MapTo]` / `[MapFrom]`. В маппингах `MappingProfile`
-несопоставленные свойства destination молча пропускаются.
+**Когда выдаётся:** для маппингов `[MapTo]` / `[MapFrom]`. Для маппингов `MappingProfile` — только с
+`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (в 1.x выключено по умолчанию, в 2.0
+планируется включить; см. [Несопоставленные свойства в профилях](configuration.ru.md#несопоставленные-свойства-в-профилях)).
+В профиле свойство destination считается сопоставленным, если его настраивает `ForMember` (`MapFrom`, `Ignore`,
+`UseConverter`), если его даёт `IncludeMembers` или source-свойство с тем же именем, или если на нём `[Ignore]`. Маппинг с
+`ConvertUsing` IM0001 не получает (converter создаёт весь объект). Обратный маппинг `ReverseMap()` не проверяется: он
+сопоставляет только по именам, и `ForMember` к нему не применяется (AutoMapper обратные маппинги тоже не проверяет — у них
+`MemberList.None`); чтобы он проверялся, объявите его через `CreateMap`.
 
 **Как исправить:**
 - Добавьте соответствующее свойство в source-тип.
 - Используйте `[MapProperty("DestPropertyName")]` на source-свойстве.
-- Поставьте `[Ignore]` на свойство destination, чтобы подавить предупреждение.
-- В `IronMapper.CodeFixes` есть code fix («Add [Ignore] to '...'»); тестами он не покрыт.
+- Поставьте `[Ignore]` на свойство destination, чтобы подавить предупреждение (маппинги атрибутами).
+- В профиле: `.ForMember(dest => dest.X, opt => opt.Ignore())` или `opt.MapFrom(...)`.
+- Code fix'ы: «Add [Ignore] to '...'» (маппинги атрибутами; при необходимости добавляет `using IronMapper.Attributes;`,
+  а для параметра позиционного record — `[property: Ignore]`) и «Ignore '...' in this mapping (ForMember)» (профили).
+  Оба поддерживают Fix All; покрыты `tests/IronMapper.CodeFixes.Tests`.
 
 ---
 
@@ -74,6 +93,8 @@ Source generator IronMapper выдаёт диагностики с иденти�
 ## IM0003 — Тип в [MapTo]/[MapFrom] нельзя смапить
 
 **Уровень:** Error
+
+**Куда указывает:** атрибут `[MapTo]`/`[MapFrom]`.
 
 **Сообщение:** `Mapping for [{0}(typeof({1}))] on '{2}' was not generated: {3}`
 
@@ -107,6 +128,8 @@ Source generator IronMapper выдаёт диагностики с иденти�
 
 **Уровень:** Warning
 
+**Куда указывает:** имя класса профиля.
+
 **Сообщение:** `MappingProfile '{0}' has no mappings defined`
 
 **Причина:** в конструкторе (конструкторах) класса-наследника `MappingProfile` нет ни одной цепочки
@@ -120,19 +143,24 @@ Source generator IronMapper выдаёт диагностики с иденти�
 
 **Уровень:** Error
 
+**Куда указывает:** атрибут `[MapProperty]` (code fix заменяет имя на ближайшее свойство destination).
+
 **Сообщение:** `[MapProperty] destination '{0}' does not exist in type '{1}'`
 
 **Причина:** имя, переданное в `[MapProperty]`, не совпадает ни с одним публичным свойством destination
 с сеттером. Сравнение **без учёта регистра**.
 
-**Как исправить:** исправьте имя или добавьте свойство в destination-тип. В `IronMapper.CodeFixes` есть
-code fix («Did you mean '...'?», расстояние Левенштейна ≤ 2); тестами он не покрыт.
+**Как исправить:** исправьте имя или добавьте свойство в destination-тип. Code fix «Did you mean '...'?» предлагает
+свойства destination смапленного типа на расстоянии Левенштейна не больше 2 (без учёта регистра); покрыт
+`tests/IronMapper.CodeFixes.Tests`.
 
 ---
 
 ## IM0007 — Повторное определение маппинга
 
 **Уровень:** Warning
+
+**Куда указывает:** определение, которое не генерируется (его и нужно удалить); остальные определения — дополнительные места.
 
 **Сообщение:** `Mapping from '{0}' to '{1}' is defined more than once: {2}. Only the definition from {3} is generated; remove the others.`
 
@@ -155,6 +183,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Уровень:** Error
 
+**Куда указывает:** атрибут `[MapTo]`/`[MapFrom]` или вызов `CreateMap`.
+
 **Сообщение:** `Type '{0}' is abstract or an interface and cannot be instantiated as a mapping destination`
 
 **Причина:** destination-тип в `[MapTo]`, `[MapFrom]` или `CreateMap` абстрактный или является интерфейсом.
@@ -167,6 +197,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 ## IM0009 — Параметр конструктора record не сопоставлен
 
 **Уровень:** Warning
+
+**Куда указывает:** параметр конструктора (его имя), если record объявлен в вашем проекте; иначе атрибут.
 
 **Сообщение:** `Constructor parameter '{0}' in record '{1}' has no matching source property`
 
@@ -186,6 +218,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Уровень:** Error
 
+**Куда указывает:** атрибут `[MapTo]`/`[MapFrom]` или вызов `CreateMap`.
+
 **Сообщение:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
 
 **Причина:** тип source или destination, один из содержащих его типов или один из аргументов обобщённого типа —
@@ -204,6 +238,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Уровень:** Error
 
+**Куда указывает:** член или тип в лямбде.
+
 **Сообщение:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
 
 **Причина:** лямбда в `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` или `AddTransformer` ссылается на
@@ -221,6 +257,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Уровень:** Error
 
+**Куда указывает:** член, переменная или `this`/`base` в лямбде.
+
 **Сообщение:** `A lambda in MappingProfile '{0}' uses {1} '{2}'. Profile lambdas are copied into generated code that runs without a profile instance, so they can only use their own parameters, static members and constants. Make it static or const, or compute the value from the source object. The mapping was not generated.`
 
 **Причина:** лямбда использует поле, свойство или метод экземпляра профиля, `this`/`base`, либо локальную переменную,
@@ -236,6 +274,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 ## IM0013 — Имя метода маппинга уточнено из-за коллизии
 
 **Уровень:** Warning
+
+**Куда указывает:** определение маппинга, получившего уточнённое имя (атрибут, вызов `CreateMap` или `ReverseMap()`).
 
 **Сообщение:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.`
 
@@ -253,6 +293,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 
 **Уровень:** Error
 
+**Куда указывает:** определение маппинга, который не сгенерирован.
+
 **Сообщение:** `Mapping from '{0}' to '{1}' was not generated: another mapping from '{0}' has a destination type named '{2}', and every qualified method name (for example '{3}') is already used by another mapping. Rename one of the destination types.`
 
 **Причина:** все уточнённые имена из IM0013 заняты другими маппингами того же source-типа (например, `N1.Dto` и
@@ -266,6 +308,8 @@ code fix («Did you mean '...'?», расстояние Левенштейна �
 ## IM0015 — Converter нельзя создать в сгенерированном коде
 
 **Уровень:** Error
+
+**Куда указывает:** тип converter: тип в `typeof(...)` у `[MapConverter]` или аргумент типа `UseConverter<T>()`/`ConvertUsing<T>()`.
 
 **Сообщение:** `Mapping from '{0}' to '{1}' was not generated: converter '{2}' ({3}) cannot be created with 'new {2}()' because {4}`
 

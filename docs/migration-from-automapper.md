@@ -57,7 +57,7 @@ limitations, or only the emitted code text is tested; **Not supported**.
 | Flattening by convention (`CustomerAddressCity` from `Customer.Address.City`) | **Not supported** | — | Use `MapFrom` or `IncludeMembers`; the property is silently left unset in profile mappings ([#25](https://github.com/iron-mapper/IronMapper/issues/25)) |
 | Nested single objects mapped by the configured map | **Not supported** | Workaround | `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`, see [Nested objects](advanced.md#nested-objects) ([#23](https://github.com/iron-mapper/IronMapper/issues/23)) |
 | Mapping to a constructor (positional records) | **Not supported** | — | `CS7036` in the generated file; use `init` properties ([#24](https://github.com/iron-mapper/IronMapper/issues/24)) |
-| `AssertConfigurationIsValid()` | No direct equivalent | — | Part of the checks happen at build time, see [diagnostics](diagnostics.md) |
+| `AssertConfigurationIsValid()` | No direct equivalent | — | Part of the checks happen at build time, see [diagnostics](diagnostics.md). The closest to its unmapped-member check: `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` reports IM0001 for profile mappings (reverse maps are not checked, as in AutoMapper), `dotnet_diagnostic.IM0001.severity = error` makes it fail the build ([configuration](configuration.md#unmapped-properties-in-profiles)); tests: `ProfileUnmappedPropertyTests` |
 
 ---
 

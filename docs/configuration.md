@@ -185,6 +185,51 @@ Set the property in the application project when the automatic choice is wrong, 
 
 ---
 
+## Unmapped properties in profiles
+
+For `[MapTo]`/`[MapFrom]` an unmatched destination property is warning
+[`IM0001`](diagnostics.md#im0001--unmapped-destination-property). For profile (`CreateMap`) mappings it is off by
+default in 1.x, as in 1.1 (an unmatched property keeps its default value without a warning; issue
+[#22](https://github.com/iron-mapper/IronMapper/issues/22)), and turned on with an MSBuild property (from 1.2.0):
+
+```xml
+<PropertyGroup>
+  <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>
+</PropertyGroup>
+```
+
+Put it in the project or in `Directory.Build.props`. The package passes it to the generator
+(`CompilerVisibleProperty` in `buildTransitive/IronMapper.props`); any value other than `true` (case-insensitive)
+keeps it off. In 2.0 it is planned to be on by default.
+
+The warning points to the `CreateMap` call. A destination property counts as mapped when:
+
+- `ForMember` configures it: `opt.MapFrom(...)`, `opt.Ignore()`, `opt.UseConverter<T>()` (also the standalone
+  `.Ignore(d => d.X)`);
+- `IncludeMembers` or a source property with the same name (case-insensitive) provides it;
+- it has `[Ignore]` (as in attribute mappings).
+
+A mapping with `ConvertUsing<T>()` or `ConvertUsing(src => ...)` gets no IM0001: the converter creates the whole
+destination. The reverse mapping of `ReverseMap()` is not checked: it maps by name only and `ForMember` does not apply
+to it (AutoMapper does not validate reverse maps either; they use `MemberList.None`). Declare it with its own
+`CreateMap` to have it checked. The code fix "Ignore '...' in this mapping (ForMember)" adds
+`.ForMember(dest => dest.X, opt => opt.Ignore())` after `CreateMap`.
+
+### Severity
+
+There is no IronMapper property for the severity: use the standard settings for any diagnostic. In `.editorconfig`
+(applies to the files it covers) or a `.globalconfig`:
+
+```ini
+[*.cs]
+dotnet_diagnostic.IM0001.severity = error
+```
+
+`<WarningsAsErrors>$(WarningsAsErrors);IM0001</WarningsAsErrors>` and `<NoWarn>` in the project file work too. The
+severity applies to attribute and profile mappings alike (it is one diagnostic ID).
+
+---
+
 ## Attributes
 
 ### `[MapTo(typeof(TDest))]`

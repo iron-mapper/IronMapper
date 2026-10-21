@@ -16,4 +16,10 @@ internal static class TrackingNames
     public const string ClassAccessibility = nameof(ClassAccessibility);
     public const string CodeOptions = nameof(CodeOptions);
     public const string Registrations = nameof(Registrations);
+    public const string SourcePlan = nameof(SourcePlan);
+    public const string MapToSource = nameof(MapToSource);
+    public const string MapFromSource = nameof(MapFromSource);
+    public const string ProfilesSource = nameof(ProfilesSource);
+    public const string Settings = nameof(Settings);
+    public const string Diagnostics = nameof(Diagnostics);
 }

@@ -57,7 +57,7 @@ extension-методов (плоский объект 31,0 нс, ×2,66). Пол
 | Flattening по соглашению (`CustomerAddressCity` из `Customer.Address.City`) | **Не поддерживается** | — | Используйте `MapFrom` или `IncludeMembers`; в маппингах из профилей свойство молча остаётся незаполненным ([#25](https://github.com/iron-mapper/IronMapper/issues/25)) |
 | Вложенные одиночные объекты по настроенному маппингу | **Не поддерживается** | Обходной путь | `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`, см. [Вложенные объекты](advanced.ru.md#вложенные-объекты) ([#23](https://github.com/iron-mapper/IronMapper/issues/23)) |
 | Маппинг через конструктор (позиционные record) | **Не поддерживается** | — | `CS7036` в сгенерированном файле; используйте свойства `init` ([#24](https://github.com/iron-mapper/IronMapper/issues/24)) |
-| `AssertConfigurationIsValid()` | Прямого аналога нет | — | Часть проверок выполняется при сборке, см. [диагностики](diagnostics.ru.md) |
+| `AssertConfigurationIsValid()` | Прямого аналога нет | — | Часть проверок выполняется при сборке, см. [диагностики](diagnostics.ru.md). Ближе всего к его проверке несопоставленных членов: `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` выдаёт IM0001 для маппингов профилей (обратные маппинги не проверяются, как в AutoMapper), `dotnet_diagnostic.IM0001.severity = error` роняет сборку ([конфигурация](configuration.ru.md#несопоставленные-свойства-в-профилях)); тесты: `ProfileUnmappedPropertyTests` |
 
 ---
 

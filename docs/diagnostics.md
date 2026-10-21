@@ -9,7 +9,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0015`. 
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|
-| IM0001 | Warning | Unmapped destination property | Yes — `[MapTo]`/`[MapFrom]` only |
+| IM0001 | Warning | Unmapped destination property | Yes — `[MapTo]`/`[MapFrom]`; profiles with `IronMapperReportUnmappedInProfiles` |
 | IM0002 | Error | Incompatible property types | **Not reported yet** |
 | IM0003 | Error | Type in `[MapTo]`/`[MapFrom]` cannot be mapped | Yes — open generic types and arrays; an unresolved type is reported by the compiler only |
 | IM0004 | Error | Cyclic mapping detected | **Not reported yet** |
@@ -25,8 +25,17 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0015`. 
 | IM0014 | Error | Mapping method name collision cannot be resolved | Yes — attributes and profiles |
 | IM0015 | Error | Converter cannot be created by generated code | Yes — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
 
-All diagnostics are currently reported **without a source location**, so the IDE lists them in the
-Error List but does not point to a line in your code.
+Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
+shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
+
+```ini
+[*.cs]
+dotnet_diagnostic.IM0001.severity = error   # or warning, suggestion, none
+```
+
+`<NoWarn>` and `<WarningsAsErrors>` in the project file work as well. Up to 1.1.4 every diagnostic was reported
+without a location (only in the Error List), so neither the per-file `.editorconfig` severities nor the code fixes
+applied to them.
 
 When a problem has no working diagnostic (for example, a property type mismatch), the build fails with
 a regular C# error (`CS0029`, `CS7036`, …) inside the generated `*.g.cs` file instead.
@@ -41,19 +50,30 @@ there is no second error inside a generated file; other mappings are generated.
 
 **Severity:** Warning
 
+**Points to:** the destination property (its name), when it is declared in your project: the code fix adds `[Ignore]` there. When the destination type comes from another assembly, the `[MapTo]`/`[MapFrom]` attribute. In a profile mapping, the `CreateMap` call (the code fix adds `.ForMember(dest => dest.X, opt => opt.Ignore())`).
+
 **Message:** `Property '{0}' on destination type '{1}' has no corresponding source property in '{2}' and will be left at its default value`
 
 **Cause:** A public settable property of the destination type has no source property with the same name
 (case-insensitive) and no `[MapProperty]` pointing to it.
 
-**Reported for:** `[MapTo]` / `[MapFrom]` mappings only. In `MappingProfile` mappings unmatched destination
-properties are skipped silently.
+**Reported for:** `[MapTo]` / `[MapFrom]` mappings. For `MappingProfile` mappings only with
+`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (off by default in 1.x, planned to be on
+in 2.0; see [Unmapped properties in profiles](configuration.md#unmapped-properties-in-profiles)). In a profile a
+destination property counts as mapped when `ForMember` configures it (`MapFrom`, `Ignore`, `UseConverter`), when
+`IncludeMembers` or a source property with the same name provides it, or when it has `[Ignore]`. A mapping with
+`ConvertUsing` gets no IM0001 (the converter creates the whole object). The reverse mapping of `ReverseMap()` is not
+checked: it maps by name only and `ForMember` does not apply to it (AutoMapper does not validate reverse maps either;
+they use `MemberList.None`); declare it with `CreateMap` to have it checked.
 
 **Fix:**
 - Add the matching property to the source type.
 - Use `[MapProperty("DestPropertyName")]` on a source property.
-- Put `[Ignore]` on the destination property to suppress the warning.
-- A code fix ("Add [Ignore] to '...'") exists in `IronMapper.CodeFixes`; it is not covered by tests.
+- Put `[Ignore]` on the destination property to suppress the warning (attribute mappings).
+- In a profile: `.ForMember(dest => dest.X, opt => opt.Ignore())` or `opt.MapFrom(...)`.
+- Code fixes: "Add [Ignore] to '...'" (attribute mappings; also adds `using IronMapper.Attributes;` when needed, and
+  `[property: Ignore]` on a positional record parameter) and "Ignore '...' in this mapping (ForMember)" (profiles).
+  Both support Fix All; covered by `tests/IronMapper.CodeFixes.Tests`.
 
 ---
 
@@ -74,6 +94,8 @@ generated file.
 ## IM0003 — Type in [MapTo]/[MapFrom] cannot be mapped
 
 **Severity:** Error
+
+**Points to:** the `[MapTo]`/`[MapFrom]` attribute.
 
 **Message:** `Mapping for [{0}(typeof({1}))] on '{2}' was not generated: {3}`
 
@@ -106,6 +128,8 @@ inside the generated file.
 
 **Severity:** Warning
 
+**Points to:** the name of the profile class.
+
 **Message:** `MappingProfile '{0}' has no mappings defined`
 
 **Cause:** a class deriving from `MappingProfile` has no `CreateMap<TSource, TDest>()` call chain in the
@@ -119,19 +143,24 @@ statements of its constructor(s).
 
 **Severity:** Error
 
+**Points to:** the `[MapProperty]` attribute (the code fix replaces the name with the closest destination property).
+
 **Message:** `[MapProperty] destination '{0}' does not exist in type '{1}'`
 
 **Cause:** the name passed to `[MapProperty]` does not match any public settable property of the destination
 type. The comparison is **case-insensitive**.
 
-**Fix:** correct the name, or add the property to the destination type. A code fix ("Did you mean '...'?",
-Levenshtein distance ≤ 2) exists in `IronMapper.CodeFixes`; it is not covered by tests.
+**Fix:** correct the name, or add the property to the destination type. The code fix "Did you mean '...'?" offers the
+destination properties of the mapped type within Levenshtein distance 2 (case-insensitive); covered by
+`tests/IronMapper.CodeFixes.Tests`.
 
 ---
 
 ## IM0007 — Duplicate mapping definition
 
 **Severity:** Warning
+
+**Points to:** the definition that is not generated (the one to remove); the other definitions are additional locations.
 
 **Message:** `Mapping from '{0}' to '{1}' is defined more than once: {2}. Only the definition from {3} is generated; remove the others.`
 
@@ -154,6 +183,8 @@ and no mapping code was generated for the project at all.
 
 **Severity:** Error
 
+**Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
+
 **Message:** `Type '{0}' is abstract or an interface and cannot be instantiated as a mapping destination`
 
 **Cause:** the destination type of `[MapTo]`, `[MapFrom]` or `CreateMap` is abstract or an interface.
@@ -166,6 +197,8 @@ because the generator reports IM0008 before reading the rest of the mapping.
 ## IM0009 — Record constructor parameter not mapped
 
 **Severity:** Warning
+
+**Points to:** the constructor parameter (its name) when the record is declared in your project; otherwise the attribute.
 
 **Message:** `Constructor parameter '{0}' in record '{1}' has no matching source property`
 
@@ -185,6 +218,8 @@ generated code does not compile (`CS7036`) even when this warning is not reporte
 
 **Severity:** Error
 
+**Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
+
 **Message:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
 
 **Cause:** the source or destination type, one of the types containing it, or one of its generic type arguments is a
@@ -203,6 +238,8 @@ generated methods are then `internal` (see [Generated method accessibility](conf
 
 **Severity:** Error
 
+**Points to:** the member or type in the lambda.
+
 **Message:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
 
 **Cause:** a lambda in `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` or `AddTransformer` references a
@@ -220,6 +257,8 @@ The affected mapping is not generated (for `AddTransformer`, the transformer is 
 
 **Severity:** Error
 
+**Points to:** the member, variable or `this`/`base` in the lambda.
+
 **Message:** `A lambda in MappingProfile '{0}' uses {1} '{2}'. Profile lambdas are copied into generated code that runs without a profile instance, so they can only use their own parameters, static members and constants. Make it static or const, or compute the value from the source object. The mapping was not generated.`
 
 **Cause:** the lambda uses an instance field, property or method of the profile, `this`/`base`, or a local variable,
@@ -235,6 +274,8 @@ The affected mapping is not generated (for `AddTransformer`, the transformer is 
 ## IM0013 — Mapping method name qualified to avoid a collision
 
 **Severity:** Warning
+
+**Points to:** the definition of the mapping that got the qualified name (attribute, `CreateMap` or `ReverseMap()` call).
 
 **Message:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.`
 
@@ -252,6 +293,8 @@ If the qualified names are intended, suppress the warning with `<NoWarn>$(NoWarn
 
 **Severity:** Error
 
+**Points to:** the definition of the mapping that was not generated.
+
 **Message:** `Mapping from '{0}' to '{1}' was not generated: another mapping from '{0}' has a destination type named '{2}', and every qualified method name (for example '{3}') is already used by another mapping. Rename one of the destination types.`
 
 **Cause:** the qualified names from IM0013 are all taken by other mappings of the same source type (for example,
@@ -265,6 +308,8 @@ generated.
 ## IM0015 — Converter cannot be created by generated code
 
 **Severity:** Error
+
+**Points to:** the converter type: the type in `typeof(...)` of `[MapConverter]`, or the type argument of `UseConverter<T>()`/`ConvertUsing<T>()`.
 
 **Message:** `Mapping from '{0}' to '{1}' was not generated: converter '{2}' ({3}) cannot be created with 'new {2}()' because {4}`
 

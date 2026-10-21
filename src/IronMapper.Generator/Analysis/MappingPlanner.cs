@@ -56,12 +56,18 @@ internal static class MappingPlanner
             if (definitions.Count == 1) continue;
 
             for (var i = 1; i < definitions.Count; i++) dropped.Add(definitions[i].Origin);
+            // Points to the first definition that is not generated (the one to remove); the others are related.
+            var related = definitions.Skip(2).Append(winner)
+                .Where(d => d.OriginLocation is not null)
+                .Select(d => d.OriginLocation!.Value);
             diagnostics.Add(new DiagnosticInfo(
-                DiagnosticDescriptors.DuplicateMappingDefinition,
-                Display(winner.SourceFullName),
-                Display(winner.DestFullName),
-                string.Join(", ", definitions.Select(d => d.OriginDisplay)),
-                winner.OriginDisplay));
+                    DiagnosticDescriptors.DuplicateMappingDefinition,
+                    Display(winner.SourceFullName),
+                    Display(winner.DestFullName),
+                    string.Join(", ", definitions.Select(d => d.OriginDisplay)),
+                    winner.OriginDisplay)
+                .WithLocation(definitions[1].OriginLocation)
+                .WithAdditionalLocations(related));
         }
 
         // 2. Method names, per source type.
@@ -96,7 +102,7 @@ internal static class MappingPlanner
                             Display(member.SourceFullName),
                             Display(member.DestFullName),
                             member.DestTypeName,
-                            Candidate(member, ModeQualifier, 1)));
+                            Candidate(member, ModeQualifier, 1)).WithLocation(member.OriginLocation));
                         continue;
                     }
 
@@ -110,7 +116,7 @@ internal static class MappingPlanner
                             member.DestTypeName,
                             Display(member.DestFullName),
                             names[i],
-                            collision.Key));
+                            collision.Key).WithLocation(member.OriginLocation));
                     }
                 }
             }

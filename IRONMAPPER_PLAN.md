@@ -80,6 +80,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | Защита `main`                            | Rulesets: `main-protection` (CI обязателен всем), `main-review` (апрув всем, кроме админа), `release-tags` (теги `v*` только админ)                                               |
 | Регистрация для `IMapper` в trimmed/AOT | **Feature switch** (21.10.2026): `IronMapper.Registration.IsSupported` (`MapperRegistry.IsSupported`, `ILLink.Substitutions.xml` в `IronMapper.dll`); `buildTransitive/IronMapper.targets` выключает его при `PublishAot`/`PublishTrimmed`, если ни один проект не ссылается на `IronMapper.Extensions.DI` (пакет DI помечает себя своим `buildTransitive`, транзитивно тоже); переопределение — `IronMapperRegistration=true|false`; при выключенном switch `RuntimeMapper` бросает исключение с именем свойства. Отклонены: opt-out свойство (по умолчанию +~90 КБ AOT у приложений только с extension-методами) и «принять для 1.2.0» |
 | Кэш конвертеров                         | **Решено 21.10.2026** (п.1.5): правило строгое — кэшируется только класс без полей экземпляра во всей иерархии, с конструкторами без кода, с публичным конструктором без параметров и со всей иерархией в исходниках проекта; остальное — `new` на каждый вызов. Явный опт-ин для конвертеров из других сборок (например, `[MapConverter(typeof(X), Cache = true)]`) — только по запросу пользователей |
+| Уровень IM0001 / «строгий режим»        | **Решено 21.10.2026** (п.2.10, утверждено мейнтейнером): свойство `IronMapperStrictMapping` не вводится. Уровень любой диагностики задаётся стандартно — `dotnet_diagnostic.IM0001.severity = error` в `.editorconfig`/`.globalconfig`, `WarningsAsErrors`, `NoWarn`; проверено тестом (`ProfileUnmappedPropertyTests`, парсер `.editorconfig` компилятора) и в `verify-package` (сборка падает с IM0001 в строке `CreateMap`). Своё свойство дублировало бы механизм, который пользователи уже знают, и не действовало бы на отдельные файлы. IronMapper даёт только включение проверки в профилях: `IronMapperReportUnmappedInProfiles` |
+| `ReverseMap()` и IM0001                  | **Решено 21.10.2026** (п.2.10): обратный маппинг не проверяется — он сопоставляет только по именам, `ForMember` к нему не применяется, исправить замечание можно было бы только заменой `ReverseMap()` на `CreateMap`; так же в AutoMapper (обратный маппинг создаётся с `MemberList.None`). Нужна проверка — объявить обратный маппинг через `CreateMap` |
 | `AddConverter<T>()` в 2.0               | **Решено 21.10.2026** (п.1.5): в 1.x API не трогается, docs и XML-комментарий явно говорят, что на маппинг он не влияет. В 2.0 — решать вместе с режимом «класс-маппер» и конвертерами из DI (этап 3, п.3.4): если конвертеры из DI появятся — сделать `AddConverter` рабочим, иначе удалить |
 | Генерировать только используемые методы | **Отклонено** (20.10.2026). Чтобы знать, какие `MapToX`/`MapToXList`/`MapToXArray` вызываются, генератору пришлось бы сканировать все вызовы в компиляции: такой шаг зависит от каждого файла и ломает инкрементальность (перегенерация на каждое нажатие клавиши), а для `public`-методов, которые вызывают другие сборки, использование вообще не видно. Вместо этого: `[ExcludeFromCodeCoverage]` по свойству и отключение перегрузок (2.13) |
 
@@ -94,7 +96,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 | 1.1.2        | `internal`-методы для `internal`-типов (IM0010); лямбды профилей через семантическую модель (IM0011, IM0012)                    |
 | 1.1.3        | Доступность `GeneratedMappers` по картам; несколько сборок; коллизии имён (IM0007, IM0013, IM0014); `IMapper` ищет по сигнатуре |
 | 1.1.4        | Выпущена 20.10.2026 (#28): исправленный Quick Start в README (страница nuget.org), документация по 1.1.3 и бенчмаркам; сгенерированный код как в 1.1.3 |
-| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30), PR 3 — `global using` (#31), PR 4 — форма кода (#32), PR 5 — реестр `IMapper` (#33). PR 6 (часть: кэш конвертеров, IM0003) — `perf/converter-cache` |
+| 1.2.0        | В работе. В `main`: набор бенчмарков (#18), тестовая инфраструктура (#20), шаг 0 — базовая линия, net8.0, smoke-проверка в CI (#21), PR 1 — EquatableArray (#29), PR 2 — AOT (#30), PR 3 — `global using` (#31), PR 4 — форма кода (#32), PR 5 — реестр `IMapper` (#33), PR 6 — кэш конвертеров, IM0003 (#34). PR 7 (Location у диагностик, IM0001 для профилей) — `feature/diagnostic-locations` |
 
 **Ветки (сверено 20.10.2026, после #28):**
 
@@ -105,7 +107,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - `feature/implicit-using` — слита (#31, `b4f84c6`), PR 3 релиза 1.2.0.
 - `perf/generated-code-shape` — слита (#32, `5047b24`), PR 4 релиза 1.2.0.
 - `feature/mapper-registry` — слита (#33, `1e758c5`), PR 5 релиза 1.2.0.
-- `perf/converter-cache` — PR 6 релиза 1.2.0, первая часть (п.1.5 кэш конвертеров, п.2.1 IM0003), от `main` `1e758c5`; не слита. Location у диагностик (п.2.2) и IM0001 для профилей (п.2.10) — отдельными ветками.
+- `perf/converter-cache` — слита (#34, `d8aa317`), PR 6 релиза 1.2.0 (п.1.5 кэш конвертеров, п.2.1 IM0003).
+- `feature/diagnostic-locations` — PR 7 релиза 1.2.0 (п.2.2 Location у диагностик и code fix'ы, п.2.10 IM0001 для профилей, #22), от `main` `d8aa317`; не слита.
 - `feature/benchmarks`, `fix/generated-accessibility`, `fix/name-collisions`, `release/1.1.3`, `add_reverse_map`, `chore/test-infrastructure`, `chore/benchmarks-baseline`, `docs/readme-refresh`, `fix/generator-equatable`, `fix/aot-honesty`, `feature/implicit-using`, `perf/generated-code-shape` — уже в `main`. Удалить.
 
 ---
@@ -154,8 +157,8 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 3. **`global using IronMapper.Generated`** (п.1.7): `buildTransitive/IronMapper.props` при `ImplicitUsings=enable`, отключение `IronMapperImplicitUsings=false`. Проверки через PackageConsumer: проект без `ImplicitUsings`, `LangVersion` < 10, решение из нескольких проектов, отключение свойством. Сделано (#31), см. п.1.7.
 4. **Форма сгенерированного кода** (п.2.11): коллекции без LINQ, `for` по конкретному типу, throw helper, `MapCollection` материализует список. Закрывает Nested, Collection(10), InPlace, размер AOT. Сделано в `perf/generated-code-shape` (не слита): Collection(10), InPlace, AOT — цели достигнуты; Nested ×1,26 → ×1,09 (net10) / ×1,06 (net8) — цель ×1,05 не достигнута, причина — проверки на `null`, см. п.2.11; ×1,09 принято для 1.2.0, цель перенесена в 1.3.0 (п.2.3).
 5. **Реестр вместо рефлексии** (п.1.3) + #8 + исходные исключения + снятие атрибутов из PR 2 + DI в AOT-пробе (#26). Сделано (#33), см. п.1.3: AOT и аллокации — цели достигнуты; цели Flat и холодного старта переформулированы (21.10.2026, раздел «Цели»), проверка — полный прогон. Найдено и исправлено по ходу: регистрация увеличивала AOT у приложений только с extension-методами (+2,6 → +93,7 КБ) — feature switch (решение 21.10.2026); инициализатор модуля создавал словари реестра и в приложении без `IMapper` — теперь только кладёт делегат сборки в lock-free список, регистрацию выполняет `RuntimeMapper`; проба `Manual_DI` в наборе; проверка ILLink-trimming в `verify-aot`.
-6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22). Кэш конвертеров и IM0003 сделаны в `perf/converter-cache` (не слита), см. п.1.5 и п.2.1; замер на net8.0 — полный прогон (шаг 8).
-7. **Объём кода и покрытие** (п.2.13): перемерить; опции отключения перегрузок (на сборку и на карту); `[GeneratedCode]` на сгенерированном классе и `IronMapperExcludeFromCodeCoverage`.
+6. **Кэш конвертеров** (п.1.5, замер на net8.0), **IM0003** (п.2.1), **Location у диагностик** (п.2.2), **IM0001 для профилей за флагом** (п.2.10, #22). Кэш конвертеров и IM0003 — PR 6 (#34), см. п.1.5 и п.2.1; замер на net8.0 — полный прогон (шаг 8). Location у диагностик и IM0001 для профилей — PR 7 (`feature/diagnostic-locations`, не слита), см. п.2.2 и п.2.10.
+7. **Объём кода и покрытие** (п.2.13, PR 8): перемерить; опции отключения перегрузок (на сборку и на карту); `[GeneratedCode]` на сгенерированном классе и `IronMapperExcludeFromCodeCoverage`.
 8. **Полный прогон**, `benchmarks/results/1.2.0/`, таблица «1.1.3 → 1.2.0» в `RESULTS.md`; README по п.5.1. Цифры раздела Performance в CHANGELOG (при выпуске 1.2.0) и в docs — только из этого прогона: в `[Unreleased]` цифр нет (решение 21.10.2026, цифры PR 4 заменены качественными описаниями).
 
 Бенчмарки в PR не запускаются (правило 21.10.2026, «Правила работы» → «Бенчмарки»): в каждом PR — smoke-проверка набора в CI; замеры — полный прогон (шаг 8), когда весь код 1.2.0 в `main`. Замеры PR 4 и PR 5 сделаны до этого правила.
@@ -258,11 +261,12 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] **IM0004** (1.3.0): граф карт, поиск циклов — обязательно вместе с 2.3.
 - [ ] Тест на каждую; `docs/diagnostics*.md` и `AnalyzerReleases.Unshipped.md` синхронны с кодом.
 
-### 2.2. Location у диагностик (аудит п.7) — 1.2.0
+### 2.2. Location у диагностик (аудит п.7) — 1.2.0, PR 7
 
-- [ ] Хранить расположение в equatable-структуре (путь, `TextSpan`, `LinePositionSpan`), `Location.Create` при выдаче.
-- [ ] Указывать на атрибут, `CreateMap`, `ForMember` или свойство.
-- [ ] Code fix'ы IM0001 и IM0006 срабатывают в IDE, покрыты тестами.
+- [x] Расположение — `Analysis/Models/LocationInfo.cs` (путь, `TextSpan`, `LinePositionSpan`, сравнение по значению) в `DiagnosticInfo` (+ дополнительные места и `Properties` для code fix'ов) и `MappingDescriptor.OriginLocation` (`feature/diagnostic-locations`). **Отличие от плана:** `Location.Create(path, span, lineSpan)` при выдаче не годится — такое место без синтаксического дерева: компилятор применяет уровни `.editorconfig` (`dotnet_diagnostic.X.severity`) по дереву, и code fix не находит документ. Проверено мутацией: с `Location.Create(path, …)` падают тесты уровней `error`/`none` и все тесты мест. Поэтому диагностики выдаёт отдельный выход, объединённый с компиляцией: `LocationInfo.ToLocation(trees)` — место в дереве текущей компиляции по пути (без дерева — `Location.Create(path, …)`). Этот выход выполняется на каждую компиляцию, но только выдаёт диагностики.
+- [x] Исходники не зависят от мест: код генерируется из копий без диагностик (`MappingDescriptor.WithoutDiagnostics`, `MappingPlan.WithoutDiagnostics`, шаги `MapToSource`/`MapFromSource`/`ProfilesSource`/`SourcePlan`), диагностики собираются в одно значение (шаг `Diagnostics`). Тест `LinesAddedAboveMappings_SourceOutputsCached_DiagnosticLocationsUpdated`: две пустые строки выше маппингов — все выходы исходников `Cached`/`Unchanged`, все диагностики в новом дереве на две строки ниже; мутация (`WithoutDiagnostics` возвращает `this`) ловится. Снимки кода не изменились; изменился `NameCollision.verified.txt` (в нём диагностики — теперь с местом).
+- [x] Куда указывают (`DiagnosticLocationTests`, docs/diagnostics «Points to»): IM0001 — свойство приёмника (имя; в другом файле — там же), для типа из другой сборки — атрибут, в профиле — вызов `CreateMap`; IM0003 — атрибут; IM0005 — имя профиля; IM0006 — `[MapProperty]`; IM0007 — не генерируемое определение, остальные — дополнительные места; IM0008/IM0010/IM0013/IM0014 — атрибут, `CreateMap` или `ReverseMap()`; IM0009 — параметр record; IM0011/IM0012 — член в лямбде; IM0015 — тип конвертера (`typeof`/аргумент типа). Места символов — по идентификатору, как у ошибок компилятора. Отдельного места «вызов `ForMember`» нет: диагностики внутри `ForMember` указывают точнее — на член лямбды (IM0011/IM0012) или тип `UseConverter<T>` (IM0015).
+- [x] Code fix'ы IM0001 и IM0006 срабатывают, покрыты тестами (`tests/IronMapper.CodeFixes.Tests`, `Microsoft.CodeAnalysis.Testing` 1.1.2, `CSharpCodeFixTest` с генератором через `GetSourceGenerators`, 9 тестов). Раньше не срабатывали вовсе (у диагностик не было места) и искали цель по тексту сообщения: IM0001 — первое свойство с таким именем в документе, IM0006 — тип по простому имени (`GetSymbolsWithName`). Теперь — по месту и свойствам диагностики (`PropertyName`, `DestinationProperties`). IM0001: `[Ignore]` (+ `using IronMapper.Attributes;`, если нужен; `[property: Ignore]` для параметра позиционного record), в профиле — `.ForMember(dest => dest.X, opt => opt.Ignore())` после `CreateMap` (новое; `[Ignore]` в профилях не читается, п.2.6); Fix All — свой провайдер (несколько исправлений одного `CreateMap`). Для типа приёмника из другой сборки исправления нет.
 
 ### 2.3. Вложенные объекты (аудит п.4) — 1.3.0, issue **#23**
 
@@ -308,12 +312,12 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [x] Тест кэширования: все выходы кэшируются (#20).
 - [x] **EquatableArray** для данных пайплайна; `MappingDescriptor.Equals` учитывает `Diagnostics`; Skip снят — `fix/generator-equatable`. Ошибка была видна в IDE: правка, менявшая только диагностику карты (`[Ignore]` на свойстве приёмника → IM0001; один из двух `private`-членов лямбды профиля стал `internal` → IM0011), не доходила до вывода — старая диагностика оставалась до перезапуска генератора. Тесты `IncrementalDiagnosticsTests` (появление и исчезновение); в данных пайплайна нет `ISymbol`, `SyntaxNode`, `Location`, `Compilation`. Трансформы перезапускаются на каждой новой компиляции (семантическая модель), их результат — `Unchanged`, всё после — `Cached`. Снимки не изменились.
 - [ ] Runtime-тесты вместо текстовых для «Partial» в таблице миграции: `[MapFrom]`, `UseConverter`, `ConvertUsing<T>`, `ConvertUsing(lambda)`, массивы и др. коллекции. `UseConverter` и `ConvertUsing<T>` — сделано (`ConverterCacheTests`, `perf/converter-cache`), таблица обновлена.
-- [ ] Тесты code fix'ов (сейчас нет).
+- [x] Тесты code fix'ов — `tests/IronMapper.CodeFixes.Tests` (PR 7, см. п.2.2).
 
-### 2.10. IM0001 для профилей (аудит п.6) — 1.2.0 за флагом, issue **#22**
+### 2.10. IM0001 для профилей (аудит п.6) — 1.2.0 за флагом, issue **#22**, PR 7
 
-- [ ] В профилях несопоставленные свойства назначения пропускаются молча. Выдавать IM0001 (`ForMember`, `Ignore`, `IncludeMembers` — сопоставлены).
-- [ ] 1.x: включается MSBuild-свойством; строгий режим `<IronMapperStrictMapping>true</IronMapperStrictMapping>` делает ошибкой. 2.0: по умолчанию.
+- [x] IM0001 для свойств приёмника профиля без источника, в месте вызова `CreateMap` (`feature/diagnostic-locations`). Сопоставлены: `ForMember` (`MapFrom`, `Ignore`, `UseConverter`), отдельный `.Ignore(...)`, `IncludeMembers`, совпадение по имени, `[Ignore]` на свойстве приёмника (как в атрибутных картах). `ConvertUsing<T>()`/`ConvertUsing(lambda)` — IM0001 не выдаётся. `ReverseMap()` — не проверяется (решение в «Принятых решениях»). Тесты `ProfileUnmappedPropertyTests`; сгенерированный код с флагом и без него одинаков.
+- [x] 1.x: MSBuild-свойство `IronMapperReportUnmappedInProfiles` (по умолчанию выключено, только `true` без учёта регистра включает), `CompilerVisibleProperty` в `buildTransitive/IronMapper.props`, читается через `GeneratorSettings` (шаг `Settings`); фильтр — при сборе диагностик, анализ профилей от свойства не зависит. `verify-package`: 4 варианта (без свойства — собирается; со свойством — сборка падает с IM0001 в строке `CreateMap`; `.editorconfig` `error` при `TreatWarningsAsErrors=false` — падает; `none` — собирается). Строгий режим `IronMapperStrictMapping` не введён — уровень через `.editorconfig` (решение в «Принятых решениях», утверждено 21.10.2026). 2.0: включить по умолчанию.
 - [ ] Опционально: предупреждение о неиспользованных свойствах источника (выключено по умолчанию).
 
 ### 2.11. Коллекции без LINQ (аудит п.2) — 1.2.0, PR 4
@@ -334,7 +338,7 @@ IronMapper — способ уйти с AutoMapper, сохранив свои п
 - [ ] README и migration-from-automapper: отличие от AutoMapper/Mapster.
 - [ ] Этап 4: анализатор миграции предупреждает о таких коллекциях.
 
-### 2.13. Объём кода, время сборки и покрытие (аудит п.22a) — 1.2.0, PR 7
+### 2.13. Объём кода, время сборки и покрытие (аудит п.22a) — 1.2.0, PR 8
 
 **Данные.** N=200: 201 файл, 12 210 строк, 799 КБ против 1 файла, 4 057 строк, 191 КБ у Mapperly; сборка +0,55 с против +0,26 с. Генераторы работают одинаково быстро — разница в компиляции результата.
 

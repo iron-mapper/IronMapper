@@ -1,6 +1,7 @@
 using IronMapper.Generator.Analysis;
 using IronMapper.Generator.Analysis.Models;
 using IronMapper.Generator.CodeGeneration;
+using IronMapper.Generator.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -60,40 +61,62 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         // Decisions across all mappings: duplicate pairs (IM0007), method name collisions (IM0013/IM0014),
         // hint names and helper scopes. The plan is compared by value, so a mapping's file is re-emitted only
         // when that mapping or a decision changes.
-        var plan = fromMapTo.Collect()
+        var all = fromMapTo.Collect()
             .Combine(fromMapFrom.Collect())
-            .Combine(fromProfiles.Collect())
+            .Combine(fromProfiles.Collect());
+        var plan = all
             .Select(static (all, _) => MappingPlanner.Create(all.Left.Left, all.Left.Right, all.Right))
             .WithTrackingName(TrackingNames.Plan);
+
+        // The generated code does not depend on diagnostics, and diagnostics carry locations, which change whenever a
+        // line is added above a mapping. Sources are generated from copies without them (compared by value, so an edit
+        // that only moves a mapping leaves every source output cached); diagnostics have their own output below.
+        var sourcePlan = plan.Select(static (mappingPlan, _) => mappingPlan.WithoutDiagnostics())
+            .WithTrackingName(TrackingNames.SourcePlan);
 
         // APIs the generated code may use in this compilation (ThrowIfNull, DoesNotReturn). Recomputed for every
         // compilation, compared by value: the outputs change only when the target framework does.
         var codeOptions = context.CompilationProvider
             .Select(static (compilation, _) => GeneratedCodeOptions.From(compilation))
             .WithTrackingName(TrackingNames.CodeOptions);
-        var planAndOptions = plan.Combine(codeOptions);
+        var planAndOptions = sourcePlan.Combine(codeOptions);
 
-        context.RegisterSourceOutput(plan, static (spc, mappingPlan) =>
+        context.RegisterSourceOutput(WithoutDiagnostics(fromMapTo, TrackingNames.MapToSource).Combine(planAndOptions),
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+
+        context.RegisterSourceOutput(WithoutDiagnostics(fromMapFrom, TrackingNames.MapFromSource).Combine(planAndOptions),
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+
+        context.RegisterSourceOutput(WithoutDiagnostics(fromProfiles, TrackingNames.ProfilesSource).Combine(planAndOptions),
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
+
+        // Diagnostics of all mappings and of the plan, as one value (compared by value: cached until a diagnostic or its
+        // location changes). The output resolves the locations in the current compilation's syntax trees: a location
+        // in a tree is what the IDE underlines, what .editorconfig severities apply to and what code fixes need. That
+        // output therefore runs for every compilation; it only reports, it generates no code.
+        var settings = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
+            .WithTrackingName(TrackingNames.Settings);
+        var diagnostics = all.Combine(plan).Combine(settings)
+            .Select(static (item, _) => CollectDiagnostics(
+                item.Left.Left.Left.Left, item.Left.Left.Left.Right, item.Left.Left.Right, item.Left.Right, item.Right))
+            .WithTrackingName(TrackingNames.Diagnostics);
+
+        context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (spc, item) =>
         {
-            foreach (var diag in mappingPlan.Diagnostics)
-                spc.ReportDiagnostic(diag.ToDiagnostic());
+            var (found, compilation) = item;
+            if (found.Length == 0) return;
+            var trees = LocationInfo.TreesByPath(compilation);
+            foreach (var diagnostic in found)
+                spc.ReportDiagnostic(diagnostic.ToDiagnostic(location => location.ToLocation(trees)));
         });
-
-        context.RegisterSourceOutput(fromMapTo.Combine(planAndOptions), static (spc, item) =>
-            EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
-
-        context.RegisterSourceOutput(fromMapFrom.Combine(planAndOptions), static (spc, item) =>
-            EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
-
-        context.RegisterSourceOutput(fromProfiles.Combine(planAndOptions), static (spc, item) =>
-            EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right));
 
         // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
         // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache when a
         // generated mapping uses one. The final Select yields a value tuple, so the declaration is re-emitted only when
         // the accessibility or the need for the cache actually changes.
-        var classAccessibility = plan.Select(static (mappingPlan, _) =>
+        var classAccessibility = sourcePlan.Select(static (mappingPlan, _) =>
                 (Accessibility: GetClassAccessibility(mappingPlan), UsesConverterCache: UsesConverterCache(mappingPlan)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
 
@@ -109,7 +132,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // Registration of the generated mappings for IMapper (module initializer → MapperRegistry). Re-emitted only
         // when the set of generated mappings, their method names or the options change.
-        var registrations = plan.Select(static (mappingPlan, _) => GetRegistrations(mappingPlan))
+        var registrations = sourcePlan.Select(static (mappingPlan, _) => GetRegistrations(mappingPlan))
             .WithTrackingName(TrackingNames.Registrations);
 
         context.RegisterSourceOutput(registrations.Combine(codeOptions), static (spc, item) =>
@@ -119,6 +142,44 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             var (hintName, source) = MapperCodeEmitter.EmitRegistration(mappings, options);
             spc.AddSource(hintName, source);
         });
+    }
+
+    /// <summary>The descriptors as the code is generated from them: without diagnostics and locations.</summary>
+    private static IncrementalValuesProvider<MappingDescriptor> WithoutDiagnostics(
+        IncrementalValuesProvider<MappingDescriptor> descriptors, string trackingName)
+        => descriptors.Select(static (descriptor, _) => descriptor.WithoutDiagnostics()).WithTrackingName(trackingName);
+
+    /// <summary>
+    /// The diagnostics to report: those of every mapping the plan generates (a duplicate definition, IM0007, or a
+    /// mapping skipped by IM0014 reports only the plan's diagnostic), of diagnostic-only descriptors (IM0005, IM0010,
+    /// IM0015, …) and of the plan. IM0001 of profile mappings only when <see cref="GeneratorSettings.ReportUnmappedInProfiles"/>
+    /// is set (1.x: off by default).
+    /// </summary>
+    private static EquatableArray<DiagnosticInfo> CollectDiagnostics(ImmutableArray<MappingDescriptor> fromMapTo,
+        ImmutableArray<MappingDescriptor> fromMapFrom, ImmutableArray<MappingDescriptor> fromProfiles, MappingPlan plan,
+        GeneratorSettings settings)
+    {
+        var builder = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        Add(fromMapTo, isProfile: false);
+        Add(fromMapFrom, isProfile: false);
+        Add(fromProfiles, isProfile: true);
+        builder.AddRange(plan.Diagnostics.AsImmutableArray());
+        return builder.ToImmutable();
+
+        void Add(ImmutableArray<MappingDescriptor> descriptors, bool isProfile)
+        {
+            foreach (var descriptor in descriptors)
+            {
+                if (descriptor.SourceTypeName.Length != 0 && plan.Find(descriptor.Origin) is not { Emit: true }) continue;
+                foreach (var diagnostic in descriptor.Diagnostics)
+                {
+                    if (isProfile && !settings.ReportUnmappedInProfiles
+                                  && diagnostic.Descriptor == DiagnosticDescriptors.UnmappedDestinationProperty)
+                        continue;
+                    builder.Add(diagnostic);
+                }
+            }
+        }
     }
 
     private static EquatableArray<MappingRegistration> GetRegistrations(MappingPlan plan)
@@ -178,24 +239,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Reports any analysis diagnostics collected in <paramref name="descriptor"/> and then
-    /// adds the generated source file to the compilation.
-    /// Sentinel descriptors (SourceTypeName is empty) carry only diagnostics and produce no source.
-    /// Definitions that the plan does not generate (duplicate pair, unresolvable name collision) produce
-    /// neither source nor their own diagnostics; the plan reports IM0007/IM0014 for them.
+    /// Adds the generated source file of <paramref name="descriptor"/> to the compilation. Diagnostic-only descriptors
+    /// (empty SourceTypeName) and definitions that the plan does not generate (duplicate pair, unresolvable name
+    /// collision) produce no source. Diagnostics are reported by their own output (see <see cref="CollectDiagnostics"/>).
     /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor, MappingPlan plan,
         GeneratedCodeOptions options)
     {
-        var entry = descriptor.SourceTypeName.Length == 0 ? null : plan.Find(descriptor.Origin);
-        if (descriptor.SourceTypeName.Length != 0 && entry is not { Emit: true }) return;
-
-        // Report any diagnostics collected during analysis.
-        foreach (var diag in descriptor.Diagnostics)
-            spc.ReportDiagnostic(diag.ToDiagnostic());
-
-        // Sentinel descriptors (e.g. empty MappingProfile) carry diagnostics only.
-        if (entry is null) return;
+        if (descriptor.SourceTypeName.Length == 0 || plan.Find(descriptor.Origin) is not { Emit: true } entry) return;
 
         spc.AddSource(entry.HintName, MapperCodeEmitter.Emit(descriptor, entry, plan, options));
     }

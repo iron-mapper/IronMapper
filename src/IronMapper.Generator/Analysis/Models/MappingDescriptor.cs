@@ -120,6 +120,13 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public string DestTypeArgsFull { get; }
 
     /// <summary>
+    /// Where the mapping is defined (the <c>[MapTo]</c>/<c>[MapFrom]</c> attribute, the <c>CreateMap</c> call or the
+    /// <c>ReverseMap()</c> call); the plan's diagnostics (IM0007, IM0013, IM0014) point here. Not part of the copy used to
+    /// generate code (<see cref="WithoutDiagnostics"/>), so moving the definition does not regenerate it.
+    /// </summary>
+    public LocationInfo? OriginLocation { get; }
+
+    /// <summary>
     /// The generated code of this mapping uses <c>ConverterCache&lt;T&gt;</c> (declared once in <c>GeneratedMappers.g.cs</c>).
     /// </summary>
     public bool UsesConverterCache
@@ -160,6 +167,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="destTypeArgsShort">Type-argument name part by simple names (see <see cref="DestTypeArgsShort"/>).</param>
     /// <param name="destTypeArgsFull">Type-argument name part by full names (see <see cref="DestTypeArgsFull"/>).</param>
     /// <param name="wholeObjectConverterIsCached">Whether one instance of <paramref name="wholeObjectConverterType"/> is reused.</param>
+    /// <param name="originLocation">Where the mapping is defined (see <see cref="OriginLocation"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -183,7 +191,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string destQualifier = "",
         string destTypeArgsShort = "",
         string destTypeArgsFull = "",
-        bool wholeObjectConverterIsCached = false)
+        bool wholeObjectConverterIsCached = false,
+        LocationInfo? originLocation = null)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -195,6 +204,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         WhenConditionBody = whenConditionBody;
         WholeObjectConverterType = wholeObjectConverterType;
         WholeObjectConverterIsCached = wholeObjectConverterIsCached;
+        OriginLocation = originLocation;
         WholeObjectLambdaBody = wholeObjectLambdaBody;
         BeforeMapLambdaBody = beforeMapLambdaBody;
         AfterMapLambdaBody = afterMapLambdaBody;
@@ -214,14 +224,29 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// Returns a copy with the definition site (see <see cref="Origin"/>) and the destination naming parts
     /// (see <see cref="DestQualifier"/>) set. Diagnostic-only descriptors are returned unchanged.
     /// </summary>
-    public MappingDescriptor WithOrigin(string origin, string originDisplay, int originRank, DestinationNaming naming)
+    public MappingDescriptor WithOrigin(string origin, string originDisplay, int originRank, DestinationNaming naming,
+        LocationInfo? originLocation)
         => SourceTypeName.Length == 0
             ? this
             : new(SourceTypeName, SourceNamespace, DestTypeName, DestNamespace, PropertyMappings, Diagnostics,
                 HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
-                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached);
+                naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation);
+
+    /// <summary>
+    /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
+    /// carry locations, which change with every line added above them; the generated code does not depend on them, so
+    /// this copy stays equal and the mapping's file stays cached. Diagnostics are reported by a separate output.
+    /// </summary>
+    public MappingDescriptor WithoutDiagnostics()
+        => Diagnostics.Length == 0 && OriginLocation is null
+            ? this
+            : new(SourceTypeName, SourceNamespace, DestTypeName, DestNamespace, PropertyMappings,
+                EquatableArray<DiagnosticInfo>.Empty, HasCustomConverter, WhenConditionBody, WholeObjectConverterType,
+                WholeObjectLambdaBody, BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName,
+                DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
+                DestTypeArgsFull, WholeObjectConverterIsCached);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -248,7 +273,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || OriginRank != other.OriginRank
             || DestQualifier != other.DestQualifier
             || DestTypeArgsShort != other.DestTypeArgsShort
-            || DestTypeArgsFull != other.DestTypeArgsFull)
+            || DestTypeArgsFull != other.DestTypeArgsFull
+            || !Nullable.Equals(OriginLocation, other.OriginLocation))
             return false;
 
         // Diagnostics count too: an edit that only adds or removes a diagnostic must reach the output.
@@ -284,6 +310,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + DestQualifier.GetHashCode();
         hash = hash * 31 + DestTypeArgsShort.GetHashCode();
         hash = hash * 31 + DestTypeArgsFull.GetHashCode();
+        hash = hash * 31 + OriginLocation.GetHashCode();
         hash = hash * 31 + PropertyMappings.GetHashCode();
         hash = hash * 31 + Diagnostics.GetHashCode();
         hash = hash * 31 + ValueTransformers.GetHashCode();

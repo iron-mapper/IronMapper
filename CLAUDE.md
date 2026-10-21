@@ -36,6 +36,7 @@ IronMapper/
 ├── tests/
 │   ├── IronMapper.Tests/              # Runtime tests with the generator attached (xUnit)
 │   ├── IronMapper.Generator.Tests/    # Generator tests: in-memory compilations, snapshots, caching
+│   ├── IronMapper.CodeFixes.Tests/    # Code fix tests (Microsoft.CodeAnalysis.Testing, generator attached)
 │   ├── IronMapper.Integration.Tests/  # Generator + Extensions.DI together (DI, real-world models)
 │   ├── IronMapper.PackageConsumer/    # Builds against the packed .nupkg (not in the .slnx)
 │   ├── IronMapper.PackageConsumer.InternalLib/  # Library for the consumer: internal maps only (not in the .slnx)
@@ -69,7 +70,8 @@ The **runtime** package. Contains:
 
 The package also ships `IronMapper.Generator.dll` and `IronMapper.CodeFixes.dll` in `analyzers/dotnet/cs`
 (see `src/IronMapper/IronMapper.csproj`, target `IncludeAnalyzersInPackage`), and `buildTransitive/IronMapper.props`:
-`global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`;
+`global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`,
+and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`);
 `buildTransitive/IronMapper.targets`: the feature switch `IronMapper.Registration.IsSupported` (see
 [The DI path](#the-di-path-imapper)), with `ILLink.Substitutions.xml` embedded in `IronMapper.dll`.
 
@@ -108,9 +110,22 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
 - **Pipeline data** (`Analysis/Models`) is compared by value: every collection is `EquatableArray<T>`, every model
   implements `Equals` over all its fields (diagnostics included); no `ISymbol`, `SyntaxNode`, `Location` or
   `Compilation` in it. A new field must be added to `Equals`/`GetHashCode`.
+- **Diagnostics and locations** (`IronMapperGenerator.Initialize`): every diagnostic carries a `LocationInfo` (path,
+  `TextSpan`, `LinePositionSpan`). Sources are generated from copies without diagnostics and locations
+  (`MappingDescriptor.WithoutDiagnostics`, `MappingPlan.WithoutDiagnostics`, steps `*Source`/`SourcePlan`), so moving a
+  mapping leaves the source outputs cached. Diagnostics are collected into one value (step `Diagnostics`) and reported
+  by a separate output combined with the compilation: `LocationInfo.ToLocation(trees)` makes a location in the current
+  syntax tree (a `Location.Create(path, …)` location has no tree, so `.editorconfig` severities and code fixes would not
+  apply to it). That output runs for every compilation; `GeneratorCachingTests` exempts it. Where each diagnostic points:
+  `docs/diagnostics.md`, `DiagnosticLocationTests`. MSBuild properties come through `GeneratorSettings`
+  (`build_property.*`, `CompilerVisibleProperty` in `buildTransitive/IronMapper.props`): `IronMapperReportUnmappedInProfiles`
+  (IM0001 for profiles; filtered in `CollectDiagnostics`, not in the analysis).
 
 ### `src/IronMapper.CodeFixes` (netstandard2.0)
-Code fixes for IM0001 and IM0006. Not covered by tests yet.
+Code fixes for IM0001 (`[Ignore]` on the destination property; `ForMember(..., opt => opt.Ignore())` in a profile) and
+IM0006 (closest destination property). They find their node by the diagnostic's location and read diagnostic properties
+(`PropertyName`, `DestinationProperties`), never the message text. Tests: `tests/IronMapper.CodeFixes.Tests`
+(`CSharpCodeFixTest` with the generator attached through `GetSourceGenerators`).
 
 ### `src/IronMapper.Extensions.DI` (netstandard2.1 + net10.0)
 Separate NuGet package. `AddIronMapper(...)` registers `IMapper` and runs the generated registration of the given
@@ -174,7 +189,8 @@ nothing has used yet (`MapperRegistryAssemblyTests`, not run in parallel).
 Reference the packed `IronMapper` package (`PackageReference`), not the projects; built by `eng/verify-package.ps1`.
 Not in `IronMapper.slnx`. `tests/IronMapper.PackageConsumer.ImplicitUsings` is built by the same script in several variants (one source file
 from `Sources/` or the README Quick Start, different `ImplicitUsings`/`LangVersion`/`IronMapperImplicitUsings`, core or
-DI package).
+DI package; `Sources/ProfileUnmapped.cs` with `IronMapperReportUnmappedInProfiles` and an `.editorconfig` must fail the
+build with IM0001 at the `CreateMap` line — variants with `BuildError`).
 The Quick Start of `README.md` and `README.ru.md` is the csharp block between `<!-- quickstart:begin -->` and
 `<!-- quickstart:end -->`; it must stay a whole `Program.cs`, because the script compiles and runs it.
 

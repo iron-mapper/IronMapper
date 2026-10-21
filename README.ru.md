@@ -21,7 +21,7 @@ English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main
 - **Ошибки конфигурации — при сборке, но не все.** Для `[MapTo]`/`[MapFrom]` несопоставленное свойство приёмника
   даёт предупреждение `IM0001`, неверное имя в `[MapProperty]` — ошибку `IM0006`, недоступный тип — `IM0010`
   ([диагностики](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)). Для профилей проверок
-  меньше (`IM0001` для них не выдаётся, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
+  меньше (`IM0001` для них включается флагом, начиная с 1.2.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
 - **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,6 нс на объект. Вложенные объекты медленнее
   (×1,26), см. [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
 - **Работа в NativeAOT проверяется в CI** (.NET 8 и .NET 10): сгенерированные методы и, начиная с 1.2.0,
@@ -228,8 +228,10 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
   инициализатор объекта. Record и классы со свойствами `init` работают.
 - **Нет flattening по соглашению** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` не заполняется из `Customer.Address.City`.
   Используйте `MapFrom`.
-- **`IM0001` не выдаётся для маппингов из профилей** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
-  остаётся со значением по умолчанию без предупреждения.
+- **`IM0001` для маппингов из профилей по умолчанию выключена** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
+  остаётся со значением по умолчанию без предупреждения. Начиная с 1.2.0 включается свойством
+  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (в 2.0 планируется включить по
+  умолчанию); уровень задаётся в `.editorconfig` (`dotnet_diagnostic.IM0001.severity = error`).
 - **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
@@ -237,7 +239,7 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
   используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002` и `IM0004` пока не выдаются.
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Кроме того: у диагностик нет места в исходном коде; в `IMapper` нельзя передать контекст в вызов
+Кроме того: до 1.1.4 включительно у диагностик нет места в исходном коде (начиная с 1.2.0 они указывают на строку); в `IMapper` нельзя передать контекст в вызов
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
 `ReverseMap()` сопоставляет только по именам; конвертеры создаёт сгенерированный код, а не DI, и им нужен публичный или
 internal конструктор без параметров (`IM0015`); private- и
@@ -267,8 +269,8 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
 
 Следующий релиз, 1.2.0. Сделано (ещё не выпущено): сгенерированный код коллекций без LINQ, `IMapper` без reflection,
 который работает в NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) и маппит коллекции через `Map<List<T>>`
-([#8](https://github.com/iron-mapper/IronMapper/issues/8)). В планах: `IM0001` для профилей с включением по флагу ([#22](https://github.com/iron-mapper/IronMapper/issues/22)), диагностики
-с местом в исходном коде. Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
+([#8](https://github.com/iron-mapper/IronMapper/issues/8)), converters без состояния создаются один раз, диагностики с местом в исходном коде и
+работающие code fix'ы, `IM0001` для профилей с включением по флагу ([#22](https://github.com/iron-mapper/IronMapper/issues/22)). Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
 он может меняться.
 
 ---
