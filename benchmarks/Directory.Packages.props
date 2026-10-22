@@ -5,9 +5,19 @@
     <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
+  <!--
+    IronMapper package version. Default: the published release the suite compares against. run-all.ps1
+    -UseLocalIronMapper packs ../src as <Version>-local.<timestamp> and sets IronMapperPackageVersion and
+    IronMapperPackageSource (environment variables) for the steps that measure what a package user gets: cold start,
+    NativeAOT, size, build time.
+  -->
+  <PropertyGroup>
+    <IronMapperPackageVersion Condition="'$(IronMapperPackageVersion)' == ''">1.1.3</IronMapperPackageVersion>
+  </PropertyGroup>
+
   <ItemGroup Label="Mappers under test">
-    <PackageVersion Include="IronMapper" Version="1.1.3" />
-    <PackageVersion Include="IronMapper.Extensions.DI" Version="1.1.3" />
+    <PackageVersion Include="IronMapper" Version="$(IronMapperPackageVersion)" />
+    <PackageVersion Include="IronMapper.Extensions.DI" Version="$(IronMapperPackageVersion)" />
     <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
     <PackageVersion Include="Mapster" Version="10.0.13" />
     <PackageVersion Include="Mapster.DependencyInjection" Version="10.0.13" />

@@ -16,11 +16,15 @@ IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not 
 | NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: no warnings, works from 1.2.0; up to 1.1.4 it failed at run time ([details](advanced.md#nativeaot-and-trimming)) |
 | License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
 
-Performance and size, IronMapper 1.1.3 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
-flat object 11.4 ns (×0.98) vs 34.6 ns (×2.97); nested order 209.8 ns (×1.26) vs 270.7 ns (×1.63); cold start
-+2.2 ms vs +73.5 ms over a console app without a mapper; framework-dependent publish +28.2 KB vs +1.17 MB (AutoMapper
-adds 9 assemblies, IronMapper one). Through `IMapper` IronMapper is slower than its extension methods (flat object 31.0 ns,
-×2.66). Full results, including Mapperly and Mapster: [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
+Performance and size, IronMapper 1.2.0 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
+flat object 11.4 ns (×0.99) vs 34.0 ns (×2.95); nested order 177.8 ns (×1.07) vs 264.0 ns (×1.59; the nested objects
+are configured by hand in IronMapper with `ForMember(... MapFrom(...))`, see below); cold start +1.3 ms vs +72.1 ms over a
+console app without a mapper; framework-dependent publish +47.7 KB vs +1.17 MB (AutoMapper adds 9 assemblies,
+IronMapper one). Through `IMapper` resolved from the same DI container (flat object): IronMapper 15.4 ns vs AutoMapper
+34.5 ns. The cold start of IronMapper's `IMapper` is +19.9 ms, of which +15.3 ms is the DI container itself
+(AutoMapper's +72.1 ms above is measured without a container). On .NET 8: flat ×1.01 vs ×3.26,
+nested ×1.09 vs ×1.49. Full results, including Mapperly and Mapster:
+[`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
 
 ---
 

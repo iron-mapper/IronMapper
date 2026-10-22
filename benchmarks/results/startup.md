@@ -4,35 +4,37 @@
 
 ## Process start (`probes/StartupProbe.*`)
 
-Each probe creates one order, sets up its mapper (the same configuration as the runtime benchmarks), maps the order, prints a checksum and exits. Time is wall-clock from `Process.Start` to process exit, measured by the script; the launch overhead of the script is the same for every probe, so compare the Δ column. `Baseline` creates the same order and prints the checksum of the source without any mapper. Runs are interleaved across probes after the warmup runs.
+Each probe creates one order, sets up its mapper (the same configuration as the runtime benchmarks), maps the order, prints a checksum and exits. Time is wall-clock from `Process.Start` to process exit, measured by the script; the launch overhead of the script is the same for every probe, so compare the Δ column. `Baseline` creates the same order and prints the checksum of the source without any mapper. `Manual_DI` is the hand-written mapping resolved from the same Microsoft.Extensions.DependencyInjection container as `IronMapper_IMapper`, so `IronMapper_IMapper` minus `Manual_DI` is what IronMapper adds on top of the container. Runs are interleaved across probes after the warmup runs.
 
 Expected checksum (Baseline): `12742788875462939321`. Status ok means every run exited with 0 and printed this value.
 
 ### Framework-dependent (JIT)
 
-2026-10-18 17:16 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
+2026-10-22 02:34 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
 
 | Probe | Median, ms | p95, ms | Min, ms | Mean, ms | Δ median vs Baseline, ms | Status |
 |---|---:|---:|---:|---:|---:|---|
-| Baseline | 51.3 | 57.9 | 47.5 | 51.7 | 0.0 | ok |
-| Manual | 52.4 | 56.3 | 47.3 | 52.1 | 1.1 | ok |
-| IronMapper | 53.4 | 58.0 | 49.1 | 53.6 | 2.2 | ok |
-| IronMapper_IMapper | 74.4 | 80.5 | 68.5 | 74.3 | 23.1 | ok |
-| Mapperly | 50.2 | 56.4 | 48.7 | 51.4 | -1.1 | ok |
-| Mapster | 150.4 | 164.6 | 143.2 | 151.6 | 99.1 | ok |
-| AutoMapper | 124.8 | 137.4 | 118.5 | 127.3 | 73.5 | ok |
+| Baseline | 50.3 | 57.8 | 47.5 | 50.7 | 0.0 | ok |
+| Manual | 50.0 | 53.9 | 48.2 | 50.5 | -0.2 | ok |
+| Manual_DI | 65.6 | 70.2 | 62.3 | 66.0 | 15.3 | ok |
+| IronMapper | 51.6 | 57.2 | 49.4 | 52.2 | 1.3 | ok |
+| IronMapper_IMapper | 70.1 | 74.1 | 67.7 | 70.7 | 19.9 | ok |
+| Mapperly | 50.4 | 53.3 | 48.0 | 50.8 | 0.1 | ok |
+| Mapster | 148.4 | 156.6 | 143.2 | 149.5 | 98.2 | ok |
+| AutoMapper | 122.4 | 133.5 | 117.9 | 124.3 | 72.1 | ok |
 
 ### NativeAOT
 
-2026-10-18 17:17 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
+2026-10-22 02:35 UTC · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · 30 runs after 3 warmup runs
 
 | Probe | Median, ms | p95, ms | Min, ms | Mean, ms | Δ median vs Baseline, ms | Status |
 |---|---:|---:|---:|---:|---:|---|
-| Baseline | 10.0 | 10.6 | 9.2 | 10.1 | 0.0 | ok |
-| Manual | 10.0 | 11.1 | 9.3 | 10.1 | -0.0 | ok |
-| IronMapper | 10.1 | 11.3 | 9.6 | 10.2 | 0.0 | ok |
-| IronMapper_IMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. IronMapper.Exceptions.MappingException: No mapping registered from 'OrderEntity' to 'OrderDto'. Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists and the IronMapper Source Generator has run on the project that owns these types. |
-| Mapperly | 10.0 | 12.8 | 9.3 | 10.3 | 0.0 | ok |
+| Baseline | 11.1 | 12.0 | 10.5 | 11.3 | 0.0 | ok |
+| Manual | 11.4 | 12.2 | 10.5 | 11.4 | 0.3 | ok |
+| Manual_DI | 11.7 | 12.5 | 10.7 | 11.7 | 0.6 | ok |
+| IronMapper | 11.4 | 13.0 | 10.4 | 11.6 | 0.2 | ok |
+| IronMapper_IMapper | 11.7 | 12.9 | 11.2 | 12.0 | 0.6 | ok |
+| Mapperly | 11.2 | 12.4 | 10.5 | 11.4 | 0.1 | ok |
 | Mapster | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.MissingMethodException: No parameterless constructor defined for type 'Mapster.NameMatchingStrategy'. |
 | AutoMapper | – | – | – | – | – | fails at runtime: exit code -1073740791: Unhandled exception. System.TypeInitializationException: A type initializer threw an exception. To determine which type, inspect the InnerException's StackTrace property. |
 
@@ -54,10 +56,11 @@ WarmupCount=0
 ```
 | Method             | Mean      | Error     | StdDev    | Ratio | RatioSD |
 |------------------- |----------:|----------:|----------:|------:|--------:|
-| Manual             |  1.653 ms | 0.0983 ms | 0.1132 ms |  1.00 |    0.09 |
-| IronMapper         |  1.831 ms | 0.1171 ms | 0.1348 ms |  1.11 |    0.11 |
-| IronMapper_IMapper | 21.706 ms | 1.0491 ms | 1.2082 ms | 13.19 |    1.12 |
-| Mapperly           |  1.744 ms | 0.0731 ms | 0.0842 ms |  1.06 |    0.08 |
-| Mapster            | 83.150 ms | 1.6968 ms | 1.9540 ms | 50.52 |    3.47 |
-| AutoMapper         | 67.876 ms | 1.5197 ms | 1.7501 ms | 41.24 |    2.86 |
+| Manual             |  2.837 ms | 0.1281 ms | 0.1475 ms |  1.00 |    0.07 |
+| Manual_DI          | 16.506 ms | 0.4985 ms | 0.5741 ms |  5.83 |    0.34 |
+| IronMapper         |  2.815 ms | 0.1198 ms | 0.1379 ms |  0.99 |    0.07 |
+| IronMapper_IMapper | 20.719 ms | 0.6457 ms | 0.7435 ms |  7.32 |    0.44 |
+| Mapperly           |  2.920 ms | 0.1776 ms | 0.2045 ms |  1.03 |    0.09 |
+| Mapster            | 85.218 ms | 1.8689 ms | 2.1523 ms | 30.11 |    1.64 |
+| AutoMapper         | 70.485 ms | 1.6114 ms | 1.8557 ms | 24.90 |    1.36 |
 

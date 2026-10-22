@@ -28,9 +28,12 @@
 
     -ResultsDir writes everything (reports and raw data) to another folder than results/, e.g. results/1.2.0 (relative to
     benchmarks/), through the environment variable IRONMAPPER_RESULTS_DIR. -UseLocalIronMapper measures the local
-    sources of ../src instead of the IronMapper package of Directory.Packages.props (the environment variable
-    UseLocalIronMapper=true, which every build of the run, BenchmarkDotNet's included, reads as an MSBuild property);
-    RESULTS.md names the source.
+    sources of ../src instead of the IronMapper package of Directory.Packages.props: the build, the tests and the
+    runtime benchmarks through project references (the environment variable UseLocalIronMapper=true, which every build
+    of the run, BenchmarkDotNet's included, reads as an MSBuild property); cold start, NativeAOT, size and build time
+    through the local sources packed as <Version>-local.<timestamp> into raw/local-packages (IronMapperPackageVersion,
+    IronMapperPackageSource), because a project reference adds the .pdb and XML docs to the publish folder and rebuilds
+    ../src inside every timed `dotnet build --no-incremental`. RESULTS.md names the source.
 
     Run durations are written to results/raw/run-info.json after every step (RESULTS.md shows them).
 
@@ -70,6 +73,8 @@ Import-Module (Join-Path $PSScriptRoot 'BenchmarkCommon.psm1') -Force
 # Set for this process and the processes it starts (dotnet, BenchmarkDotNet, the other scripts); restored at the end.
 $previousResultsDir = $env:IRONMAPPER_RESULTS_DIR
 $previousUseLocal = $env:UseLocalIronMapper
+$previousPackageVersion = $env:IronMapperPackageVersion
+$previousPackageSource = $env:IronMapperPackageSource
 if ($ResultsDir) { $env:IRONMAPPER_RESULTS_DIR = $ResultsDir }
 $env:UseLocalIronMapper = $UseLocalIronMapper ? 'true' : 'false'
 
@@ -136,6 +141,8 @@ Write-Host
 function Restore-Environment {
     $env:IRONMAPPER_RESULTS_DIR = $previousResultsDir
     $env:UseLocalIronMapper = $previousUseLocal
+    $env:IronMapperPackageVersion = $previousPackageVersion
+    $env:IronMapperPackageSource = $previousPackageSource
 }
 
 if ($problems.Count) { Restore-Environment; throw "Environment check failed:`n  $($problems -join "`n  ")" }
@@ -148,8 +155,13 @@ try {
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $started = Get-Date
+# The commit the run measures, so a report regenerated later names it rather than the HEAD of that moment.
+# Generated results (benchmarks/results/**) are not changes of the code under test.
+$runCommit = (& git -C $benchmarksDir rev-parse --short HEAD 2>$null)
+$runDirty = [bool] (& git -C $benchmarksDir status --porcelain -- .. ':(exclude)results' 2>$null)
 $runInfo = [ordered]@{ Mode = $mode; Started = (Get-UtcStamp); TotalSeconds = 0
     IronMapper = (Test-UseLocalIronMapper) ? 'local' : 'package'; ResultsDir = (Get-ResultsDirDisplay)
+    Commit = $runCommit; UncommittedChanges = $runDirty
     Steps = [System.Collections.Generic.List[object]]::new() }
 
 function Save-RunInfo {
@@ -204,6 +216,17 @@ function Invoke-RuntimeBenchmarks([string] $framework, [string] $folder, [string
 Invoke-Step 'Runtime' { Invoke-RuntimeBenchmarks 'net10.0' 'bdn' 'bdn-runtime.log' }
 
 if (-not $SkipNet8) { Invoke-Step 'RuntimeNet8' { Invoke-RuntimeBenchmarks 'net8.0' 'bdn-net8.0' 'bdn-runtime-net8.0.log' } }
+
+# From here on the local sources are measured as a package (see the description).
+if ($UseLocalIronMapper) {
+    $packageDir = Join-Path (Get-ResultsRawDir) 'local-packages'
+    $env:IronMapperPackageVersion = New-LocalIronMapperPackage $packageDir (Join-Path $logDir 'pack.log')
+    $env:IronMapperPackageSource = $packageDir
+    $env:UseLocalIronMapper = 'false'
+    $runInfo.LocalPackageVersion = $env:IronMapperPackageVersion
+    Save-RunInfo
+    Write-Host "IronMapper from here on: local sources packed as $($env:IronMapperPackageVersion)"
+}
 
 Invoke-Step 'Startup' {
     $startupArgs = @{ Mode = 'Both'; Force = $Force; LowMemory = $LowMemory; MinFreeMemoryGB = $MinFreeMemoryGB }

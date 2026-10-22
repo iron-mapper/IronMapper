@@ -91,16 +91,18 @@ for the scripts (MSBuild reads environment variables as properties).
 
 - **`IronMapper_StaticFormat` is a workaround**, not the documented converter API. It maps the salary in
   CustomConfig with `MapFrom(s => SalaryFormat.Format(s.Salary))` instead of `UseConverter<SalaryConverter>()`, only
-  to show the cost of creating the converter: the code generated for `UseConverter<T>()` calls `new T().Convert(...)`
-  on every mapping. The `IronMapper` row uses `UseConverter<T>()`, as a user would.
+  to show the cost of creating the converter: up to 1.1.x the code generated for `UseConverter<T>()` calls
+  `new T().Convert(...)` on every mapping; from 1.2.0 a converter without state (`SalaryConverter` is one) is created
+  once and reused. The `IronMapper` row uses `UseConverter<T>()`, as a user would.
 - **IronMapper configures nested single objects through `MapFrom`.** IronMapper does not map nested single objects
   automatically; the documented workaround is `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested
   property (feature matrix: "manual setup"). The benchmarks and the build time projects use exactly that.
   Collections of mapped types are automatic.
-- **IronMapper collections** are generated as `Enumerable.ToList(Enumerable.Select(...))`; `Manual` and Mapperly use
-  `new List<T>(count)` + loop. Part of the collection difference to `Manual` comes from this. Under NativeAOT the same
-  LINQ `Select` makes the executable ~230 KB larger than with Mapperly, because it needs the NativeAOT runtime type
-  loader (verified in isolation, see [results/aot.md](results/aot.md)).
+- **IronMapper collections** up to 1.1.x are generated as `Enumerable.ToList(Enumerable.Select(...))`; `Manual` and
+  Mapperly use `new List<T>(count)` + loop. Part of the 1.1.3 collection difference to `Manual` comes from this. Under
+  NativeAOT the same LINQ `Select` made the executable ~230 KB larger than with Mapperly, because it needs the NativeAOT
+  runtime type loader (verified in isolation, see [results/baseline-1.1.3/aot.md](results/baseline-1.1.3/aot.md)).
+  From 1.2.0 the generated code uses loops of a known size like `Manual` (no LINQ, no delegates).
 - **Mapperly enumerates nested collections through `IReadOnlyCollection<T>`.** The generated
   `MapToListOfOrderLineDto(IReadOnlyCollection<OrderLineEntity>)` uses `foreach` over the interface. In Nested the JIT
   devirtualizes it for `List<T>` (guarded by a type check) and removes the boxed enumerator, so the allocation equals
@@ -168,6 +170,22 @@ pwsh ./scripts/run-all.ps1 -ResultsDir results/1.1.3-rerun
 ./scripts/run-all.sh                    # the same on Linux/macOS
 ```
 
+A release run in one go (Windows; both runs one after the other in one session, the machine kept awake, build outputs
+cleaned before each run, then a check of both reports; summary in `../artifacts/bench-summary.txt`), and the
+comparison of the two runs, which `generate-report.ps1` embeds into the RESULTS.md of the second:
+
+```bash
+pwsh ./scripts/run-benchmarks.ps1        # published package -> results/1.1.3-rerun, local sources -> results/1.2.0
+pwsh ./scripts/run-benchmarks.ps1 -Dry   # checks the commands (~10 min); results to ../artifacts/bench-dry/
+pwsh ./scripts/compare-results.ps1 -Baseline results/1.1.3-rerun -Current results/1.2.0   # results/1.2.0/comparison.md
+pwsh ./scripts/generate-report.ps1       # with IRONMAPPER_RESULTS_DIR=results/1.2.0: RESULTS.md with the comparison
+```
+
+`run-benchmarks.ps1` requires the branch `main` and a clean tree (changes under `benchmarks/results/` are allowed; with
+`-Dry` both only warn). A run passes when `run-all.ps1` exits with 0, its log ends with "All done in", and its
+RESULTS.md has none of the markers of a missing or shortened measurement (`_Not measured`, `**Quick run**`,
+`**Dry run**`; case-sensitive). `-SkipRerun` keeps an existing `results/1.1.3-rerun`.
+
 Close other applications and keep a laptop on mains power during the run.
 
 Step by step:
@@ -208,8 +226,13 @@ time projects are .NET 10 only.
 `-ResultsDir <folder>` (relative to `benchmarks/`) writes the whole run — reports, raw data, BenchmarkDotNet artifacts,
 the feature matrix — to that folder instead of `results/` (environment variable `IRONMAPPER_RESULTS_DIR`, read by the
 scripts, `Program.cs` and the feature matrix test); its `raw/` is not committed. `-UseLocalIronMapper` measures the
-local sources (`UseLocalIronMapper=true` for every build of the run); RESULTS.md then lists IronMapper as "local
-sources" with the commit instead of the package version.
+local sources: the build, the tests and the runtime benchmarks through project references (`UseLocalIronMapper=true`);
+cold start, NativeAOT, size and build time through the local sources packed as `<Version>-local.<timestamp>` into
+`raw/local-packages` (MSBuild properties `IronMapperPackageVersion` and `IronMapperPackageSource`, see
+`Directory.Packages.props`). A project reference is not what a package user gets: it copies the `.pdb` and XML docs into
+the publish folder (the 1.2.0 run showed +107 KB instead of +48 KB) and rebuilds `../src` inside every timed
+`dotnet build --no-incremental` (+1.2 s at any N). RESULTS.md lists IronMapper as "local sources" with the commit and
+the package version used.
 
 ### Smoke check (CI)
 
@@ -238,7 +261,11 @@ tests/Comparison.Tests       equivalence, deep copy, in-place, edge cases → fe
 probes/StartupProbe.*        one console per library (cold start, NativeAOT, size)
 probes/BuildProbe.*          generated by run-build-time.ps1 (not committed)
 tools/MstatReport            NativeAOT size breakdown from ILC .mstat files
-scripts/                     run-all, run-startup, run-aot, run-footprint, run-build-time, generate-report
-results/                     reports (RESULTS.md and the per-area pages); raw/ is not committed
-results/baseline-1.1.3/      frozen copy of the 1.1.3 reports, the reference for the 1.2.0 targets
+scripts/                     run-all, run-benchmarks (release run), run-startup, run-aot, run-footprint, run-build-time,
+                             compare-results, generate-report
+results/                     reports of the latest release (RESULTS.md and the per-area pages): a copy of results/1.2.0
+results/1.2.0/               the 1.2.0 release run (local sources) with the comparison to results/1.1.3-rerun
+results/1.1.3-rerun/         the published 1.1.3, measured in the same session as results/1.2.0
+results/baseline-1.1.3/      frozen copy of the 1.1.3 reports of 18.10.2026, the reference for the 1.2.0 targets
+                             (raw/ of every folder is not committed)
 ```
