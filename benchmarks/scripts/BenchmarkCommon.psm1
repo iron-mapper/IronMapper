@@ -192,9 +192,47 @@ function Get-PackageVersions {
     [xml] $props = Get-Content (Join-Path $script:BenchmarksDir 'Directory.Packages.props') -Raw
     foreach ($group in $props.Project.ItemGroup) {
         foreach ($p in @($group.PackageVersion)) {
-            if ($p) { [pscustomobject]@{ Id = $p.Include; Version = $p.Version; Label = $group.Label } }
+            if ($p) { [pscustomobject]@{ Id = $p.Include; Version = (Resolve-PackageVersion $props $p.Version); Label = $group.Label } }
         }
     }
+}
+
+# A version of Directory.Packages.props: a literal, or $(Property) — the environment variable of that name (MSBuild
+# reads it as a property), else the default from the file's PropertyGroup.
+function Resolve-PackageVersion([xml] $props, [string] $version) {
+    if ($version -notmatch '^\$\((\w+)\)$') { return $version }
+    $name = $Matches[1]
+    $fromEnv = [Environment]::GetEnvironmentVariable($name)
+    if ($fromEnv) { return $fromEnv }
+    foreach ($group in $props.Project.PropertyGroup) {
+        $node = $group.SelectSingleNode($name)
+        if ($node) { return $node.InnerText.Trim() }
+    }
+    return $version
+}
+
+<#
+    Packs the local sources (../src: IronMapper, IronMapper.Extensions.DI) into $OutputDir as <Version>-local.<UTC
+    timestamp> (a new version every time, so the NuGet global packages folder never serves an older build) and returns
+    the version. With IronMapperPackageVersion and IronMapperPackageSource set to it, the probes reference the local
+    sources the way a package user does: buildTransitive, analyzers, no .pdb or XML docs in the publish folder, and no
+    ProjectReference build of ../src inside a timed `dotnet build --no-incremental`.
+#>
+function New-LocalIronMapperPackage([string] $OutputDir, [string] $LogPath, [string] $BaseVersion) {
+    $src = Join-Path $script:BenchmarksDir '..' 'src'
+    # The version being prepared, when <Version> is not bumped yet (e.g. 1.2.0 while Directory.Build.props says 1.1.4).
+    $version = $BaseVersion
+    if (-not $version) {
+        $version = (& dotnet msbuild (Join-Path $src 'IronMapper' 'IronMapper.csproj') -getProperty:Version).Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $version) { throw 'Cannot read Version of src/IronMapper/IronMapper.csproj' }
+    }
+    $version = "$version-local.$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+    foreach ($project in (Join-Path $src 'IronMapper' 'IronMapper.csproj'), (Join-Path $src 'IronMapper.Extensions.DI' 'IronMapper.Extensions.DI.csproj')) {
+        & dotnet pack $project -c Release -o $OutputDir "-p:Version=$version" -nologo *>> $LogPath
+        if ($LASTEXITCODE -ne 0) { throw "dotnet pack $project failed (exit code $LASTEXITCODE); log: $LogPath" }
+    }
+    $version
 }
 
 # results/raw/run-info.json, written by run-all.ps1: run mode, start/end, duration of each step.

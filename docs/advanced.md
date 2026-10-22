@@ -198,32 +198,39 @@ The in-place overload only assigns the mapped properties. It:
 
 ### Performance
 
-IronMapper 1.1.3, .NET 10.0.12, Intel Core i7-12650H; mean time and the ratio to hand-written code. Full report,
-method and the other libraries: [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
+IronMapper 1.2.0, .NET 10.0.12 and .NET 8, Intel Core i7-12650H; mean time and the ratio to hand-written code. Full
+report, method, the other libraries and the comparison with 1.1.3 measured in the same session:
+[`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
 
-| Scenario | Extension method | `IMapper` |
-|---|---:|---:|
-| Flat (15 properties) | 11.4 ns (×0.98), 168 B | 31.0 ns (×2.66), 200 B |
-| Nested (order, customer, address, 5–20 lines) | 209.8 ns (×1.26) | 227.6 ns (×1.37) |
-| Collection, 1 000 orders | 258.1 µs (×1.01) | 282.4 µs (×1.11) |
-| Cold start, Δ ms over a console app without a mapper | 2.2 | 23.1 |
+| Scenario | Extension method, .NET 10 | `IMapper`, .NET 10 | Extension method, .NET 8 | `IMapper`, .NET 8 |
+|---|---:|---:|---:|---:|
+| Flat (15 properties) | 11.4 ns (×0.99), 168 B | 16.3 ns (×1.41), 168 B | 15.4 ns (×1.01) | 20.9 ns (×1.37) |
+| Nested (order, customer, address, 5–20 lines) | 177.8 ns (×1.07) | 185.5 ns (×1.11) | 208.1 ns (×1.09) | 215.6 ns (×1.13) |
+| Collection, 1 000 orders | 271.4 µs (×1.05) | 253.0 µs (×0.98) | 274.9 µs (×1.02) | 284.3 µs (×1.05) |
+| In-place update | 8.0 ns (×0.91), 0 B | 14.0 ns (×1.59), 0 B | 8.3 ns (×0.93) | 14.9 ns (×1.68) |
+| Cold start, Δ ms over a console app without a mapper | 1.3 | 19.9 | – | – |
 
-- In 1.1.3 `IMapper` adds the reflection call (`MethodInfo.Invoke`) on every call and the assembly scan on the first
-  call for a type pair. From 1.2.0 it calls the generated methods through delegates and allocates nothing of its own;
-  the table is updated by the full run of the release.
+- `IMapper` calls the generated methods through the delegates of the generated registry and allocates nothing of its
+  own (the same bytes as the extension method). What remains over the extension method (+5 ns on Flat) is the call of
+  the generic interface method `IMapper.Map<TSource, TDest>`. In the DI overhead benchmark (both resolved from the same
+  container, flat object) IronMapper's `IMapper` takes 15.4 ns, AutoMapper's 34.5 ns. 1.1.3 called through reflection:
+  30.2 ns on Flat, +32 B per call.
+- `IMapper` cold start: the DI container alone (the same hand-written mapping resolved from it, `Manual_DI`) is
+  +15.3 ms; IronMapper adds 4.5 ms on top of it (registration of the mappings when the first `IMapper` is created, and
+  the first call), more with more mappings. 1.1.3: 6.4 ms.
 - In the Nested scenario IronMapper maps the nested objects through `ForMember(... MapFrom(...))` (see
-  [Nested objects](#nested-objects)); the generated collection code of 1.1.3 uses `Enumerable.Select` + `ToList`.
-  Mapperly is at ×1.00 there.
-- Unreleased (1.2.0): the generated code has no LINQ and no delegates (loops of a known size, see
-  [Nested collection properties](#nested-collection-properties)). A preliminary run of the local sources on the same
-  machine (not a full run; the table above is updated by the full run of the release): Nested ×1.09, Collection of 10
-  orders ×0.97 (Mapperly ×1.18), in-place update ×0.90. The remaining Nested gap is the null checks of the generated
-  methods: they keep the JIT from inlining `MapToAddressDto` into `MapToCustomerDto`; without them the same run gives
-  ×1.02.
-- Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +73.5 ms, Mapster +99.1 ms).
-- Only .NET 10 was measured. CI only checks that the benchmark suite builds and that every scenario runs one
-  iteration on .NET 10 and .NET 8; it does not publish numbers. How to run the suite:
-  [`benchmarks/README.md`](../benchmarks/README.md).
+  [Nested objects](#nested-objects)); Mapperly maps them automatically and is at ×0.98 there. The generated code has
+  no LINQ and no delegates (loops of a known size, see
+  [Nested collection properties](#nested-collection-properties)); 1.1.3 used `Enumerable.Select` + `ToList` and was at
+  ×1.25. The remaining Nested gap is the null checks of the generated methods: they keep the JIT from inlining
+  `MapToAddressDto` into `MapToCustomerDto` (checked with `DisassemblyDiagnoser`). They are the documented behavior in
+  1.x; 1.3.0 is to call an inner method without the check for nested objects.
+- Collection differences of a few percent are within the run-to-run spread: at 1 000 orders this run has `IMapper`
+  faster than the extension methods it calls, and a separate run of IronMapper alone gave ×1.01.
+- Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +72.1 ms, Mapster +98.2 ms). The
+  probes (cold start, NativeAOT, size, build time) run on .NET 10 only.
+- One machine. CI only checks that the benchmark suite builds and that every scenario runs one iteration on .NET 10
+  and .NET 8; it does not publish numbers. How to run the suite: [`benchmarks/README.md`](../benchmarks/README.md).
 
 ### NativeAOT and trimming
 
@@ -234,9 +241,10 @@ against the packed package with `PublishAot=true` for .NET 8 and .NET 10 (linux-
 - **Generated extension methods: compatible.** No trim/AOT warnings (the CI check fails on any); the executable runs
   and produces the correct result. In the benchmark suite (win-x64, .NET 10,
   [`benchmarks/results/aot.md`](../benchmarks/results/aot.md)) startup is the same as without a mapper, and the
-  executable of 1.1.3 is 255.5 KB larger than the app without a mapper (Mapperly: +23.6 KB), mostly because the
-  generated collection code (`Enumerable.Select` + `ToList`) pulls in the NativeAOT type loader. Unreleased (1.2.0,
-  no LINQ in the generated code): +2.6 KB, preliminary, measured with the local sources. The registration for
+  executable is 2.6 KB larger than the app without a mapper (Mapperly: +23.6 KB). In 1.1.3 it was +255.5 KB, mostly
+  because the generated collection code (`Enumerable.Select` + `ToList`) pulled in the NativeAOT type loader. The
+  `IMapper` probe adds 1.50 MB, almost all of it Microsoft.Extensions.DependencyInjection (the same hand-written mapping
+  behind the same container: +1.05 MB). The registration for
   `IMapper` is not in such an app: without `IronMapper.Extensions.DI` the trimmer removes it (see
   [Registration for IMapper](configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps)); CI checks that
   it is absent from `tests/IronMapper.AotProbe` and present with `IronMapperRegistration=true`.

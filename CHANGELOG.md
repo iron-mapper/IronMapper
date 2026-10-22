@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-22
+
 ### Added
 
 - **Optional overloads can be turned off.** For the project with the MSBuild properties `IronMapperGenerateInPlace`,
@@ -174,10 +176,45 @@
 
 ### Performance
 
-The numbers come with the release, from the full run of the comparison benchmarks.
+Full run of the comparison benchmarks: 1.1.3 (the package from nuget.org) and 1.2.0 measured in one session on one
+machine (Intel Core i7-12650H, Windows 11, BenchmarkDotNet 0.15.8), .NET 10.0.12 / .NET 8; ratio to hand-written code
+(`Manual`) of the same run. Report and the full comparison:
+[benchmarks/results/RESULTS.md](benchmarks/results/RESULTS.md#compared-with-the-previous-release).
 
-Converters (see Changed): a converter without state is no longer allocated on every call; its effect on time is
-measured by the full run.
+| Scenario | 1.1.3, .NET 10 | 1.2.0, .NET 10 | 1.1.3, .NET 8 | 1.2.0, .NET 8 |
+|---|---:|---:|---:|---:|
+| Flat | ×0.98 | ×0.99 | ×1.05 | ×1.01 |
+| Nested (nested objects configured with `ForMember(... MapFrom(...))`) | ×1.25 | ×1.07 | ×1.28 | ×1.09 |
+| Collection, 10 orders | ×1.15 | ×0.98 | ×1.35 | ×1.03 |
+| Collection, 1 000 orders | ×1.03 | ×1.05 | ×1.12 | ×1.02 |
+| Collection, 100 000 orders | ×1.17 | ×1.00 | ×1.12 | ×1.00 |
+| CustomConfig (converter) | ×1.02 | ×1.00 | ×0.99 | ×0.97 |
+| In-place update | ×1.10 | ×0.91 | ×0.97 | ×0.93 |
+| `IMapper`, Flat | 30.2 ns, ×2.65 | 16.3 ns, ×1.41 | 36.0 ns, ×2.41 | 20.9 ns, ×1.37 |
+| `IMapper`, Nested | ×1.36 | ×1.11 | ×1.52 | ×1.13 |
+| `IMapper`, in-place | 31.0 ns, ×3.56 | 14.0 ns, ×1.59 | 33.4 ns, ×4.04 | 14.9 ns, ×1.68 |
+
+Collection differences of a few percent are within the run-to-run spread (at 1 000 orders on .NET 10 the libraries
+that did not change moved by up to 12 % between the two runs; a separate A/B run gave ×1.01 for 1.2.0). Mapperly in the
+same run: Nested ×0.98 / ×1.21, Collection of 10 ×1.17 / ×1.10.
+
+- Allocations: collections allocate as much as `Manual` (1.1.3: +4 % at 1 000 and 100 000 orders); Nested 2.0 →
+  1.9 KB; `IMapper` allocates nothing of its own (Flat 200 → 168 B, in-place 40 → 0 B).
+- NativeAOT executable of an app with the extension methods only: +255.5 KB → +2.6 KB over the app without a mapper
+  (Mapperly +23.6 KB). `IMapper` under NativeAOT: fails → works, no trim/AOT warnings; +1.50 MB, almost all of it
+  Microsoft.Extensions.DependencyInjection (the same hand-written mapping behind the same container: +1.05 MB).
+- Cold start (process start + one mapping, JIT, over a console app without a mapper; re-measured for both versions in
+  one session with the packages): extension methods +2.0 → +1.3 ms; `IMapper` +21.8 → +19.9 ms, of which the DI
+  container is +15.3 ms, so IronMapper's own part went from 6.4 to 4.5 ms.
+- Size: framework-dependent publish +28.2 → +47.7 KB (`IronMapper.dll` 14.8 → 28.7 KB, with `MapperRegistry`);
+  `.nupkg` 83.6 → 114.4 KB (`IronMapper`, with the generator and the code fixes), 35.7 → 24.9 KB
+  (`IronMapper.Extensions.DI`).
+- Build time of a project with 200 entity/DTO pairs over the same project without a mapper: +0.49 → +0.60 s (Mapperly
+  +0.20 / +0.31 s in the same runs); the generated code grew from 12,210 to 13,894 lines (loops instead of LINQ, the
+  registration for `IMapper`).
+
+Converters (see Changed): a converter without state is no longer allocated on every call (CustomConfig above; on
+.NET 10 the escape analysis already removed the allocation in 1.1.3).
 
 Generated code without LINQ and delegates (see Changed):
 
@@ -204,6 +241,15 @@ Generated code without LINQ and delegates (see Changed):
 
 ### Build
 
+- Benchmarks: `scripts/run-benchmarks.ps1` runs both release runs (the published package and the local sources) in one
+  session and checks them (exit code, log, the `_Not measured`, `**Quick run**`, `**Dry run**` markers of RESULTS.md,
+  case-sensitive; `-Dry` checks the commands into `artifacts/bench-dry/`); `scripts/compare-results.ps1` compares two
+  runs, and `generate-report.ps1` embeds the comparison into RESULTS.md. `run-all.ps1 -UseLocalIronMapper` measures cold
+  start, NativeAOT, size and build time through the local sources packed as `<Version>-local.<timestamp>`
+  (`IronMapperPackageVersion`, `IronMapperPackageSource`): a project reference added the `.pdb` and XML docs to the
+  publish folder and rebuilt `../src` inside every timed build. RESULTS.md names the commit recorded at the start of
+  the run and links the benchmarks README relative to its folder; the NativeAOT findings no longer say that
+  `docs/advanced.md` lists NativeAOT as "Not verified".
 - Tests of the optional overloads: every combination of the three, set by MSBuild property, attribute and profile, run
   through the generated method and the registry (`GeneratedMethodsTests`); `IMapper` with the overloads turned off gives
   the same results as with all of them (`TurnedOffOverloadsTests`). The tests that use the process-wide registry run in

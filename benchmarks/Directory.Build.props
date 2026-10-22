@@ -31,5 +31,7 @@
     -->
     <UseLocalIronMapper Condition="'$(UseLocalIronMapper)' == ''">false</UseLocalIronMapper>
     <IronMapperSrcDir>$(MSBuildThisFileDirectory)..\src\</IronMapperSrcDir>
+    <!-- Folder with locally packed IronMapper packages (IronMapperPackageVersion, see Directory.Packages.props). -->
+    <RestoreAdditionalProjectSources Condition="'$(IronMapperPackageSource)' != ''">$(RestoreAdditionalProjectSources);$(IronMapperPackageSource)</RestoreAdditionalProjectSources>
   </PropertyGroup>
 </Project>

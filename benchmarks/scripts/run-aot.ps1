@@ -120,7 +120,7 @@ function Get-Facts([string] $probe) {
 function Test-Works([string] $probe) { [bool] ($data | Where-Object { $_.Probe -eq $probe -and $_.Works }) }
 
 [void] $sb.AppendLine("- **IronMapper** (generated extension methods): $(Get-Facts 'IronMapper'). " +
-    'This is the first actual NativeAOT check of IronMapper (`docs/advanced.md` lists it as "Not verified").')
+    'The repository CI checks the same on every change (`eng/verify-aot.ps1`, .NET 8 and .NET 10; `docs/advanced.md`, "NativeAOT and trimming").')
 [void] $sb.AppendLine("- **Mapperly**: $(Get-Facts 'Mapperly').")
 $line = "- **IronMapper_IMapper** (``IMapper`` from ``IronMapper.Extensions.DI``): $(Get-Facts 'IronMapper_IMapper')."
 if (-not (Test-Works 'IronMapper_IMapper')) {

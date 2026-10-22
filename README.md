@@ -22,17 +22,19 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
   ([diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)). Profile mappings get
   fewer checks (`IM0001` for them is opt-in from 1.2.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
   the generated file.
-- **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.6 ns per object. Nested objects are slower
-  (×1.26), see [Performance](https://github.com/iron-mapper/IronMapper#performance).
+- **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.5 ns per object (.NET 10). Nested objects are a
+  little slower (×1.07 on .NET 10, ×1.09 on .NET 8; 1.1.3: ×1.25), see
+  [Performance](https://github.com/iron-mapper/IronMapper#performance).
 - **NativeAOT checked in CI** (.NET 8 and .NET 10): the generated methods and, from 1.2.0, the optional `IMapper`
   service publish with no trim/AOT warnings and run correctly. Up to 1.1.4 `IMapper` used reflection and did not work
   under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
-- **Cold start of about 2 ms** (process start plus the first mapping, over a console app without a mapper), the
-  same order as hand-written code. AutoMapper and Mapster need tens of milliseconds there to build their mapping
-  configuration ([results](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
+- **Cold start of about 1 ms** (process start plus the first mapping, over a console app without a mapper: +1.3 ms;
+  hand-written code and Mapperly are within 0.2 ms of the app without a mapper, IronMapper loads its assembly for the
+  generated module initializer). AutoMapper and Mapster need 70–100 ms there to build their mapping configuration
+  ([results](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md#cold-start)).
 - **No runtime dependencies.** The `IronMapper` package has no NuGet dependencies and adds one assembly to the app
-  (+28.2 KB to a framework-dependent publish). The optional `IronMapper.Extensions.DI` package depends on
-  `Microsoft.Extensions.DependencyInjection.Abstractions`.
+  (+47.7 KB to a framework-dependent publish of the benchmark console, +2.6 KB to its NativeAOT executable). The
+  optional `IronMapper.Extensions.DI` package depends on `Microsoft.Extensions.DependencyInjection.Abstractions`.
 
 ---
 
@@ -89,18 +91,24 @@ Studio 2022 17.11+). On an older SDK the compiler reports warning `CS9057`, the 
 
 ## Performance
 
-IronMapper 1.1.3 (1.1.4 generates the same code) against hand-written code (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 and AutoMapper 16.2.0.
-BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Full report, method and raw data:
+IronMapper 1.2.0 against hand-written code (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 and AutoMapper 16.2.0.
+BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Full report (also .NET 8), method and the
+comparison with 1.1.3 measured in the same session:
 [benchmarks/results/RESULTS.md](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md).
 
 | Library | Flat | Nested | Collection, 1 000 | Cold start, Δ ms | NativeAOT | Δ publish (JIT) | Δ AOT executable |
 |---|---:|---:|---:|---:|---|---:|---:|
-| Manual | 11.6 ns | 165.9 ns | 255.0 µs | 1.1 | works | +4.6 KB | +2.0 KB |
-| IronMapper | 11.4 ns (×0.98) | 209.8 ns (×1.26) | 258.1 µs (×1.01) | 2.2 | works | +28.2 KB | +255.5 KB |
-| IronMapper `IMapper` | 31.0 ns (×2.66) | 227.6 ns (×1.37) | 282.4 µs (×1.11) | 23.1 | fails | +205.8 KB | +1.47 MB |
-| Mapperly | 11.6 ns (×0.99) | 165.5 ns (×1.00) | 267.3 µs (×1.05) | -1.1 | works | +38.5 KB | +23.6 KB |
-| Mapster | 15.6 ns (×1.34) | 192.3 ns (×1.16) | 263.5 µs (×1.03) | 99.1 | fails | +244.8 KB | +3.99 MB |
-| AutoMapper | 34.6 ns (×2.97) | 270.7 ns (×1.63) | 344.6 µs (×1.35) | 73.5 | fails | +1.17 MB | +5.16 MB |
+| Manual | 11.5 ns | 166.5 ns | 257.5 µs | −0.2 | works | +4.6 KB | +2.0 KB |
+| IronMapper | 11.4 ns (×0.99) | 177.8 ns (×1.07) | 271.4 µs (×1.05) | 1.3 | works | +47.7 KB | +2.6 KB |
+| IronMapper `IMapper` | 16.3 ns (×1.41) | 185.5 ns (×1.11) | 253.0 µs (×0.98) | 19.9 | works | +223.4 KB | +1.50 MB |
+| Mapperly | 11.6 ns (×1.01) | 163.1 ns (×0.98) | 276.9 µs (×1.08) | 0.1 | works | +38.5 KB | +23.6 KB |
+| Mapster | 15.2 ns (×1.32) | 185.8 ns (×1.12) | 287.0 µs (×1.11) | 98.2 | fails | +244.8 KB | +3.99 MB |
+| AutoMapper | 34.0 ns (×2.95) | 264.0 ns (×1.59) | 344.6 µs (×1.34) | 72.1 | fails | +1.17 MB | +5.16 MB |
+
+Against 1.1.3 (same session, same machine, ratio to `Manual`, .NET 10): Nested ×1.25 → ×1.07, Collection of 10 orders
+×1.15 → ×0.98 (Mapperly ×1.17), in-place update ×1.10 → ×0.91, collections allocate as much as `Manual` (1.1.3:
++4 %); `IMapper` Flat 30.2 → 16.3 ns with no allocation of its own, NativeAOT fails → works; NativeAOT executable
++255.5 KB → +2.6 KB.
 
 How to read it:
 
@@ -110,14 +118,19 @@ How to read it:
   because it does not map nested single objects automatically (see [Known limitations](https://github.com/iron-mapper/IronMapper#known-limitations)). The
   other libraries map them automatically.
 - Cold start: median wall-clock time of process start plus one mapping, minus the same console app without a mapper
-  (30 runs). This metric is sensitive to noise; read it as an order of magnitude.
-- NativeAOT: "works" means the published executable ran and printed the correct result. The IronMapper `IMapper`
-  executable of 1.1.3 fails with `MappingException` (from 1.2.0 it works, checked in CI). Mapster and AutoMapper build
-  their mappers at run time and fail as well.
+  (30 runs). This metric is sensitive to noise; read it as an order of magnitude. Most of the `IMapper` cold start is
+  the DI container itself: the same hand-written mapping resolved from the same container (`Manual_DI`) gives +15.3 ms,
+  so IronMapper's own part is 4.5 ms (1.1.3: 6.4 ms); it grows with the number of mappings (registration).
+- NativeAOT: "works" means the published executable ran and printed the correct result; from 1.2.0 this includes
+  `IMapper` (checked in CI; the 1.1.3 executable failed with `MappingException`). Mapster and AutoMapper build their
+  mappers at run time and fail.
 - Sizes are the increase over the same console app without a mapper.
-- Collection differences of a few percent (×1.01–×1.05 here; 100 000 items in the full report) are within the run-to-run
-  spread and do not mean one library is faster.
-- Measured only on .NET 10 and on one machine. Mapster.Tool (Mapster's code generator) was not measured.
+- Collection differences of a few percent are within the run-to-run spread and do not mean one library is faster: at
+  1 000 orders this run has `IMapper` (×0.98) faster than the extension methods (×1.05) it calls, and Mapster at ×1.11
+  against ×1.03 in the 1.1.3 run of the same session; a separate run of IronMapper alone gave ×1.01. At 100 000 orders
+  the garbage collector dominates (full report).
+- .NET 8 (same run): Flat ×1.01, Nested ×1.09, Collection 1 000 ×1.02, in-place ×0.93; `IMapper` Flat ×1.37.
+- One machine. Mapster.Tool (Mapster's code generator) was not measured.
 
 ---
 
@@ -221,7 +234,9 @@ NativeAOT app without `IronMapper.Extensions.DI` does not contain the registrati
 ([details](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps)).
 A call through `IMapper` still costs more than the extension method (the call of a generic interface method and a
 delegate, and a type lookup for `Map<TDest>(object)`); prefer the extension methods when the types are known at
-compile time. Up to 1.1.4 `IMapper` used reflection, was ×2.7 slower on Flat and did not work under NativeAOT.
+compile time (DI overhead benchmark, flat object: 15.4 ns through `IMapper` against 11.1 ns for the extension method;
+AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
+`IMapper` used reflection, was ×2.7 slower on Flat and did not work under NativeAOT.
 
 ---
 
@@ -250,7 +265,9 @@ Also: up to 1.1.4 diagnostics have no source location (from 1.2.0 they point to 
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
 `ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public
 or internal parameterless constructor (`IM0015`); private/protected nested types
-cannot be mapped (`IM0010`); several projects in one solution have their own `GeneratedMappers` class. Details:
+cannot be mapped (`IM0010`); several projects in one solution have their own `GeneratedMappers` class; the first
+`IMapper` registers all mappings of the assembly, which adds 4.5 ms to the cold start over the DI container in the
+benchmark (more with more mappings). Details:
 [Advanced topics](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md),
 [Configuration](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.md),
 [Diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md).
@@ -260,7 +277,7 @@ cannot be mapped (`IM0010`); several projects in one solution have their own `Ge
 - Packages: `IronMapper` targets `netstandard2.0` and `net10.0`; `IronMapper.Extensions.DI` targets `netstandard2.1`
   and `net10.0`. The generator needs .NET SDK 8.0.400+.
 - The library tests run on .NET 10 (Ubuntu and Windows in CI). The equivalence tests of the benchmark suite also run
-  on .NET 8. .NET 9 is not tested in CI ([#10](https://github.com/iron-mapper/IronMapper/issues/10)). The Quick Start
+  on .NET 8, and the runtime benchmarks of 1.2.0 were measured on .NET 8 and .NET 10. .NET 9 is not tested in CI ([#10](https://github.com/iron-mapper/IronMapper/issues/10)). The Quick Start
   above is compiled and run against the packed package in CI (.NET 10); 1.1.4 was checked by hand on .NET 8, 9
   and 10.
 
@@ -274,12 +291,19 @@ Open issues:
 - Context data in `Map` calls (like `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
 - `net9.0` target — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
 
-Next release, 1.2.0. Done (not released yet): generated collection code without LINQ, `IMapper` without
-reflection that works under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) and maps collections with `Map<List<T>>`
-([#8](https://github.com/iron-mapper/IronMapper/issues/8)), stateless converters created once, diagnostics with source locations and working code
-fixes, `IM0001` for profiles behind an opt-in switch ([#22](https://github.com/iron-mapper/IronMapper/issues/22)). The
-working plan (in Russian) is [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md);
-it may change.
+1.2.0 (this release): generated collection code without LINQ, `IMapper` without reflection that works under NativeAOT
+([#26](https://github.com/iron-mapper/IronMapper/issues/26)) and maps collections with `Map<List<T>>`
+([#8](https://github.com/iron-mapper/IronMapper/issues/8)), stateless converters created once, diagnostics with source
+locations and working code fixes, `IM0001` for profiles behind an opt-in switch
+([#22](https://github.com/iron-mapper/IronMapper/issues/22)), optional overloads that can be turned off.
+
+Next, 1.3.0: nested single objects mapped automatically, with `null` checks by nullable annotations
+([#23](https://github.com/iron-mapper/IronMapper/issues/23); also aimed at the remaining Nested gap), constructors and
+positional records ([#24](https://github.com/iron-mapper/IronMapper/issues/24)), diagnostics `IM0002` (incompatible
+types) and `IM0004` (cycles). 2.0: `null` → `null` for nullable sources
+([#27](https://github.com/iron-mapper/IronMapper/issues/27)), `IM0001` for profiles on by default, the "mapper class"
+mode. The working plan (in Russian) is
+[IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md); it may change.
 
 ---
 
