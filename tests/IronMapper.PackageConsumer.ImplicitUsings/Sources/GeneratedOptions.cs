@@ -1,7 +1,8 @@
 // The attributes of the generated class and the optional overloads, as set by the MSBuild properties of the package
 // (CompilerVisibleProperty in buildTransitive/IronMapper.props). Built twice by eng/verify-package.ps1: with the defaults,
-// and with IronMapperGenerateInPlace/List/Array=false, IronMapperExcludeFromCodeCoverage=true and
-// DefineConstants=OVERLOADS_OFF. The registry used by IMapper maps List, array and in-place either way.
+// and with IronMapperGenerateInPlace/List/Array=false, IronMapperExcludeFromCodeCoverage=true,
+// IronMapperGeneratedCodeAttribute=false and DefineConstants=OVERLOADS_OFF. The registry used by IMapper maps List, array
+// and in-place either way.
 using System.CodeDom.Compiler;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -15,7 +16,9 @@ const bool overloads = true;
 #endif
 
 var failures = new List<string>();
-var mappers = typeof(User).Assembly.GetType("IronMapper.Generated.GeneratedMappers", throwOnError: true)!;
+// The generated class is GeneratedMappers_{assembly name with every character other than a letter, digit or _ as _}.
+var mappers = typeof(User).Assembly.GetType(
+    "IronMapper.Generated.GeneratedMappers_" + typeof(User).Assembly.GetName().Name!.Replace('.', '_'), throwOnError: true)!;
 var methods = mappers.GetMethods(BindingFlags.Public | BindingFlags.Static)
     .Select(m => $"{m.Name}/{m.GetParameters().Length}").ToHashSet();
 
@@ -26,8 +29,10 @@ foreach (var method in new[] { "MapToUserDto/2", "MapToUserDtoList/1", "MapToUse
 var package = typeof(MapToAttribute).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
 package = package.Split('+')[0];
 var generatedCode = mappers.GetCustomAttribute<GeneratedCodeAttribute>();
-if (generatedCode is not { Tool: "IronMapper" } || generatedCode.Version != package)
+if (overloads && (generatedCode is not { Tool: "IronMapper" } || generatedCode.Version != package))
     failures.Add($"[GeneratedCode]: expected IronMapper {package}, got {generatedCode?.Tool} {generatedCode?.Version}");
+if (!overloads && generatedCode is not null)
+    failures.Add("[GeneratedCode]: expected none with IronMapperGeneratedCodeAttribute=false");
 if ((mappers.GetCustomAttribute<ExcludeFromCodeCoverageAttribute>() is not null) == overloads)
     failures.Add($"[ExcludeFromCodeCoverage]: expected present = {!overloads}");
 

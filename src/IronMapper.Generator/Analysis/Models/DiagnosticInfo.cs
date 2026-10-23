@@ -56,6 +56,10 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     public DiagnosticInfo WithAdditionalLocations(IEnumerable<LocationInfo> locations)
         => new(Descriptor, MessageArgs, Location, ImmutableArray.CreateRange(locations), Properties);
 
+    /// <summary>A copy with <paramref name="value"/> appended to <see cref="MessageArgs"/>.</summary>
+    public DiagnosticInfo WithMessageArg(string value)
+        => new(Descriptor, MessageArgs.AsImmutableArray().Add(value), Location, AdditionalLocations, Properties);
+
     /// <summary>A copy with the property <paramref name="key"/> set to <paramref name="value"/>.</summary>
     public DiagnosticInfo WithProperty(string key, string value)
         => new(Descriptor, MessageArgs, Location, AdditionalLocations, Properties.AsImmutableArray().Add(key + "=" + value));

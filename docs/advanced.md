@@ -55,7 +55,7 @@ read with a `for` loop and the result is created with the exact size; another `I
 `Count` and is read with `foreach`; any other sequence is read with `foreach` into a growing list. No LINQ, no
 delegates: each element is mapped by a direct call of `MapToUserDto`.
 
-From 1.2.0 these loops are written once per project, in two generic methods of `GeneratedMappers`
+From 2.0.0 these loops are written once per project, in two generic methods of the generated class
 (`MapElementsToList`, `MapElementsToArray`); `MapToUserDtoList` is a one-line call of them with a small private struct
 of the mapping whose `Map` calls `MapToUserDto`. Because the struct is a type argument, the runtime compiles a separate
 copy of the loop for each mapping, in which the call is direct and can be inlined: a collection method takes a few
@@ -153,7 +153,7 @@ The in-place overload only assigns the mapped properties. It:
 
 - The generated extension methods (`source.MapToDto()`) are plain compiled C# with no reflection.
 - `IMapper` from `IronMapper.Extensions.DI` (`RuntimeMapper`) calls the same generated methods through delegates,
-  without reflection (from 1.2.0). For every assembly with mappings the generator emits a registration
+  without reflection (from 2.0.0). For every assembly with mappings the generator emits a registration
   (`GeneratedMappers.Registration.g.cs`): a module initializer (`[ModuleInitializer]`) hands it to
   `IronMapper.Registration.MapperRegistry`, which registers the mappings when the first `IMapper` is created (or, for
   an assembly first used later, at the next mapping). The module initializer only puts one delegate per assembly on a
@@ -178,8 +178,10 @@ The in-place overload only assigns the mapped properties. It:
   `IronMapperRegistration` property.
 - **C# 8** (`LangVersion` below 9) has no module initializers: the registration is generated without
   `[ModuleInitializer]`, and `IMapper` does not find the mappings of that assembly until you call
-  `IronMapper.Generated.GeneratedMappers.RegisterIronMapperMappings()` once at startup (the method is `internal`, so
-  call it from that assembly). Targets without `ModuleInitializerAttribute` (`netstandard`, .NET Framework) get an
+  `RegisterIronMapperMappings()` of the assembly's generated class once at startup, e.g.
+  `IronMapper.Generated.GeneratedMappers_MyCompany_Mappings.RegisterIronMapperMappings()` for the assembly
+  `MyCompany.Mappings` (the method is `internal`, so call it from that assembly; up to 1.1.4 the class was
+  `GeneratedMappers`, see [Multi-project solutions](configuration.md#multi-project-solutions)). Targets without `ModuleInitializerAttribute` (`netstandard`, .NET Framework) get an
   internal copy of the attribute generated into the assembly.
 - `Map<TSource, TDest>(source)` uses the mapping of the exact pair: a static field read and a delegate call. When
   there is none, and for `Map<TDest>(object)`, the mapping is looked up by type: the runtime type of the source, then
@@ -191,14 +193,14 @@ The in-place overload only assigns the mapped properties. It:
   any `IEnumerable<User>` source (`List`, array, `HashSet`, …) when `User → UserDto` is mapped. They call the
   generated `MapToUserDtoList`/`MapToUserDtoArray`, so the result is a `List<UserDto>` (an array for `T[]`).
 - `RuntimeMapper.Map(object source, Type sourceType, Type destinationType)` and `MapperRegistry.Map` map by `Type`.
-  The method is not on the `IMapper` interface: a new interface member would break other implementations in 1.x.
+  The method is not on the `IMapper` interface: a new interface member would break other implementations of it.
 - `IMapper.MapCollection<TSource, TDest>` maps the whole source during the call and returns a `List<TDest>` (typed
   as `IEnumerable<TDest>`); enumerating the result again does not map again. Up to 1.1.4 it returned a lazy sequence
   that mapped on every enumeration and threw for a `null` source only when enumerated.
 
 ### Performance
 
-IronMapper 1.2.0, .NET 10.0.12 and .NET 8, Intel Core i7-12650H; mean time and the ratio to hand-written code. Full
+IronMapper 2.0.0, .NET 10.0.12 and .NET 8, Intel Core i7-12650H; mean time and the ratio to hand-written code. Full
 report, method, the other libraries and the comparison with 1.1.3 measured in the same session:
 [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md).
 
@@ -223,8 +225,8 @@ report, method, the other libraries and the comparison with 1.1.3 measured in th
   no LINQ and no delegates (loops of a known size, see
   [Nested collection properties](#nested-collection-properties)); 1.1.3 used `Enumerable.Select` + `ToList` and was at
   ×1.25. The remaining Nested gap is the null checks of the generated methods: they keep the JIT from inlining
-  `MapToAddressDto` into `MapToCustomerDto` (checked with `DisassemblyDiagnoser`). They are the documented behavior in
-  1.x; 1.3.0 is to call an inner method without the check for nested objects.
+  `MapToAddressDto` into `MapToCustomerDto` (checked with `DisassemblyDiagnoser`). They are the documented behavior;
+  2.1.0 is to call an inner method without the check for nested objects.
 - Collection differences of a few percent are within the run-to-run spread: at 1 000 orders this run has `IMapper`
   faster than the extension methods it calls, and a separate run of IronMapper alone gave ×1.01.
 - Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +72.1 ms, Mapster +98.2 ms). The
@@ -248,7 +250,7 @@ against the packed package with `PublishAot=true` for .NET 8 and .NET 10 (linux-
   `IMapper` is not in such an app: without `IronMapper.Extensions.DI` the trimmer removes it (see
   [Registration for IMapper](configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps)); CI checks that
   it is absent from `tests/IronMapper.AotProbe` and present with `IronMapperRegistration=true`.
-- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): compatible from 1.2.0** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)). They use the
+- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): compatible from 2.0.0** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)). They use the
   generated registry (see [IMapper vs. generated extension methods](#imapper-vs-generated-extension-methods)), not
   reflection over the generated code. CI publishes `tests/IronMapper.AotProbe.DI` for .NET 8 and .NET 10 with zero
   trim/AOT warnings allowed and runs it: `AddIronMapper`, `Map` by declared and runtime type, in-place, `MapCollection`,

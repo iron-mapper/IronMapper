@@ -121,8 +121,9 @@ namespace IronMapper.Integration.Tests
         [Fact]
         public void PublicMethods_OnlyTheEnabledOnesExist()
         {
-            // GeneratedMappers of this assembly (the referenced Application assembly has its own).
-            var generated = typeof(Full).Assembly.GetType("IronMapper.Generated.GeneratedMappers", throwOnError: true)!;
+            // The generated class of this assembly (the referenced Application assembly has its own).
+            var generated = typeof(Full).Assembly.GetType("IronMapper.Generated.GeneratedMappers_IronMapper_Integration_Tests",
+                throwOnError: true)!;
             var methods = generated.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Select(m => m.Name + "/" + m.GetParameters().Length).ToHashSet();
 

@@ -83,13 +83,18 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // MSBuild properties (build_property.*). Each output takes only the part it uses, so changing one property
         // re-emits only what depends on it: the overloads (IronMapperGenerate*) the mapping files and the registration,
-        // IronMapperExcludeFromCodeCoverage the class declaration, IronMapperReportUnmappedInProfiles the diagnostics.
+        // IronMapperExcludeFromCodeCoverage and IronMapperGeneratedCodeAttribute the class declaration,
+        // IronMapperReportUnmappedInProfiles the diagnostics.
         var settings = context.AnalyzerConfigOptionsProvider
             .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
             .WithTrackingName(TrackingNames.Settings);
         var methods = settings.Select(static (value, _) => value.Methods)
             .WithTrackingName(TrackingNames.MethodSettings);
-        var excludeFromCodeCoverage = settings.Select(static (value, _) => value.ExcludeFromCodeCoverage)
+        // Attributes of the class declaration: [ExcludeFromCodeCoverage] (IronMapperExcludeFromCodeCoverage) and
+        // [GeneratedCode] (IronMapperGeneratedCodeAttribute). A value tuple: compared by value.
+        var classAttributes = settings
+            .Select(static (value, _) => (ExcludeFromCodeCoverage: value.ExcludeFromCodeCoverage,
+                GeneratedCode: value.GeneratedCodeAttribute))
             .WithTrackingName(TrackingNames.CoverageSettings);
 
         var planAndOptions = sourcePlan.Combine(codeOptions.Combine(methods));
@@ -107,9 +112,13 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         // location changes). The output resolves the locations in the current compilation's syntax trees: a location
         // in a tree is what the IDE underlines, what .editorconfig severities apply to and what code fixes need. That
         // output therefore runs for every compilation; it only reports, it generates no code.
-        var diagnostics = all.Combine(plan).Combine(settings)
+        // The generated class name (GeneratedMappers_{AssemblyName}) is part of the IM0013 message.
+        var className = codeOptions.Select(static (options, _) => options.ClassName)
+            .WithTrackingName(TrackingNames.ClassName);
+        var diagnostics = all.Combine(plan).Combine(settings.Combine(className))
             .Select(static (item, _) => CollectDiagnostics(
-                item.Left.Left.Left.Left, item.Left.Left.Left.Right, item.Left.Left.Right, item.Left.Right, item.Right))
+                item.Left.Left.Left.Left, item.Left.Left.Left.Right, item.Left.Left.Right, item.Left.Right, item.Right.Left,
+                item.Right.Right))
             .WithTrackingName(TrackingNames.Diagnostics);
 
         context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (spc, item) =>
@@ -121,7 +130,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 spc.ReportDiagnostic(diagnostic.ToDiagnostic(location => location.ToLocation(trees)));
         });
 
-        // Accessibility of GeneratedMappers over all generated mappings of the assembly: public if any generated
+        // Accessibility of the generated class over all generated mappings of the assembly: public if any generated
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
         // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache and the
         // generic loops of MapToXList/MapToXArray when a generated mapping uses them. The final Select yields a value
@@ -132,13 +141,14 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                     UsesArray: UsesOverload(item.Left, item.Right, static m => m.Array)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
 
-        context.RegisterSourceOutput(classAccessibility.Combine(codeOptions.Combine(excludeFromCodeCoverage)), static (spc, item) =>
+        context.RegisterSourceOutput(classAccessibility.Combine(codeOptions.Combine(classAttributes)), static (spc, item) =>
         {
             // No generated mappings: there is no class to declare, only the namespace (for the global using).
-            var ((accessibility, usesConverterCache, usesList, usesArray), (options, exclude)) = item;
+            var ((accessibility, usesConverterCache, usesList, usesArray), (options, (exclude, generatedCode))) = item;
             var (hintName, source) = accessibility is null
                 ? MapperCodeEmitter.EmitEmptyNamespace()
-                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, usesList, usesArray, options);
+                : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, usesList, usesArray, options,
+                    generatedCode);
             spc.AddSource(hintName, source);
         });
 
@@ -166,17 +176,21 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// The diagnostics to report: those of every mapping the plan generates (a duplicate definition, IM0007, or a
     /// mapping skipped by IM0014 reports only the plan's diagnostic), of diagnostic-only descriptors (IM0005, IM0010,
     /// IM0015, …) and of the plan. IM0001 of profile mappings only when <see cref="GeneratorSettings.ReportUnmappedInProfiles"/>
-    /// is set (1.x: off by default).
+    /// is set (off by default). IM0013 gets the name of the generated class (<paramref name="className"/>) as its
+    /// last message argument: the plan does not depend on the assembly name.
     /// </summary>
     private static EquatableArray<DiagnosticInfo> CollectDiagnostics(ImmutableArray<MappingDescriptor> fromMapTo,
         ImmutableArray<MappingDescriptor> fromMapFrom, ImmutableArray<MappingDescriptor> fromProfiles, MappingPlan plan,
-        GeneratorSettings settings)
+        GeneratorSettings settings, string className)
     {
         var builder = ImmutableArray.CreateBuilder<DiagnosticInfo>();
         Add(fromMapTo, isProfile: false);
         Add(fromMapFrom, isProfile: false);
         Add(fromProfiles, isProfile: true);
-        builder.AddRange(plan.Diagnostics.AsImmutableArray());
+        foreach (var diagnostic in plan.Diagnostics)
+            builder.Add(diagnostic.Descriptor == DiagnosticDescriptors.QualifiedMethodName
+                ? diagnostic.WithMessageArg(className)
+                : diagnostic);
         return builder.ToImmutable();
 
         void Add(ImmutableArray<MappingDescriptor> descriptors, bool isProfile)

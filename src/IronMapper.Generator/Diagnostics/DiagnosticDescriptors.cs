@@ -119,16 +119,16 @@ internal static class DiagnosticDescriptors
 
     /// <summary>
     /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,
-    /// so the generated <c>GeneratedMappers</c> class cannot reference it. The mapping is not generated.
+    /// so the generated class (<c>GeneratedMappers_{AssemblyName}</c>) cannot reference it. The mapping is not generated.
     /// </summary>
     public static readonly DiagnosticDescriptor InaccessibleMappingType = new(
         id: "IM0010",
         title: "Mapping type is not accessible from generated code",
-        messageFormat: "Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class in namespace IronMapper.Generated cannot access it. Make the type and all types that contain it public or internal.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Generated mapping methods live in the top-level class IronMapper.Generated.GeneratedMappers. Private, protected and private protected nested types are not visible there. Other mappings in the project are still generated.");
+        description: "Generated mapping methods live in the top-level class IronMapper.Generated.GeneratedMappers_{AssemblyName}. Private, protected and private protected nested types are not visible there. Other mappings in the project are still generated.");
 
     /// <summary>
     /// IM0011 — A profile lambda references a member or type that the generated class cannot access.
@@ -136,7 +136,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor LambdaMemberNotAccessible = new(
         id: "IM0011",
         title: "Profile lambda uses a member that generated code cannot access",
-        messageFormat: "A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.",
+        messageFormat: "A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class in namespace IronMapper.Generated, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -161,7 +161,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor QualifiedMethodName = new(
         id: "IM0013",
         title: "Mapping method name qualified to avoid a collision",
-        messageFormat: "Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.",
+        messageFormat: "Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}() or IronMapper.Generated.{5}.{3}(source); the collection methods are {3}List and {3}Array.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,

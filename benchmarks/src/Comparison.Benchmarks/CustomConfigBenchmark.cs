@@ -13,7 +13,12 @@ using Comparison.Models.Data;
 using IronMapper.Generated;
 using Mapster;
 using IIronMapper = IronMapper.Interfaces.IMapper;
+#if IRONMAPPER_CLASS_PER_ASSEMBLY
+// IronMapper 2.0+: one class name per assembly (Directory.Build.targets sets the constant).
+using StaticFormatMappers = StaticFormat::IronMapper.Generated.GeneratedMappers_Comparison_Mappers_IronMapperStaticFormat;
+#else
 using StaticFormatMappers = StaticFormat::IronMapper.Generated.GeneratedMappers;
+#endif
 
 namespace Comparison.Benchmarks;
 

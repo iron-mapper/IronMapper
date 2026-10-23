@@ -15,7 +15,7 @@ $script:BenchmarksDir = Split-Path -Parent $PSScriptRoot
 function Get-BenchmarksDir { $script:BenchmarksDir }
 
 # The folder a run writes its reports and raw data to: results/ by default, or IRONMAPPER_RESULTS_DIR (absolute, or relative
-# to benchmarks/), e.g. results/1.2.0 (set by run-all.ps1 -ResultsDir). Program.cs of Comparison.Benchmarks reads the same
+# to benchmarks/), e.g. results/2.0.0 (set by run-all.ps1 -ResultsDir). Program.cs of Comparison.Benchmarks reads the same
 # variable for the BenchmarkDotNet artifacts.
 function Get-ResultsDir {
     $dir = $env:IRONMAPPER_RESULTS_DIR
@@ -26,7 +26,7 @@ function Get-ResultsDir {
 
 function Get-ResultsRawDir { Join-Path (Get-ResultsDir) 'raw' }
 
-# The results folder relative to benchmarks/ with '/' (for the text of the reports), e.g. results/1.2.0.
+# The results folder relative to benchmarks/ with '/' (for the text of the reports), e.g. results/2.0.0.
 function Get-ResultsDirDisplay {
     [System.IO.Path]::GetRelativePath($script:BenchmarksDir, (Get-ResultsDir)).Replace('\', '/')
 }

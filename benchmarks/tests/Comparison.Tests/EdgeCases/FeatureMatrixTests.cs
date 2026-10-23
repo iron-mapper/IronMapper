@@ -94,14 +94,14 @@ public class FeatureMatrixTests
         "IronMapper, nullable nested object: the documented workaround `MapFrom(s => s.Customer!.MapToCustomerDto())` has no `null` check; " +
         "a user who needs `null` → `null` has to write the check in the lambda (`s.Customer == null ? null : ...`).",
         "IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); " +
-        "from 1.2.0 the `ArgumentNullException` arrives as it is.",
+        "from 2.0.0 the `ArgumentNullException` arrives as it is.",
         "`List<string>` → `List<string>`: IronMapper and Mapperly (by default, without `UseDeepCloning`) assign the same list; Mapster and AutoMapper create a new list. " +
         "Collections with the same element type are kept out of the timed scenarios for this reason (BENCHMARK_SPEC.md, 4).",
         "IronMapper, flattening: in `MappingProfile` mappings unmatched destination properties are skipped silently (IM0001 is reported for `[MapTo]`/`[MapFrom]` only, docs/diagnostics.md). " +
         "This comparison configures IronMapper only through a profile, so the build gives no hint.",
         "IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy " +
         "`IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; " +
-        "from 1.2.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).",
+        "from 2.0.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).",
         "IronMapper, positional record: the mapping is not declared in the code, because it breaks the build (checked with IronMapper 1.1.3: CS7036 in the generated file, no IronMapper diagnostic).",
     ];
 

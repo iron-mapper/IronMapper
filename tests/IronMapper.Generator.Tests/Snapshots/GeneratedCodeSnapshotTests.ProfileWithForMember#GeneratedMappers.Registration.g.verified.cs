@@ -4,7 +4,7 @@
 
 namespace IronMapper.Generated
 {
-    static partial class GeneratedMappers
+    static partial class GeneratedMappers_TestAssembly
     {
         /// <summary>Adds the mappings of this assembly to <see cref="global::IronMapper.Registration.MapperRegistry"/> (used by <c>IMapper</c>).</summary>
         /// <remarks>Runs as the module initializer; the mappings are registered on the first use of the registry.</remarks>

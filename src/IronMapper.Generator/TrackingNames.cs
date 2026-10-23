@@ -24,4 +24,5 @@ internal static class TrackingNames
     public const string Diagnostics = nameof(Diagnostics);
     public const string MethodSettings = nameof(MethodSettings);
     public const string CoverageSettings = nameof(CoverageSettings);
+    public const string ClassName = nameof(ClassName);
 }

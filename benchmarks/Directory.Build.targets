@@ -32,6 +32,21 @@
           Condition="'$(UsesIronMapper)' == 'true' And '$(UseLocalIronMapper)' == 'true'" />
 
   <!--
+    IronMapper 2.0 names the generated class GeneratedMappers_{AssemblyName} (1.1.x: GeneratedMappers in every assembly).
+    Code that names the class (the extern alias StaticFormat) checks IRONMAPPER_CLASS_PER_ASSEMBLY: set for the local
+    sources and for a package version 2 or later (IronMapperPackageVersion, Directory.Packages.props).
+  -->
+  <PropertyGroup Condition="'$(UseLocalIronMapper)' != 'true' And '$(IronMapperPackageVersion)' != ''">
+    <_IronMapperPackageMajor>$([System.Version]::Parse($(IronMapperPackageVersion.Split('-')[0])).Major)</_IronMapperPackageMajor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(UseLocalIronMapper)' == 'true'">
+    <DefineConstants>$(DefineConstants);IRONMAPPER_CLASS_PER_ASSEMBLY</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_IronMapperPackageMajor)' != '' And $(_IronMapperPackageMajor) &gt;= 2">
+    <DefineConstants>$(DefineConstants);IRONMAPPER_CLASS_PER_ASSEMBLY</DefineConstants>
+  </PropertyGroup>
+
+  <!--
     The ../src projects are not part of IronMapper.Comparison.slnx. In a solution build MSBuild strips
     Configuration from references to projects outside the solution, so `-c Release` would build them
     as Debug. Keep Configuration on every reference into ../src (direct and transitive), and drop

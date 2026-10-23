@@ -3,27 +3,28 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Loader;
+using IronMapper.Generator.Analysis;
 using Microsoft.CodeAnalysis;
 using Xunit;
 
 namespace IronMapper.Generator.Tests;
 
 /// <summary>
-/// The accessibility of <c>IronMapper.Generated.GeneratedMappers</c> follows the mappings of the assembly
+/// The accessibility of <c>IronMapper.Generated.GeneratedMappers_{AssemblyName}</c> follows the mappings of the assembly
 /// (internal unless at least one generated method is public), and two projects that both use IronMapper,
 /// one referencing the other, build with <c>TreatWarningsAsErrors</c>.
 /// </summary>
 [Collection(RegistryCollection.Name)]
 public class GeneratedClassVisibilityTests
 {
-    private const string ClassName = "IronMapper.Generated.GeneratedMappers";
-
     private static void AssertClean(IReadOnlyList<Diagnostic> diagnostics)
         => Assert.True(diagnostics.Count == 0, "Warnings/errors:\n" + string.Join("\n", diagnostics.Select(d => d.ToString())));
 
     private static INamedTypeSymbol GetGeneratedClass(Compilation compilation)
-        => compilation.Assembly.GetTypeByMetadataName(ClassName)
-           ?? throw new InvalidOperationException($"{ClassName} was not generated.");
+    {
+        var name = "IronMapper.Generated." + GeneratedClassName.For(compilation.AssemblyName);
+        return compilation.Assembly.GetTypeByMetadataName(name) ?? throw new InvalidOperationException($"{name} was not generated.");
+    }
 
     // ------------------------------------------------------------------
     // Accessibility of the class in one assembly
@@ -115,8 +116,8 @@ public class GeneratedClassVisibilityTests
             .ToList();
         // Two mapping files and the registration for IMapper declare the class without a modifier.
         Assert.Equal(4, declarations.Count);
-        Assert.Single(declarations, "public static partial class GeneratedMappers");
-        Assert.Equal(3, declarations.Count(d => d == "static partial class GeneratedMappers"));
+        Assert.Single(declarations, "public static partial class GeneratedMappers_TestAssembly");
+        Assert.Equal(3, declarations.Count(d => d == "static partial class GeneratedMappers_TestAssembly"));
     }
 
     [Fact]
@@ -138,7 +139,7 @@ public class GeneratedClassVisibilityTests
         var (compilation, diagnostics) = GeneratorTestHelper.CompileProject("App", source);
 
         Assert.Equal(new[] { "IM0010" }, diagnostics.Select(d => d.Id));
-        Assert.Null(compilation.Assembly.GetTypeByMetadataName(ClassName));
+        Assert.Null(compilation.Assembly.GetTypeByMetadataName("IronMapper.Generated.GeneratedMappers_App"));
     }
 
     // The package adds `global using IronMapper.Generated;` (ImplicitUsings): a project with no mappings yet, e.g.
@@ -157,7 +158,7 @@ public class GeneratedClassVisibilityTests
         var (compilation, diagnostics) = GeneratorTestHelper.CompileProject("App", source);
 
         AssertClean(diagnostics);
-        Assert.Null(compilation.Assembly.GetTypeByMetadataName(ClassName));
+        Assert.Null(compilation.Assembly.GetTypeByMetadataName("IronMapper.Generated.GeneratedMappers_App"));
     }
 
     [Fact]
@@ -332,25 +333,62 @@ public class GeneratedClassVisibilityTests
         var (libraryRef, libraryImage) = GeneratorTestHelper.EmitReference(library);
 
         var (app, appDiagnostics) = GeneratorTestHelper.CompileProject("App",
-            App("parts.Add(GeneratedMappers.MapToOrderDto(new Order { Id = 9 }).Id.ToString());"), libraryRef);
+            App("parts.Add(GeneratedMappers_App.MapToOrderDto(new Order { Id = 9 }).Id.ToString());"), libraryRef);
 
         AssertClean(appDiagnostics);
         Assert.Equal("7,8,n,s:3,9", Run(app, ("Lib", libraryImage)));
     }
 
     [Fact]
-    public void ExplicitClassName_ReferencedAssemblyWithPublicMaps_ReportsCS0436()
+    public void ExplicitClassName_ReferencedAssemblyWithPublicMaps_BothClassesCallableWithoutCS0436()
     {
-        // Known limitation (documented): both assemblies declare a public IronMapper.Generated.GeneratedMappers.
-        // Extension method calls are unaffected; naming the class explicitly binds to the current assembly's class
-        // with warning CS0436.
+        // Up to 1.1.4 both assemblies declared a public IronMapper.Generated.GeneratedMappers: naming the class bound to the
+        // current assembly's class with warning CS0436, and the referenced assembly's methods were not reachable this way.
+        // From 2.0 every assembly has its own class name (GeneratedMappers_{AssemblyName}).
         var (library, _) = GeneratorTestHelper.CompileProject("Lib", LibraryWithPublicMaps);
-        var (libraryRef, _) = GeneratorTestHelper.EmitReference(library);
+        var (libraryRef, libraryImage) = GeneratorTestHelper.EmitReference(library);
 
-        var (_, appDiagnostics) = GeneratorTestHelper.CompileProject("App",
-            App("parts.Add(GeneratedMappers.MapToOrderDto(new Order { Id = 9 }).Id.ToString());"), libraryRef);
+        var (app, appDiagnostics) = GeneratorTestHelper.CompileProject("App",
+            App("""
+                parts.Add(GeneratedMappers_App.MapToOrderDto(new Order { Id = 9 }).Id.ToString());
+                parts.Add(GeneratedMappers_Lib.MapToProductDto(new Lib.Product { Name = "p" }).Name);
+                """), libraryRef);
 
-        Assert.Equal(new[] { "CS0436" }, appDiagnostics.Select(d => d.Id));
+        AssertClean(appDiagnostics);
+        Assert.Equal("7,8,n,s:3,9,p", Run(app, ("Lib", libraryImage)));
+    }
+
+    [Fact]
+    public void GeneratedTypesOfTwoAssemblies_HaveDifferentFullNames()
+    {
+        // Tools that identify types by their full name (ArchUnitNET) merged the generated classes of two assemblies with
+        // their nested types (<>c, <>O, ConverterCache`1, IElementMapper`2) and attributed the dependencies of one
+        // assembly's class to the other: a layer rule "Application does not depend on EfCore" failed.
+        var (library, _) = GeneratorTestHelper.CompileProject("Lib", LibraryWithPublicMaps);
+        var (libraryRef, libraryImage) = GeneratorTestHelper.EmitReference(library);
+        var (app, _) = GeneratorTestHelper.CompileProject("App", App(PublicLibraryCalls), libraryRef);
+        var (_, appImage) = GeneratorTestHelper.EmitReference(app);
+
+        var context = new AssemblyLoadContext("generated-type-names", isCollectible: true);
+        try
+        {
+            static string[] GeneratedTypes(System.Reflection.Assembly assembly) => assembly.GetTypes()
+                .Select(t => t.FullName!).Where(n => n.StartsWith("IronMapper.Generated.", StringComparison.Ordinal)).ToArray();
+
+            var libraryTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(libraryImage)));
+            var appTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(appImage)));
+
+            Assert.Contains("IronMapper.Generated.GeneratedMappers_Lib", libraryTypes);
+            Assert.Contains("IronMapper.Generated.GeneratedMappers_App", appTypes);
+            // Nested types (the registration's lambdas, the element mappers) are inside the assembly's own class.
+            Assert.Contains(appTypes, n => n.StartsWith("IronMapper.Generated.GeneratedMappers_App+", StringComparison.Ordinal));
+            Assert.Contains(libraryTypes, n => n.StartsWith("IronMapper.Generated.GeneratedMappers_Lib+", StringComparison.Ordinal));
+            Assert.Empty(libraryTypes.Intersect(appTypes));
+        }
+        finally
+        {
+            context.Unload();
+        }
     }
 
     [Fact]

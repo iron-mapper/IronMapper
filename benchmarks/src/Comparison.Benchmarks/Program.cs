@@ -21,7 +21,7 @@ public static class Program
         {
             var folder = Environment.Version.Major == 10 ? "bdn" : $"bdn-net{Environment.Version.Major}.0";
             // IRONMAPPER_RESULTS_DIR (absolute, or relative to benchmarks/; set by run-all.ps1 -ResultsDir) moves the whole
-            // run to another folder, e.g. results/1.2.0, like the scripts (BenchmarkCommon.psm1, Get-ResultsDir).
+            // run to another folder, e.g. results/2.0.0, like the scripts (BenchmarkCommon.psm1, Get-ResultsDir).
             var results = Environment.GetEnvironmentVariable("IRONMAPPER_RESULTS_DIR");
             var resultsDir = string.IsNullOrWhiteSpace(results)
                 ? Path.Combine(FindBenchmarksDirectory(), "results")

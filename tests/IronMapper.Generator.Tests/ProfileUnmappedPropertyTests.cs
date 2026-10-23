@@ -10,7 +10,7 @@ using Xunit;
 namespace IronMapper.Generator.Tests;
 
 /// <summary>
-/// IM0001 for profile mappings (issue #22): off by default in 1.x, on with the MSBuild property
+/// IM0001 for profile mappings (issue #22): off by default, on with the MSBuild property
 /// <c>IronMapperReportUnmappedInProfiles</c> (passed to the generator as <c>build_property.*</c>). The severity is set the
 /// standard way, <c>dotnet_diagnostic.IM0001.severity</c> in <c>.editorconfig</c>, which the compiler applies per syntax
 /// tree (checked here with the compiler's own <c>.editorconfig</c> parser).

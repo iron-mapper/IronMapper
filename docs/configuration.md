@@ -91,7 +91,11 @@ usings (`<ImplicitUsings>enable</ImplicitUsings>` or `true`, the default in the 
 
 - **Without implicit usings** nothing is added: write `using IronMapper.Generated;` in the files that call `MapTo*`
   methods (C# 9 and earlier have no global usings at all).
-- An explicit `using IronMapper.Generated;` next to the global one compiles without warnings.
+- An explicit `using IronMapper.Generated;` next to the global one compiles without compiler warnings. With a strict
+  code style in the build (`<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>` and
+  `dotnet_diagnostic.IDE0005.severity = error` or `warning` with `TreatWarningsAsErrors`) it is reported as an
+  unnecessary using: `Program.cs(7,1): error IDE0005: Using directive is unnecessary.` Remove the explicit usings, or
+  turn the global using off (below). Checked by `eng/verify-package.ps1` against the packed package.
 - A project without mappings gets an empty `IronMapper.Generated` namespace from the generator, so the global using
   compiles there too.
 - **Turn it off** for a project (or for all projects in `Directory.Build.props`):
@@ -110,8 +114,20 @@ projects see [Multi-project solutions](#multi-project-solutions).
 
 ## Multi-project solutions
 
-Every project that references the `IronMapper` package gets its own class `IronMapper.Generated.GeneratedMappers`
-with the mappings of that project. The name is the same in every assembly.
+Every project that references the `IronMapper` package gets its own class with the mappings of that project, in the
+namespace `IronMapper.Generated`. From 2.0.0 the class name contains the assembly name:
+`GeneratedMappers_{AssemblyName}`, every character of the assembly name that is not a letter, a digit or `_` replaced
+with `_` (`Shop.Application` → `GeneratedMappers_Shop_Application`, `My-App.Web` → `GeneratedMappers_My_App_Web`). An
+assembly name longer than 64 characters keeps its first 55 characters, followed by `_` and 8 hex digits of a hash of the
+full name (FNV-1a; the same in every build). Up to 1.1.4 the class was `GeneratedMappers` in every assembly, and naming
+it reported `CS0436` when a referenced project's class was visible. With the registration for `IMapper` every assembly
+would also have members and nested types with the same full names (`RegisterIronMapperMappingsCore`, its lambdas in
+`<>c`, `ConverterCache<T>`, …): tools that identify types by their full name, such as ArchUnitNET, attributed the
+dependencies of one assembly's generated class to the other's, and a layer rule like "Application does not depend on
+Infrastructure" failed (`GeneratedTypeNamesArchitectureTests`). Two assemblies whose names differ only in the replaced characters
+(`My.App` and `My_App`) get the same class name; the compiler does not mind (the classes are in different assemblies),
+only such tools would. The generated files keep their names (`GeneratedMappers.g.cs`,
+`GeneratedMappers.Registration.g.cs`).
 
 **Accessibility of the class.** The class is `public` if at least one generated method of the project is `public`,
 and `internal` otherwise. A project with only internal mappings therefore exposes nothing: projects that reference it
@@ -135,12 +151,13 @@ Qualified names ([`IM0013`](#one-source-type-several-destination-types-with-the-
 project's public mappings are called the same way, by the name the warning reported in that project
 (`member.MapToAdminMemberDto()`, `members.MapToAdminMemberDtoList()`).
 
-Two limitations remain:
+**Naming the class** works with the full name of each project's class, e.g.
+`GeneratedMappers_Shop_Application.MapToOrderDto(entity)` and `GeneratedMappers_Shop_Catalog.MapToProductDto(product)`
+from the same file (`GeneratedClassVisibilityTests`). Prefer the extension method syntax: it does not change when an
+assembly is renamed.
 
-- **Do not name the class.** `GeneratedMappers.MapToOrderDto(entity)` binds to the class of the current project. If a
-  referenced project's class is also visible (it has public mappings, or it grants `[InternalsVisibleTo]`), the
-  compiler reports warning `CS0436` (an error with `TreatWarningsAsErrors`), and the referenced project's methods are
-  not reachable this way. The extension method syntax has no such problem.
+One limitation remains:
+
 - **Define each mapping in one project.** If a referenced project already exposes a mapping for a type pair and the
   current project maps the same pair again, the current project still builds, but calling `source.MapToX()` in it is
   ambiguous (`CS0121`). The same happens inside the generated code when a nested collection's element type is mapped
@@ -188,7 +205,7 @@ Set the property in the application project when the automatic choice is wrong, 
 ## Generated overloads and code coverage
 
 For every mapping the generator emits `MapToX(source)` and, by default, three more overloads: the in-place
-`MapToX(source, destination)`, `MapToXList(...)` and `MapToXArray(...)`. The optional ones can be turned off (from 1.2.0)
+`MapToX(source, destination)`, `MapToXList(...)` and `MapToXArray(...)`. The optional ones can be turned off (from 2.0.0)
 when a project does not use them: less generated code, fewer methods in IntelliSense, and no uncovered methods in code
 coverage reports. Nothing changes by default.
 
@@ -242,7 +259,7 @@ public class OrderProfile : MappingProfile
 
 ### Attributes of the generated class
 
-`GeneratedMappers` is marked `[GeneratedCode("IronMapper", "<package version>")]`, so code analyzers and tools treat it
+The generated class is marked `[GeneratedCode("IronMapper", "<package version>")]`, so code analyzers and tools treat it
 as generated. With
 
 ```xml
@@ -255,14 +272,25 @@ registration for `IMapper` and the converter cache. They are emitted only when t
 in .NET Standard 2.0 and later). The mapping code is still checked by your tests: the attribute only removes it from the
 coverage percentage.
 
+**Coverage tools that exclude `[GeneratedCode]`.** coverlet with `ExcludeByAttribute=GeneratedCodeAttribute` (in
+`coverlet.runsettings`, `<ExcludeByAttribute>` of `coverlet.msbuild` or `--exclude-by-attribute`) and other tools set up
+the same way leave the generated mappings out of the report from 2.0.0, also without
+`IronMapperExcludeFromCodeCoverage`. To measure them, leave `[GeneratedCode]` off:
+
+```xml
+<IronMapperGeneratedCodeAttribute>false</IronMapperGeneratedCodeAttribute>
+```
+
+`true` by default; only `false` (case-insensitive) turns it off. It does not affect `IronMapperExcludeFromCodeCoverage`.
+
 ---
 
 ## Unmapped properties in profiles
 
 For `[MapTo]`/`[MapFrom]` an unmatched destination property is warning
 [`IM0001`](diagnostics.md#im0001--unmapped-destination-property). For profile (`CreateMap`) mappings it is off by
-default in 1.x, as in 1.1 (an unmatched property keeps its default value without a warning; issue
-[#22](https://github.com/iron-mapper/IronMapper/issues/22)), and turned on with an MSBuild property (from 1.2.0):
+default, as in 1.1 (an unmatched property keeps its default value without a warning; issue
+[#22](https://github.com/iron-mapper/IronMapper/issues/22)), and turned on with an MSBuild property (from 2.0.0):
 
 ```xml
 <PropertyGroup>
@@ -272,7 +300,7 @@ default in 1.x, as in 1.1 (an unmatched property keeps its default value without
 
 Put it in the project or in `Directory.Build.props`. The package passes it to the generator
 (`CompilerVisibleProperty` in `buildTransitive/IronMapper.props`); any value other than `true` (case-insensitive)
-keeps it off. In 2.0 it is planned to be on by default.
+keeps it off. It is planned to be on by default in the next major version.
 
 The warning points to the `CreateMap` call. A destination property counts as mapped when:
 
@@ -499,7 +527,7 @@ Applies to every lambda in a `MappingProfile` constructor: `MapFrom`, `When`, `C
 `BeforeMap`/`AfterMap` and `AddTransformer`.
 
 The generator does not call these lambdas at runtime. It rewrites their code into the generated class
-`IronMapper.Generated.GeneratedMappers` using the semantic model:
+`IronMapper.Generated.GeneratedMappers_{AssemblyName}` using the semantic model:
 
 - lambda parameters are renamed to `source` / `destination` / `value` by symbol, so string literals and member names
   that happen to match the parameter name are left alone (`s => s.s + "s"` becomes `source.s + "s"`);
@@ -516,7 +544,7 @@ extension methods; locals and nested lambdas declared inside the lambda; `nameof
 
 | Reference | Diagnostic | Why / fix |
 |---|---|---|
-| `private` or `protected` members or types, e.g. a `private static` helper of the profile | [`IM0011`](diagnostics.md#im0011--profile-lambda-uses-a-member-that-generated-code-cannot-access) | The code runs in `GeneratedMappers`, a different class, where private and protected members are not visible. Make the member `internal`: internal members are visible to all code in the same assembly, including the generated class. |
+| `private` or `protected` members or types, e.g. a `private static` helper of the profile | [`IM0011`](diagnostics.md#im0011--profile-lambda-uses-a-member-that-generated-code-cannot-access) | The code runs in the generated class, a different class, where private and protected members are not visible. Make the member `internal`: internal members are visible to all code in the same assembly, including the generated class. |
 | Instance members of the profile, `this`, `base` | [`IM0012`](diagnostics.md#im0012--profile-lambda-captures-state) | There is no profile instance when the mapping runs. Make the member `static` (or `const`). |
 | Local variables, parameters and local functions of the constructor | [`IM0012`](diagnostics.md#im0012--profile-lambda-captures-state) | They do not exist in the generated code. Use a constant or a static member, or compute the value from the source. |
 
@@ -555,7 +583,7 @@ The generated code creates converters itself; it never resolves them from DI. Ho
   arguments). The instance is created on first use, once per converter type for the assembly (`ConverterCache<T>` in
   `GeneratedMappers.g.cs`); the runtime runs that initialization once even when several threads map at the same time.
   Static fields do not count as state.
-- **Anything else — a new instance on every call**, as before 1.2.0: a converter with instance fields (in the class or in
+- **Anything else — a new instance on every call**, as up to 1.1.4: a converter with instance fields (in the class or in
   a base class), a constructor with code or arguments in its `base(...)` call, a primary constructor with parameters, a
   struct, a non-public parameterless constructor (`internal`, or only one with optional parameters), and any class whose
   hierarchy contains a type from another assembly (the generator cannot see its private fields or constructor bodies).

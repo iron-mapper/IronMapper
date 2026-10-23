@@ -4,6 +4,10 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
 
 Русская версия: [README.ru.md](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md)
 
+**Upgrading from 1.1.x?** 2.0.0 has breaking changes (the global using, the name of the generated class, `IMapper`
+exceptions and `AddIronMapper`, `MapCollection`): see
+[Upgrading to 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.md).
+
 [![NuGet](https://img.shields.io/nuget/v/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
 [![Downloads](https://img.shields.io/nuget/dt/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
 [![CI](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml)
@@ -20,12 +24,12 @@ A compile-time object mapper for .NET: a Roslyn source generator writes the mapp
 - **Configuration errors at build time, partly.** For `[MapTo]`/`[MapFrom]` an unmatched destination property is
   warning `IM0001`, a wrong `[MapProperty]` name is error `IM0006`, an inaccessible type is `IM0010`
   ([diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)). Profile mappings get
-  fewer checks (`IM0001` for them is opt-in from 1.2.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
+  fewer checks (`IM0001` for them is opt-in from 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
   the generated file.
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.5 ns per object (.NET 10). Nested objects are a
   little slower (×1.07 on .NET 10, ×1.09 on .NET 8; 1.1.3: ×1.25), see
   [Performance](https://github.com/iron-mapper/IronMapper#performance).
-- **NativeAOT checked in CI** (.NET 8 and .NET 10): the generated methods and, from 1.2.0, the optional `IMapper`
+- **NativeAOT checked in CI** (.NET 8 and .NET 10): the generated methods and, from 2.0.0, the optional `IMapper`
   service publish with no trim/AOT warnings and run correctly. Up to 1.1.4 `IMapper` used reflection and did not work
   under NativeAOT ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Cold start of about 1 ms** (process start plus the first mapping, over a console app without a mapper: +1.3 ms;
@@ -91,7 +95,7 @@ Studio 2022 17.11+). On an older SDK the compiler reports warning `CS9057`, the 
 
 ## Performance
 
-IronMapper 1.2.0 against hand-written code (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 and AutoMapper 16.2.0.
+IronMapper 2.0.0 against hand-written code (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 and AutoMapper 16.2.0.
 BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Full report (also .NET 8), method and the
 comparison with 1.1.3 measured in the same session:
 [benchmarks/results/RESULTS.md](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md).
@@ -121,7 +125,7 @@ How to read it:
   (30 runs). This metric is sensitive to noise; read it as an order of magnitude. Most of the `IMapper` cold start is
   the DI container itself: the same hand-written mapping resolved from the same container (`Manual_DI`) gives +15.3 ms,
   so IronMapper's own part is 4.5 ms (1.1.3: 6.4 ms); it grows with the number of mappings (registration).
-- NativeAOT: "works" means the published executable ran and printed the correct result; from 1.2.0 this includes
+- NativeAOT: "works" means the published executable ran and printed the correct result; from 2.0.0 this includes
   `IMapper` (checked in CI; the 1.1.3 executable failed with `MappingException`). Mapster and AutoMapper build their
   mappers at run time and fail.
 - Sizes are the increase over the same console app without a mapper.
@@ -201,9 +205,11 @@ entity.MapToUserDto(existingDto);                  // updates an existing object
 `List<T>` properties (`List<Comment>` → `List<CommentDto>`) are mapped automatically when a mapping exists for the
 element types.
 
-**Code coverage and unused overloads.** From 1.2.0 the generated class is marked `[GeneratedCode]`, and
+**Code coverage and unused overloads.** From 2.0.0 the generated class is marked `[GeneratedCode]`, and
 `<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` adds `[ExcludeFromCodeCoverage]`, so unused
-generated methods (e.g. `MapToXList` that nothing calls) no longer lower the coverage of your project. Overloads you do
+generated methods (e.g. `MapToXList` that nothing calls) no longer lower the coverage of your project. A coverage tool
+that excludes `[GeneratedCode]` (coverlet with `ExcludeByAttribute=GeneratedCodeAttribute`) leaves the generated code out
+of the report; to measure it, set `<IronMapperGeneratedCodeAttribute>false</IronMapperGeneratedCodeAttribute>`. Overloads you do
 not use can be turned off for the project (`IronMapperGenerateInPlace`, `IronMapperGenerateList`,
 `IronMapperGenerateArray`) or for one mapping (`GenerateList = false` on `[MapTo]`, `.GenerateMethods(list: false)` in a
 profile); `IMapper` keeps mapping lists, arrays and in-place
@@ -225,7 +231,7 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
 app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()));
 ```
 
-From 1.2.0 `IMapper` calls the generated methods through delegates that the generator registers for every mapping
+From 2.0.0 `IMapper` calls the generated methods through delegates that the generator registers for every mapping
 (no reflection): it works with trimming and NativeAOT, and exceptions of your converters and hooks reach you as they
 are. `Map<List<UserDto>>`, `Map<UserDto[]>` and `Map<IEnumerable<UserDto>>` map collections. Pass every assembly
 that holds mappings to `AddIronMapper`; the mappings are registered when the first `IMapper` is created. An app that
@@ -251,8 +257,9 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 - **No flattening by convention** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` is not filled from `Customer.Address.City`. Use
   `MapFrom`.
 - **`IM0001` is off by default for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
-  mapping keeps its default value without a warning. From 1.2.0 turn it on with
-  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (planned to be on by default in 2.0);
+  mapping keeps its default value without a warning. From 2.0.0 turn it on with
+  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (planned to be on by default in the
+  next major version);
   the severity is set in `.editorconfig` (`dotnet_diagnostic.IM0001.severity = error`).
 - **A `null` source throws `ArgumentNullException`**, also when it is declared nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster and AutoMapper return `null` there.
@@ -261,11 +268,11 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
   use `MapFrom` or a converter. Declared diagnostics `IM0002` and `IM0004` are not reported yet.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Also: up to 1.1.4 diagnostics have no source location (from 1.2.0 they point to the line); `IMapper` has no per-call context
+Also: up to 1.1.4 diagnostics have no source location (from 2.0.0 they point to the line); `IMapper` has no per-call context
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
 `ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public
 or internal parameterless constructor (`IM0015`); private/protected nested types
-cannot be mapped (`IM0010`); several projects in one solution have their own `GeneratedMappers` class; the first
+cannot be mapped (`IM0010`); the same type pair mapped in two projects makes `source.MapToX()` ambiguous (`CS0121`); the first
 `IMapper` registers all mappings of the assembly, which adds 4.5 ms to the cold start over the DI container in the
 benchmark (more with more mappings). Details:
 [Advanced topics](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md),
@@ -277,7 +284,7 @@ benchmark (more with more mappings). Details:
 - Packages: `IronMapper` targets `netstandard2.0` and `net10.0`; `IronMapper.Extensions.DI` targets `netstandard2.1`
   and `net10.0`. The generator needs .NET SDK 8.0.400+.
 - The library tests run on .NET 10 (Ubuntu and Windows in CI). The equivalence tests of the benchmark suite also run
-  on .NET 8, and the runtime benchmarks of 1.2.0 were measured on .NET 8 and .NET 10. .NET 9 is not tested in CI ([#10](https://github.com/iron-mapper/IronMapper/issues/10)). The Quick Start
+  on .NET 8, and the runtime benchmarks of 2.0.0 were measured on .NET 8 and .NET 10. .NET 9 is not tested in CI ([#10](https://github.com/iron-mapper/IronMapper/issues/10)). The Quick Start
   above is compiled and run against the packed package in CI (.NET 10); 1.1.4 was checked by hand on .NET 8, 9
   and 10.
 
@@ -291,18 +298,20 @@ Open issues:
 - Context data in `Map` calls (like `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
 - `net9.0` target — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
 
-1.2.0 (this release): generated collection code without LINQ, `IMapper` without reflection that works under NativeAOT
+2.0.0 (this release): generated collection code without LINQ, `IMapper` without reflection that works under NativeAOT
 ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) and maps collections with `Map<List<T>>`
 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)), stateless converters created once, diagnostics with source
 locations and working code fixes, `IM0001` for profiles behind an opt-in switch
-([#22](https://github.com/iron-mapper/IronMapper/issues/22)), optional overloads that can be turned off.
+([#22](https://github.com/iron-mapper/IronMapper/issues/22)), optional overloads that can be turned off, a generated
+class name of its own in every assembly. It changes behavior that 1.1.x code may rely on:
+[Upgrading to 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.md).
 
-Next, 1.3.0: nested single objects mapped automatically, with `null` checks by nullable annotations
+Next, 2.1.0: nested single objects mapped automatically, with `null` checks by nullable annotations
 ([#23](https://github.com/iron-mapper/IronMapper/issues/23); also aimed at the remaining Nested gap), constructors and
 positional records ([#24](https://github.com/iron-mapper/IronMapper/issues/24)), diagnostics `IM0002` (incompatible
-types) and `IM0004` (cycles). 2.0: `null` → `null` for nullable sources
-([#27](https://github.com/iron-mapper/IronMapper/issues/27)), `IM0001` for profiles on by default, the "mapper class"
-mode. The working plan (in Russian) is
+types) and `IM0004` (cycles), no in-place overload for a type whose properties are all `init`. The next major version:
+`null` → `null` for nullable sources ([#27](https://github.com/iron-mapper/IronMapper/issues/27)), `IM0001` for
+profiles on by default, the "mapper class" mode. The working plan (in Russian) is
 [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md); it may change.
 
 ---
@@ -314,6 +323,7 @@ mode. The working plan (in Russian) is
 - [Advanced topics](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md)
 - [Migrating from AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.md)
 - [Compiler diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)
+- [Upgrading to 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.md)
 - [Benchmarks](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md)
 - [Changelog](https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md)
 

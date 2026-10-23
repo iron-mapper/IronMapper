@@ -26,7 +26,8 @@ namespace IronMapper.Registration;
 /// an assembly that nothing has touched yet (<c>AddIronMapper(assembly)</c> does this), and
 /// <see cref="EnsureLoadedAssembliesRegistered"/> for every loaded assembly. Projects with
 /// <c>LangVersion</c> below 9 get no module initializer and must call
-/// <c>IronMapper.Generated.GeneratedMappers.RegisterIronMapperMappings()</c> themselves.
+/// <c>RegisterIronMapperMappings()</c> of their generated class (<c>IronMapper.Generated.GeneratedMappers_{AssemblyName}</c>)
+/// themselves.
 /// </para>
 /// <para>
 /// The registry is thread-safe. When two assemblies register the same type pair, the first registration wins.

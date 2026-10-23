@@ -2,7 +2,53 @@
 
 ## [Unreleased]
 
-## [1.2.0] - 2026-10-22
+## [2.0.0] - 2026-10-23
+
+### Breaking changes
+
+2.0.0 follows 1.1.4 (1.2.0 was prepared but not published; its changes are in this release). Each change below with
+what to do: [Upgrading to 2.0](docs/upgrading-to-2.0.md) ([in Russian](docs/upgrading-to-2.0.ru.md)).
+
+- **`global using IronMapper.Generated;` from the package** (see Added): with implicit usings an explicit
+  `using IronMapper.Generated;` is redundant. The compiler does not warn, but a strict code style in the build
+  (`EnforceCodeStyleInBuild=true` and `dotnet_diagnostic.IDE0005.severity = error`, or `warning` with
+  `TreatWarningsAsErrors`) fails with `error IDE0005: Using directive is unnecessary.` at that line (checked against the
+  packed package in `eng/verify-package.ps1`). Remove the explicit usings, or set
+  `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`. A file that imports another extension method
+  with the same name and parameter type as a generated one (e.g. a hand-written `MapToUserDto`) now gets `CS0121` at
+  that call; remove or rename the method, or turn the global using off.
+- **The generated class is `IronMapper.Generated.GeneratedMappers_{AssemblyName}`** instead of `GeneratedMappers` in
+  every assembly: every character of the assembly name that is not a letter, a digit or `_` becomes `_`
+  (`Shop.Application` → `GeneratedMappers_Shop_Application`); a name longer than 64 characters keeps its first 55 and
+  gets `_` and 8 hex digits of a stable hash (FNV-1a) of the full name. Calls `source.MapToX()` (and `MapToXList`,
+  `MapToXArray`, in-place) and `IMapper` do not change. Code that names the class breaks: `GeneratedMappers.MapToX(...)`,
+  a method group `Select(GeneratedMappers.MapToX)`, `using static IronMapper.Generated.GeneratedMappers;`, a lookup by
+  reflection, and in C# 8 projects the call `GeneratedMappers.RegisterIronMapperMappings()`; use the extension method
+  syntax or the new name. Why: with the registration for `IMapper` every assembly had members and nested types with the
+  same full names (`RegisterIronMapperMappingsCore`, its lambdas in `<>c`, `<>O`, `ConverterCache<T>`,
+  `IElementMapper<TSource, TDest>`); tools that identify types by their full name attributed the dependencies of one
+  assembly's generated class to the other's: an ArchUnitNET rule "Application does not depend on EfCore" over two
+  assemblies with mappings passed with 1.1.3 and failed before this change (`GeneratedTypeNamesArchitectureTests`).
+  Naming the class of a referenced project now works (up to 1.1.4 it reported `CS0436`). `IM0013` names the class:
+  `Call it as source.MapToX() or IronMapper.Generated.GeneratedMappers_App.MapToX(source)`. The diagnostics that
+  mentioned `IronMapper.Generated.GeneratedMappers` (`IM0010`, `IM0011`, `IM0015`) say "the generated class in
+  namespace IronMapper.Generated". The generated file names do not change.
+- **Exceptions thrown through `IMapper` are no longer wrapped:** an `ArgumentNullException` of the generated code (a
+  `null` nested element), an exception of your converter or hook reach the caller as they are, with the stack of the
+  generated method. Up to 1.1.4 they came as `TargetInvocationException` with the original as `InnerException`; code
+  that catches `TargetInvocationException` around `IMapper` must catch the original exception instead.
+- **`AddIronMapper` does not scan assemblies and does not add profiles to the container.** For every assembly passed
+  (also `AddProfile<T>()` and `AddProfilesFromAssembly`) it runs the assembly's module initializer
+  (`RuntimeHelpers.RunModuleConstructor`), so the mappings of an assembly that nothing has used yet are found; they
+  are registered when the first `IMapper` is created. Profiles are read by the source generator; up to 1.1.4 `AddIronMapper` called `GetTypes()` and added
+  every `MappingProfile` as a singleton, so code that resolved a profile from the container gets nothing now.
+  `AddProfilesFromAssembly(null)` throws `ArgumentNullException` (it used to fail later in `AddIronMapper`). When a
+  mapping is not found, `IMapper` runs the module initializers of all loaded assemblies (names not starting with
+  `System.` or `Microsoft.`) and looks again, as the old assembly scan did.
+- **`IMapper.MapCollection` returns a materialized `List<TDest>`** (typed as `IEnumerable<TDest>`, the signature is
+  the same). The elements are mapped during the call: a `null` source throws `ArgumentNullException` and a `null`
+  element or a missing mapping throws at the call, not when the result is enumerated; enumerating the result again
+  does not map again. Up to 1.1.4 it was a lazy sequence that mapped on every enumeration.
 
 ### Added
 
@@ -18,7 +64,9 @@
 - **`[GeneratedCode("IronMapper", "<version>")]` on the generated class**, and with
   `<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` also `[ExcludeFromCodeCoverage]`: unused
   generated methods (e.g. `MapToXList` that nothing calls) no longer lower the coverage of a project. Declared once on
-  `GeneratedMappers`, so they cover the mapping methods, the registration for `IMapper` and the converter cache.
+  the generated class, so they cover the mapping methods, the registration for `IMapper` and the converter cache.
+  `[GeneratedCode]` can be turned off with `<IronMapperGeneratedCodeAttribute>false</IronMapperGeneratedCodeAttribute>`
+  (see Changed).
 - Diagnostic `IM0016` (warning): an argument of `GenerateMethods(...)` is not a constant; the project value applies for
   that overload.
 - **Diagnostics point to your code.** Every `IMxxxx` diagnostic has a source location: the destination property or the
@@ -33,7 +81,8 @@
   `CreateMap` mapping that nothing maps is reported at the `CreateMap` call. Mapped means `ForMember` (`MapFrom`,
   `Ignore`, `UseConverter`), `IncludeMembers`, a source property with the same name, or `[Ignore]` on the destination
   property; a mapping with `ConvertUsing` and the reverse mapping of `ReverseMap()` are not checked (as in AutoMapper,
-  where reverse maps use `MemberList.None`). Off by default in 1.x (planned on by default in 2.0). The severity is set
+  where reverse maps use `MemberList.None`). Off by default (planned on by default in the next major version). The
+  severity is set
   the standard way, e.g. `dotnet_diagnostic.IM0001.severity = error` in `.editorconfig`. See
   [Unmapped properties in profiles](docs/configuration.md#unmapped-properties-in-profiles).
 - **Code fixes work.** IM0001: "Add [Ignore] to '...'" on the destination property (adds `using IronMapper.Attributes;`
@@ -48,7 +97,7 @@
   applies when the package comes through `IronMapper.Extensions.DI`. Turn it off with
   `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`. Projects without implicit usings (and C# 9 and
   earlier) are not affected and still need the explicit using; an explicit using next to the global one compiles
-  without warnings. See [Global using](docs/configuration.md#global-using-of-ironmappergenerated).
+  without compiler warnings (a strict code style reports it as `IDE0005`, see Breaking changes). See [Global using](docs/configuration.md#global-using-of-ironmappergenerated).
 - **`IMapper` maps collections by the destination type** ([#8](https://github.com/iron-mapper/IronMapper/issues/8)):
   `mapper.Map<List<UserDto>>(users)`, `Map<UserDto[]>`, `Map<IEnumerable<UserDto>>`, `Map<IList<UserDto>>`,
   `Map<ICollection<UserDto>>`, `Map<IReadOnlyList<UserDto>>`, `Map<IReadOnlyCollection<UserDto>>` (and the same with
@@ -59,7 +108,7 @@
   source (a `DerivedEntity` without its own mapping uses the one of `Entity`); up to 1.1.4 only the exact type matched.
   `Map<TSource, TDest>` with a source declared as a base type or `object` uses the runtime type.
 - `RuntimeMapper.Map(object source, Type sourceType, Type destinationType)` maps by `Type`. It is not on the `IMapper`
-  interface (a new interface member would break other implementations in 1.x).
+  interface (a new interface member would break other implementations of it).
 - Namespace `IronMapper.Registration` in the `IronMapper` package: `MapperRegistry` (the registry of the generated
   mappings, mapping by `Type`, `EnsureModuleInitialized(assembly)`) and `MapperCache<TSource, TDest>` (the generated
   delegates of one pair). Used by `IMapper`; can be used without the DI package.
@@ -84,11 +133,16 @@
 
 ### Changed
 
+- **Coverage tools that exclude `[GeneratedCode]` no longer measure the generated mappings.** The generated class is
+  marked `[GeneratedCode("IronMapper", "<version>")]` by default (see Added). With coverlet's
+  `ExcludeByAttribute=GeneratedCodeAttribute` (`coverlet.runsettings`, `<ExcludeByAttribute>` of `coverlet.msbuild`,
+  `--exclude-by-attribute`) or a tool set up the same way, the generated code drops out of the coverage report, so the
+  percentage changes, also without `IronMapperExcludeFromCodeCoverage`. To measure it as in 1.1.x, set
+  `<IronMapperGeneratedCodeAttribute>false</IronMapperGeneratedCodeAttribute>` (MSBuild property, `true` by default;
+  only `false`, case-insensitive, turns it off; independent of `IronMapperExcludeFromCodeCoverage`). See
+  [Attributes of the generated class](docs/configuration.md#attributes-of-the-generated-class).
 - `MapperRegistry.Register<TSource, TDest>`: `mapList` and `mapArray` may be `null` (the generated registration passes
   `null` for a turned-off `MapToXList`/`MapToXArray`); the registry then maps the elements with `map`.
-- With implicit usings every file imports `IronMapper.Generated`. A file that imports another extension method with
-  the same name and parameter type as a generated one (e.g. a hand-written `MapToUserDto`) now gets `CS0121` at
-  that call; remove or rename the method, or set `IronMapperImplicitUsings` to `false`.
 - A project that references the package but has no generated mappings gets an empty `IronMapper.Generated`
   namespace (file `GeneratedMappers.g.cs`), so the global using compiles there (otherwise `CS0246`). Generated code
   of projects with mappings does not change.
@@ -105,21 +159,9 @@
   not annotated; the `IMapper` probe runs in CI). Up to 1.1.4 `RuntimeMapper` scanned the loaded assemblies for
   `GeneratedMappers`, called the methods through `MethodInfo.Invoke`, and the NativeAOT app failed with
   `MappingException`.
-- **Exceptions thrown through `IMapper` are no longer wrapped:** an `ArgumentNullException` of the generated code (a
-  `null` nested element), an exception of your converter or hook reach the caller as they are, with the stack of the
-  generated method. Up to 1.1.4 they came as `TargetInvocationException` with the original as `InnerException`; code
-  that catches `TargetInvocationException` around `IMapper` must catch the original exception instead.
-- **`AddIronMapper` does not scan assemblies and does not add profiles to the container.** For every assembly passed
-  (also `AddProfile<T>()` and `AddProfilesFromAssembly`) it runs the assembly's module initializer
-  (`RuntimeHelpers.RunModuleConstructor`), so the mappings of an assembly that nothing has used yet are found; they
-  are registered when the first `IMapper` is created. Profiles are read by the source generator; up to 1.1.4 `AddIronMapper` called `GetTypes()` and added
-  every `MappingProfile` as a singleton, so code that resolved a profile from the container gets nothing now.
-  `AddProfilesFromAssembly(null)` throws `ArgumentNullException` (it used to fail later in `AddIronMapper`). When a
-  mapping is not found, `IMapper` runs the module initializers of all loaded assemblies (names not starting with
-  `System.` or `Microsoft.`) and looks again, as the old assembly scan did.
 - **C# 8 projects** (`LangVersion` below 9) get the registration without `[ModuleInitializer]` (C# 8 does not have
-  it): `IMapper` finds their mappings only after `IronMapper.Generated.GeneratedMappers.RegisterIronMapperMappings()`
-  is called in that assembly. Projects on targets without `ModuleInitializerAttribute` (`netstandard`, .NET Framework)
+  it): `IMapper` finds their mappings only after `RegisterIronMapperMappings()` of the generated class
+  (`IronMapper.Generated.GeneratedMappers_{AssemblyName}`) is called in that assembly. Projects on targets without `ModuleInitializerAttribute` (`netstandard`, .NET Framework)
   get an internal copy of the attribute in the generated file, unless the compilation already has one.
 - The `MappingException` for a missing mapping says to pass the assembly with the mapping to `AddIronMapper`.
 - `MappingValidator` is marked `[RequiresUnreferencedCode]` (it reads properties and constructors through
@@ -146,10 +188,6 @@
   - Null checks of the generated methods use `ArgumentNullException.ThrowIfNull` when the project's target has it
     (.NET 6+); otherwise one private throw helper in `GeneratedMappers.g.cs` (with `[DoesNotReturn]` when available).
     The exception and its `ParamName` are the same.
-- **`IMapper.MapCollection` returns a materialized `List<TDest>`** (typed as `IEnumerable<TDest>`, the signature is
-  the same). The elements are mapped during the call: a `null` source throws `ArgumentNullException` and a `null`
-  element or a missing mapping throws at the call, not when the result is enumerated; enumerating the result again
-  does not map again. Up to 1.1.4 it was a lazy sequence that mapped on every enumeration.
 - **A converter without state is created once and reused** (`[MapConverter]`, `UseConverter<T>()`,
   `ConvertUsing<T>()`). A converter is without state when it is a class with a public parameterless constructor, no
   instance fields anywhere in its hierarchy except `object` (auto-property backing fields and field-like events
@@ -176,12 +214,15 @@
 
 ### Performance
 
-Full run of the comparison benchmarks: 1.1.3 (the package from nuget.org) and 1.2.0 measured in one session on one
+Full run of the comparison benchmarks: 1.1.3 (the package from nuget.org) and 2.0.0 measured in one session on one
 machine (Intel Core i7-12650H, Windows 11, BenchmarkDotNet 0.15.8), .NET 10.0.12 / .NET 8; ratio to hand-written code
 (`Manual`) of the same run. Report and the full comparison:
-[benchmarks/results/RESULTS.md](benchmarks/results/RESULTS.md#compared-with-the-previous-release).
+[benchmarks/results/RESULTS.md](benchmarks/results/RESULTS.md#compared-with-the-previous-release). The run measured
+commit `909da54` (the code prepared as 1.2.0, `benchmarks/results/2.0.0/`); 2.0.0 differs from it in the generated code
+only by the name of the class (the declaration line of each generated file, see the snapshots), so it was not measured
+again.
 
-| Scenario | 1.1.3, .NET 10 | 1.2.0, .NET 10 | 1.1.3, .NET 8 | 1.2.0, .NET 8 |
+| Scenario | 1.1.3, .NET 10 | 2.0.0, .NET 10 | 1.1.3, .NET 8 | 2.0.0, .NET 8 |
 |---|---:|---:|---:|---:|
 | Flat | ×0.98 | ×0.99 | ×1.05 | ×1.01 |
 | Nested (nested objects configured with `ForMember(... MapFrom(...))`) | ×1.25 | ×1.07 | ×1.28 | ×1.09 |
@@ -195,7 +236,7 @@ machine (Intel Core i7-12650H, Windows 11, BenchmarkDotNet 0.15.8), .NET 10.0.12
 | `IMapper`, in-place | 31.0 ns, ×3.56 | 14.0 ns, ×1.59 | 33.4 ns, ×4.04 | 14.9 ns, ×1.68 |
 
 Collection differences of a few percent are within the run-to-run spread (at 1 000 orders on .NET 10 the libraries
-that did not change moved by up to 12 % between the two runs; a separate A/B run gave ×1.01 for 1.2.0). Mapperly in the
+that did not change moved by up to 12 % between the two runs; a separate A/B run gave ×1.01 for 2.0.0). Mapperly in the
 same run: Nested ×0.98 / ×1.21, Collection of 10 ×1.17 / ×1.10.
 
 - Allocations: collections allocate as much as `Manual` (1.1.3: +4 % at 1 000 and 100 000 orders); Nested 2.0 →
@@ -241,6 +282,19 @@ Generated code without LINQ and delegates (see Changed):
 
 ### Build
 
+- Tests of the generated class name: `GeneratedClassNameTests` (the name scheme, long and unusual assembly names),
+  `GeneratedClassVisibilityTests` (the generated types of two assemblies have different full names; naming the class of
+  the current and of a referenced project), and `GeneratedTypeNamesArchitectureTests` in
+  `tests/IronMapper.Integration.Tests`: an ArchUnitNET layer rule over `IronMapper.Integration.Application` and the test
+  assembly, both with mappings (it fails with one class name for all assemblies). `TngTech.ArchUnitNET.xUnit` is a
+  dependency of that test project only. `eng/verify-package.ps1` and the package consumers look the generated classes up
+  by their new names.
+- Benchmarks: `IronMapper_StaticFormat` (an extern alias, the only place in the repository that named the generated
+  class) uses `GeneratedMappers_Comparison_Mappers_IronMapperStaticFormat` with IronMapper 2.0+ and `GeneratedMappers`
+  with a 1.x package (`IRONMAPPER_CLASS_PER_ASSEMBLY`, set in `benchmarks/Directory.Build.targets` from
+  `UseLocalIronMapper` / `IronMapperPackageVersion`).
+- Benchmarks: the results of the release run are in `benchmarks/results/2.0.0/` (was `results/1.2.0/`; the reports were
+  regenerated from the same raw data with the label 2.0.0, the numbers did not change).
 - Benchmarks: `scripts/run-benchmarks.ps1` runs both release runs (the published package and the local sources) in one
   session and checks them (exit code, log, the `_Not measured`, `**Quick run**`, `**Dry run**` markers of RESULTS.md,
   case-sensitive; `-Dry` checks the commands into `artifacts/bench-dry/`); `scripts/compare-results.ps1` compares two
@@ -281,10 +335,12 @@ Generated code without LINQ and delegates (see Changed):
   mappings in `IronMapper.AotProbe.Transitive.Maps` without it) must run with the JIT and with NativeAOT. `AotProbe` and
   `AotProbe.DI` are also published trimmed without NativeAOT (`PublishTrimmed`, self-contained; ILLink): no warnings,
   they run, and the trimmed probe assembly has no registration in the first and keeps it in the second.
-- `eng/verify-package.ps1` builds `tests/IronMapper.PackageConsumer.ImplicitUsings` in sixteen variants against
+- `eng/verify-package.ps1` builds `tests/IronMapper.PackageConsumer.ImplicitUsings` in 24 variants against
   the packed package: no using with implicit usings, only `IronMapper.Extensions.DI` referenced, no mappings, the
   Quick Start extracted from `README.md` and `README.ru.md` (between `<!-- quickstart:begin -->` and
-  `<!-- quickstart:end -->` comments), an explicit using next to the global one, implicit usings
+  `<!-- quickstart:end -->` comments), an explicit using next to the global one (also with a strict code style:
+  `EnforceCodeStyleInBuild` and `IDE0005` as an error must fail with `IDE0005` at the using, and build with
+  `IronMapperImplicitUsings=false`), implicit usings
   off, `LangVersion` 9, `IronMapperImplicitUsings=false` (each also checks whether the global using was generated),
   and netstandard2.0 / netstandard2.1 libraries (the generated throw helper instead of `ThrowIfNull`, with and
   without `[DoesNotReturn]`; the generated copy of `ModuleInitializerAttribute`; C# 8 without a module initializer;
@@ -311,7 +367,7 @@ Generated code without LINQ and delegates (see Changed):
 - Benchmarks: `Manual_DI` in `StartupBenchmark` and `probes/StartupProbe.Manual_DI`: the hand-written mapping resolved
   from the same Microsoft.Extensions.DependencyInjection container as `IronMapper_IMapper`, so the cold start of
   `IronMapper_IMapper` minus `Manual_DI` is what IronMapper adds on top of the container. The descriptions of
-  `IronMapper_IMapper` in `benchmarks/README.md` and the feature matrix notes cover 1.1.x and 1.2.0.
+  `IronMapper_IMapper` in `benchmarks/README.md` and the feature matrix notes cover 1.1.x and 2.0.0.
 - Tests: `tests/IronMapper.Tests/CollectionShapeTests.cs` maps every pair of `List<T>`, `T[]`, `IEnumerable<T>`,
   `ICollection<T>`, `IReadOnlyCollection<T>`, `IReadOnlyList<T>`, `IList<T>` as a nested property (new object and
   in place: values, order, `null`, empty, `null` element) and `MapToXList`/`MapToXArray` over several runtime source

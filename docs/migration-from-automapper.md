@@ -13,10 +13,10 @@ IronMapper's fluent API is intentionally similar to AutoMapper's, but it is not 
 | Where mapping code comes from | Mapping plans built at runtime and compiled from expression trees ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C# generated at compile time |
 | Configuration errors | Reported by `AssertConfigurationIsValid()`, typically called in a unit test ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Some at build time: IM00xx diagnostics, or C# errors in the generated code. Several declared diagnostics are not reported yet, see [diagnostics](diagnostics.md) |
 | `IMapper` service | Core API | Optional (`IronMapper.Extensions.DI`); calls the generated methods through delegates of a generated registry (up to 1.1.4 via reflection) |
-| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: no warnings, works from 1.2.0; up to 1.1.4 it failed at run time ([details](advanced.md#nativeaot-and-trimming)) |
+| NativeAOT / trimming | Not supported: warnings on publish, fails at run time ([results](../benchmarks/results/aot.md)) | Generated extension methods: no warnings, work. `IMapper`: no warnings, works from 2.0.0; up to 1.1.4 it failed at run time ([details](advanced.md#nativeaot-and-trimming)) |
 | License | 14.x and earlier: MIT. 15.0+: RPL-1.5 or commercial license, free Community license for eligible organizations ([automapper.io](https://automapper.io/)) | MIT |
 
-Performance and size, IronMapper 1.2.0 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
+Performance and size, IronMapper 2.0.0 vs AutoMapper 16.2.0 (.NET 10, one machine; ratio to hand-written code):
 flat object 11.4 ns (×0.99) vs 34.0 ns (×2.95); nested order 177.8 ns (×1.07) vs 264.0 ns (×1.59; the nested objects
 are configured by hand in IronMapper with `ForMember(... MapFrom(...))`, see below); cold start +1.3 ms vs +72.1 ms over a
 console app without a mapper; framework-dependent publish +47.7 KB vs +1.17 MB (AutoMapper adds 9 assemblies,
@@ -43,7 +43,7 @@ limitations, or only the emitted code text is tested; **Not supported**.
 | `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Supported | `DiIntegrationTests.AddIronMapper_RegistersIMapper`, `MapperRegistryAssemblyTests`. Registers `IMapper` and the generated mappings of the assemblies; it does not build any mapping configuration and does not add the profiles to the container |
 | `mapper.Map<Dest>(source)` | `source.MapToDest()` **or** `mapper.Map<Dest>(source)` | Supported | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`, `MapperRegistryTests`. `IMapper` uses the runtime type of the source, then its base types |
 | `mapper.Map(source, destination)` | `source.MapToDest(destination)` **or** `mapper.Map<Src, Dest>(source, dest)` | Partial | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Ignores `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; skips `init` properties |
-| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Partial | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` and `Map<IEnumerable<Dest>>` work from 1.2.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); up to 1.1.4 they threw `MappingException` |
+| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Partial | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` and `Map<IEnumerable<Dest>>` work from 2.0.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); up to 1.1.4 they threw `MappingException` |
 | `ReverseMap()` | `.ReverseMap()` | Partial | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. The reverse direction uses name matching only; `ForMember`, `When`, hooks and `IncludeMembers` are not reversed |
 | `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Supported | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` and other `HookTests`. Not called by the in-place overload |
 | `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Supported | `IncludeMembersTests` (e.g. `IncludeMembers_ForMemberWins_OverIncludedMember`, `IncludeMembers_FirstMemberWins_OnDuplicatePropertyName`) |
@@ -102,7 +102,7 @@ dotnet add package IronMapper.Extensions.DI
 + using IronMapper.Interfaces;
 ```
 
-The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)`. Collections are mapped by the destination type (`Map<List<Dest>>(list)`, from 1.2.0, [#8](https://github.com/iron-mapper/IronMapper/issues/8)). There are no per-call options/context ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
+The `IMapper` interface in IronMapper exposes `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)`, and `MapCollection<TSource, TDest>(source)`. Collections are mapped by the destination type (`Map<List<Dest>>(list)`, from 2.0.0, [#8](https://github.com/iron-mapper/IronMapper/issues/8)). There are no per-call options/context ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 
 ### 5. Optionally switch to extension methods
 

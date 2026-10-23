@@ -4,7 +4,7 @@
 
 namespace IronMapper.Generated
 {
-    static partial class GeneratedMappers
+    static partial class GeneratedMappers_TestAssembly
     {
         /// <summary>Maps <see cref="global::App.Outer.Entry"/> to a new <see cref="global::App.EntryDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Outer.Entry"/> instance to map.</param>
