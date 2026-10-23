@@ -35,7 +35,7 @@ Source generators work at compile time, runtime mappers at startup ([startup.md]
 Notes:
 
 - Δ vs Baseline includes everything the library adds to a build: the reference (and its analyzers), compiling the configuration code, and for the source generators the generator run and compiling the generated code.
-- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 1.2.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
+- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 2.0.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
 - Differences of a few tens of milliseconds are within the noise of a single build; compare the medians together with the min/max.
 - The generated projects, the warnings of the warmup builds and the ReportAnalyzer logs are kept in `probes/BuildProbe.*` and `results/raw/build-time/`.
 

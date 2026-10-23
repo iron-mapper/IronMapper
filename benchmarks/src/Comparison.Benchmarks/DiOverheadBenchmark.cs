@@ -16,7 +16,7 @@ namespace Comparison.Benchmarks;
 
 /// <summary>
 /// The cost of going through an <c>IMapper</c> resolved from DI instead of calling the mapping directly:
-/// IronMapper extension method vs IronMapper <c>IMapper</c> (up to 1.1.x reflection + MethodInfo.Invoke, from 1.2.0
+/// IronMapper extension method vs IronMapper <c>IMapper</c> (up to 1.1.x reflection + MethodInfo.Invoke, from 2.0.0
 /// delegates of the generated registry),
 /// AutoMapper <c>IMapper</c> from <c>AddAutoMapper</c>, Mapster <c>IMapper</c> (<c>ServiceMapper</c>).
 /// </summary>

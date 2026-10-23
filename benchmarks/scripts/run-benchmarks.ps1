@@ -7,7 +7,7 @@
     Runs, in one go:
       0) pre-flight checks (branch, clean tree except benchmarks/results/, run-all.ps1 -CheckOnly)
       1) published IronMapper 1.1.3 -> benchmarks/results/1.1.3-rerun
-      2) local sources (main)       -> benchmarks/results/1.2.0
+      2) local sources (main)       -> benchmarks/results/2.0.0
       3) verification of both runs and a summary file (artifacts/bench-summary.txt)
 
     Build outputs are cleaned before each run. The computer is kept awake while the script runs (power settings are
@@ -175,9 +175,9 @@ try {
     }
 
     # ---- 2. Local sources ----
-    $localDir = "$resultsRoot/1.2.0"
-    $code2 = Invoke-Run '1.2.0' @('-UseLocalIronMapper', '-ResultsDir', $localDir)
-    if (-not (Test-Run '1.2.0' $code2 $localDir)) { $allOk = $false }
+    $localDir = "$resultsRoot/2.0.0"
+    $code2 = Invoke-Run '2.0.0' @('-UseLocalIronMapper', '-ResultsDir', $localDir)
+    if (-not (Test-Run '2.0.0' $code2 $localDir)) { $allOk = $false }
 
     # ---- 3. Summary ----
     $elapsed = (Get-Date) - $started

@@ -5,7 +5,7 @@
 IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Current status** (`main`, unreleased 1.2.0):
+**Current status** (2.0.0):
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|
@@ -59,8 +59,8 @@ there is no second error inside a generated file; other mappings are generated.
 (case-insensitive) and no `[MapProperty]` pointing to it.
 
 **Reported for:** `[MapTo]` / `[MapFrom]` mappings. For `MappingProfile` mappings only with
-`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (off by default in 1.x, planned to be on
-in 2.0; see [Unmapped properties in profiles](configuration.md#unmapped-properties-in-profiles)). In a profile a
+`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (off by default, planned to be on by default
+in the next major version; see [Unmapped properties in profiles](configuration.md#unmapped-properties-in-profiles)). In a profile a
 destination property counts as mapped when `ForMember` configures it (`MapFrom`, `Ignore`, `UseConverter`), when
 `IncludeMembers` or a source property with the same name provides it, or when it has `[Ignore]`. A mapping with
 `ConvertUsing` gets no IM0001 (the converter creates the whole object). The reverse mapping of `ReverseMap()` is not
@@ -221,11 +221,11 @@ generated code does not compile (`CS7036`) even when this warning is not reporte
 
 **Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
 
-**Message:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
+**Message:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class in namespace IronMapper.Generated cannot access it. Make the type and all types that contain it public or internal.`
 
 **Cause:** the source or destination type, one of the types containing it, or one of its generic type arguments is a
 `private`, `protected` or `private protected` nested type. Generated methods live in the top-level class
-`IronMapper.Generated.GeneratedMappers` and cannot reference such types.
+`IronMapper.Generated.GeneratedMappers_{AssemblyName}` and cannot reference such types.
 
 **Reported for:** `[MapTo]` / `[MapFrom]` and `MappingProfile` mappings. Only the affected mapping is skipped; all other
 mappings in the project are still generated.
@@ -241,7 +241,7 @@ generated methods are then `internal` (see [Generated method accessibility](conf
 
 **Points to:** the member or type in the lambda.
 
-**Message:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
+**Message:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class in namespace IronMapper.Generated, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
 
 **Cause:** a lambda in `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` or `AddTransformer` references a
 `private`, `protected` or `private protected` member or type (or a member of such a type) — typically a
@@ -278,14 +278,15 @@ The affected mapping is not generated (for `AddTransformer`, the transformer is 
 
 **Points to:** the definition of the mapping that got the qualified name (attribute, `CreateMap` or `ReverseMap()` call).
 
-**Message:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.`
+**Message:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}() or IronMapper.Generated.{5}.{3}(source); the collection methods are {3}List and {3}Array.`
 
 **Cause:** one source type is mapped to several destination types with the same simple name (different namespaces,
 nested in different types, or different type arguments). `MapTo{Name}` would be declared twice (`CS0111`), so these
 mappings get qualified names, e.g. `MapToAdminUserDto` and `MapToPublicUserDto`, or `MapToBoxOfInt32`. The rule is
 described in [Method names and collisions](configuration.md#one-source-type-several-destination-types-with-the-same-simple-name).
 
-**Fix:** call the method by the name in the message, or rename one of the destination types to get `MapTo{Name}` back.
+**Fix:** call the method by the name in the message, as an extension method or on the generated class of the project
+(`{5}` in the message, `GeneratedMappers_{AssemblyName}`), or rename one of the destination types to get `MapTo{Name}` back.
 If the qualified names are intended, suppress the warning with `<NoWarn>$(NoWarn);IM0013</NoWarn>`.
 
 ---
@@ -321,7 +322,7 @@ generated.
   with parameters);
 - its parameterless constructor is `private` or `protected`;
 - it is abstract, an interface, a static class or an open generic type (`typeof(Converter<>)`);
-- the generated class `IronMapper.Generated.GeneratedMappers` cannot access it (a `private` nested type).
+- the generated class `IronMapper.Generated.GeneratedMappers_{AssemblyName}` cannot access it (a `private` nested type).
 
 Before this diagnostic the build failed with `CS7036`, `CS1729`, `CS0122` or `CS0144` inside the generated file.
 

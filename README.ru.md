@@ -5,6 +5,10 @@
 
 English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main/README.md)
 
+**Обновляетесь с 1.1.x?** В 2.0.0 есть несовместимые изменения (global using, имя сгенерированного класса, исключения
+`IMapper` и `AddIronMapper`, `MapCollection`): см.
+[Обновление до 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.ru.md).
+
 [![NuGet](https://img.shields.io/nuget/v/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
 [![Downloads](https://img.shields.io/nuget/dt/IronMapper.svg)](https://www.nuget.org/packages/IronMapper)
 [![CI](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/iron-mapper/IronMapper/actions/workflows/ci.yml)
@@ -21,11 +25,11 @@ English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main
 - **Ошибки конфигурации — при сборке, но не все.** Для `[MapTo]`/`[MapFrom]` несопоставленное свойство приёмника
   даёт предупреждение `IM0001`, неверное имя в `[MapProperty]` — ошибку `IM0006`, недоступный тип — `IM0010`
   ([диагностики](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)). Для профилей проверок
-  меньше (`IM0001` для них включается флагом, начиная с 1.2.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
+  меньше (`IM0001` для них включается флагом, начиная с 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
 - **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,5 нс на объект (.NET 10). Вложенные объекты
   немного медленнее (×1,07 на .NET 10, ×1,09 на .NET 8; в 1.1.3 — ×1,25), см.
   [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
-- **Работа в NativeAOT проверяется в CI** (.NET 8 и .NET 10): сгенерированные методы и, начиная с 1.2.0,
+- **Работа в NativeAOT проверяется в CI** (.NET 8 и .NET 10): сгенерированные методы и, начиная с 2.0.0,
   необязательный сервис `IMapper` публикуются без предупреждений trimming/AOT и работают корректно. До 1.1.4
   включительно `IMapper` использовал reflection и в NativeAOT не работал ([#26](https://github.com/iron-mapper/IronMapper/issues/26)).
 - **Холодный старт — около 1 мс** (запуск процесса и первый маппинг сверх консольного приложения без маппера: +1,3 мс;
@@ -92,7 +96,7 @@ global using: `<IronMapperImplicitUsings>false</IronMapperImplicitUsings>`
 
 ## Производительность
 
-IronMapper 1.2.0 против ручного кода (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 и AutoMapper 16.2.0.
+IronMapper 2.0.0 против ручного кода (`Manual`), Mapperly 4.3.1, Mapster 10.0.13 и AutoMapper 16.2.0.
 BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полный отчёт (также .NET 8), методика и
 сравнение с 1.1.3, измеренной в той же сессии:
 [benchmarks/results/RESULTS.md](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/results/RESULTS.md)
@@ -125,7 +129,7 @@ BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полн
   холодного старта `IMapper` — сам DI-контейнер: тот же ручной маппинг, полученный из того же контейнера (`Manual_DI`),
   даёт +15,3 мс, то есть собственный вклад IronMapper — 4,5 мс (в 1.1.3 — 6,4 мс); он растёт с числом маппингов
   (регистрация).
-- NativeAOT: «работает» — опубликованный файл запустился и вывел правильный результат; начиная с 1.2.0 это относится и
+- NativeAOT: «работает» — опубликованный файл запустился и вывел правильный результат; начиная с 2.0.0 это относится и
   к `IMapper` (проверяется в CI; файл 1.1.3 падал с `MappingException`). Mapster и AutoMapper строят мапперы во время
   выполнения и падают.
 - Размеры — прирост к тому же консольному приложению без маппера.
@@ -205,10 +209,12 @@ entity.MapToUserDto(existingDto);                  // обновляет сущ�
 Свойства `List<T>` (`List<Comment>` → `List<CommentDto>`) маппятся автоматически, если есть маппинг для типов
 элементов.
 
-**Покрытие кода и неиспользуемые перегрузки.** Начиная с 1.2.0 сгенерированный класс помечен `[GeneratedCode]`, а
+**Покрытие кода и неиспользуемые перегрузки.** Начиная с 2.0.0 сгенерированный класс помечен `[GeneratedCode]`, а
 `<IronMapperExcludeFromCodeCoverage>true</IronMapperExcludeFromCodeCoverage>` добавляет `[ExcludeFromCodeCoverage]`,
 поэтому неиспользуемые сгенерированные методы (например, `MapToXList`, который никто не вызывает) больше не снижают
-покрытие вашего проекта. Неиспользуемые перегрузки можно отключить для проекта (`IronMapperGenerateInPlace`,
+покрытие вашего проекта. Инструмент покрытия, который исключает `[GeneratedCode]` (coverlet с
+`ExcludeByAttribute=GeneratedCodeAttribute`), не включает сгенерированный код в отчёт; чтобы измерять его, задайте
+`<IronMapperGeneratedCodeAttribute>false</IronMapperGeneratedCodeAttribute>`. Неиспользуемые перегрузки можно отключить для проекта (`IronMapperGenerateInPlace`,
 `IronMapperGenerateList`, `IronMapperGenerateArray`) или для одного маппинга (`GenerateList = false` у `[MapTo]`,
 `.GenerateMethods(list: false)` в профиле); `IMapper` по-прежнему маппит списки, массивы и in-place
 ([подробнее](https://github.com/iron-mapper/IronMapper/blob/main/docs/configuration.ru.md#генерируемые-перегрузки-и-покрытие-кода)).
@@ -229,7 +235,7 @@ app.MapGet("/users/{id}", (int id, IMapper mapper) => mapper.Map<UserDto>(LoadUs
 app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()));
 ```
 
-Начиная с 1.2.0 `IMapper` вызывает сгенерированные методы через делегаты, которые генератор регистрирует для каждого
+Начиная с 2.0.0 `IMapper` вызывает сгенерированные методы через делегаты, которые генератор регистрирует для каждого
 маппинга (без reflection): он работает с trimming и NativeAOT, а исключения ваших конвертеров и хуков приходят как
 есть. `Map<List<UserDto>>`, `Map<UserDto[]>` и `Map<IEnumerable<UserDto>>` маппят коллекции. Передайте в
 `AddIronMapper` все сборки, где объявлены маппинги; маппинги регистрируются при создании первого `IMapper`.
@@ -254,9 +260,9 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
 - **Нет flattening по соглашению** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` не заполняется из `Customer.Address.City`.
   Используйте `MapFrom`.
 - **`IM0001` для маппингов из профилей по умолчанию выключена** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`
-  остаётся со значением по умолчанию без предупреждения. Начиная с 1.2.0 включается свойством
-  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (в 2.0 планируется включить по
-  умолчанию); уровень задаётся в `.editorconfig` (`dotnet_diagnostic.IM0001.severity = error`).
+  остаётся со значением по умолчанию без предупреждения. Начиная с 2.0.0 включается свойством
+  `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (в следующей мажорной версии
+  планируется включить по умолчанию); уровень задаётся в `.editorconfig` (`dotnet_diagnostic.IM0001.severity = error`).
 - **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
@@ -264,11 +270,12 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
   используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002` и `IM0004` пока не выдаются.
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
-Кроме того: до 1.1.4 включительно у диагностик нет места в исходном коде (начиная с 1.2.0 они указывают на строку); в `IMapper` нельзя передать контекст в вызов
+Кроме того: до 1.1.4 включительно у диагностик нет места в исходном коде (начиная с 2.0.0 они указывают на строку); в `IMapper` нельзя передать контекст в вызов
 ([#7](https://github.com/iron-mapper/IronMapper/issues/7)); in-place перегрузка игнорирует `When`, `ConvertUsing` и хуки;
 `ReverseMap()` сопоставляет только по именам; конвертеры создаёт сгенерированный код, а не DI, и им нужен публичный или
 internal конструктор без параметров (`IM0015`); private- и
-protected-вложенные типы маппить нельзя (`IM0010`); у каждого проекта решения свой класс `GeneratedMappers`; первый
+protected-вложенные типы маппить нельзя (`IM0010`); одна пара типов, смапленная в двух проектах, делает вызов
+`source.MapToX()` неоднозначным (`CS0121`); первый
 `IMapper` регистрирует все маппинги сборки, что добавляет к холодному старту 4,5 мс сверх DI-контейнера в бенчмарке
 (больше — при большем числе маппингов).
 Подробности: [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md),
@@ -280,7 +287,7 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
 - Пакеты: `IronMapper` — `netstandard2.0` и `net10.0`; `IronMapper.Extensions.DI` — `netstandard2.1` и `net10.0`.
   Генератору нужен .NET SDK 8.0.400+.
 - Тесты библиотеки запускаются на .NET 10 (Ubuntu и Windows в CI). Тесты эквивалентности набора бенчмарков также
-  запускаются на .NET 8, runtime-бенчмарки 1.2.0 измерены на .NET 8 и .NET 10. .NET 9 в CI не проверяется ([#10](https://github.com/iron-mapper/IronMapper/issues/10)).
+  запускаются на .NET 8, runtime-бенчмарки 2.0.0 измерены на .NET 8 и .NET 10. .NET 9 в CI не проверяется ([#10](https://github.com/iron-mapper/IronMapper/issues/10)).
   Быстрый старт выше компилируется и запускается на упакованном пакете в CI (.NET 10); 1.1.4 проверялась вручную
   на .NET 8, 9 и 10.
 
@@ -294,17 +301,20 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
 - Передача контекста в вызов `Map` (аналог `ResolutionContext.Items`) — [#7](https://github.com/iron-mapper/IronMapper/issues/7)
 - Целевой фреймворк `net9.0` — [#10](https://github.com/iron-mapper/IronMapper/issues/10)
 
-1.2.0 (этот релиз): сгенерированный код коллекций без LINQ, `IMapper` без reflection, который работает в NativeAOT
+2.0.0 (этот релиз): сгенерированный код коллекций без LINQ, `IMapper` без reflection, который работает в NativeAOT
 ([#26](https://github.com/iron-mapper/IronMapper/issues/26)) и маппит коллекции через `Map<List<T>>`
 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)), конвертеры без состояния создаются один раз, диагностики с
 местом в исходном коде и работающие code fix'ы, `IM0001` для профилей с включением по флагу
-([#22](https://github.com/iron-mapper/IronMapper/issues/22)), отключаемые необязательные перегрузки.
+([#22](https://github.com/iron-mapper/IronMapper/issues/22)), отключаемые необязательные перегрузки, своё имя
+сгенерированного класса в каждой сборке. Релиз меняет поведение, на которое мог опираться код на 1.1.x:
+[Обновление до 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.ru.md).
 
-Дальше, 1.3.0: автоматический маппинг вложенных одиночных объектов с проверками на `null` по nullable-аннотациям
+Дальше, 2.1.0: автоматический маппинг вложенных одиночных объектов с проверками на `null` по nullable-аннотациям
 ([#23](https://github.com/iron-mapper/IronMapper/issues/23); на нём же — оставшийся разрыв в Nested), конструкторы и
 позиционные records ([#24](https://github.com/iron-mapper/IronMapper/issues/24)), диагностики `IM0002` (несовместимые
-типы) и `IM0004` (циклы). 2.0: `null` → `null` для nullable-источника
-([#27](https://github.com/iron-mapper/IronMapper/issues/27)), `IM0001` для профилей по умолчанию, режим «класс-маппер».
+типы) и `IM0004` (циклы), без in-place перегрузки для типа, у которого все свойства `init`. Следующая мажорная версия:
+`null` → `null` для nullable-источника ([#27](https://github.com/iron-mapper/IronMapper/issues/27)), `IM0001` для
+профилей по умолчанию, режим «класс-маппер».
 Рабочий план — [IRONMAPPER_PLAN.md](https://github.com/iron-mapper/IronMapper/blob/main/IRONMAPPER_PLAN.md); он может
 меняться.
 
@@ -317,6 +327,7 @@ protected-вложенные типы маппить нельзя (`IM0010`); у
 - [Продвинутые возможности](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md)
 - [Миграция с AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.ru.md)
 - [Диагностики компилятора](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)
+- [Обновление до 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.ru.md)
 - [Бенчмарки](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md) (на английском)
 - [Список изменений](https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md) (на английском)
 

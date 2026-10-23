@@ -72,14 +72,19 @@ The package also ships `IronMapper.Generator.dll` and `IronMapper.CodeFixes.dll`
 (see `src/IronMapper/IronMapper.csproj`, target `IncludeAnalyzersInPackage`), and `buildTransitive/IronMapper.props`:
 `global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`,
 and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`,
-`IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`);
+`IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`, `IronMapperGeneratedCodeAttribute`);
 `buildTransitive/IronMapper.targets`: the feature switch `IronMapper.Registration.IsSupported` (see
 [The DI path](#the-di-path-imapper)), with `ILLink.Substitutions.xml` embedded in `IronMapper.dll`.
 
 ### `src/IronMapper.Generator` (netstandard2.0)
 The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
 - Reads `[MapTo]`/`[MapFrom]` attributes and `MappingProfile` subclasses from the compilation.
-- For every type pair emits extension methods into `IronMapper.Generated.GeneratedMappers`, one file per pair:
+- For every type pair emits extension methods into `IronMapper.Generated.GeneratedMappers_{AssemblyName}`, one file per pair.
+  **Class name** (`Analysis/GeneratedClassName.cs`, from 2.0.0): every character of the assembly name that is not a
+  letter, digit or `_` becomes `_`; a name longer than 64 characters keeps 55 and gets `_` + 8 hex FNV-1a of the full name;
+  carried by `GeneratedCodeOptions.ClassName` (step `CodeOptions`), so every generated file uses it. Unique per assembly:
+  with one name ArchUnitNET merged the generated types of two assemblies (`GeneratedTypeNamesArchitectureTests`). Hint
+  names stay `GeneratedMappers.g.cs`/`GeneratedMappers.Registration.g.cs`. Methods:
   - `MapToX(this Source source)` — new destination object;
   - `MapToX(this Source source, X destination)` — in-place update (skips `init` properties);
   - `MapToXList(this IEnumerable<Source>? source)` and `MapToXArray(...)` — collections.
@@ -88,8 +93,9 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   A turned-off in-place overload stays as `private static void MapInto{scope}(source, destination)` for the registration;
   a turned-off List/Array is passed as `null` to `MapperRegistry.Register`, and the registry loops over `map` itself
   (`MapperEntry`). `MapToX(source)` is always generated (nested collections call it). The class declaration
-  (`EmitClassDeclaration`) carries `[GeneratedCode("IronMapper", <generator informational version>)]` and, with
-  `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` — once, for all partial parts. Snapshot tests scrub the
+  (`EmitClassDeclaration`) carries `[GeneratedCode("IronMapper", <generator informational version>)]` (off with
+  `IronMapperGeneratedCodeAttribute=false`) and, with `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` —
+  once, for all partial parts. Snapshot tests scrub the
   version. Tests: `GeneratedMethodsTests`, `tests/IronMapper.Integration.Tests/TurnedOffOverloadsTests.cs`.
 - **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` are
   one-line calls of the generic `MapElementsToList`/`MapElementsToArray<TSource, TDest, TMapper>` declared once in
@@ -103,7 +109,7 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   user's compilation has it, otherwise the throw helper in `GeneratedMappers.g.cs` (`[DoesNotReturn]` if available) —
   `Analysis/Models/GeneratedCodeOptions.cs`. Runtime tests of every collection kind: `tests/IronMapper.Tests/CollectionShapeTests.cs`.
 - **Accessibility:** each method gets the minimum effective accessibility of its source and destination types
-  (private/protected nested types → IM0010, not generated). `GeneratedMappers` is `public` if any method is public,
+  (private/protected nested types → IM0010, not generated). The generated class is `public` if any method is public,
   otherwise `internal`; the modifier is declared once (`EmitClassDeclaration`). Without generated mappings only an
   empty `IronMapper.Generated` namespace is emitted (`EmitEmptyNamespace`), so the package's global using compiles.
 - **Name collisions** (`Analysis/MappingPlanner.cs`): a type pair defined twice is generated once (IM0007; profile
@@ -134,8 +140,9 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `docs/diagnostics.md`, `DiagnosticLocationTests`. MSBuild properties come through `GeneratorSettings`
   (`build_property.*`, `CompilerVisibleProperty` in `buildTransitive/IronMapper.props`): `IronMapperReportUnmappedInProfiles`
   (IM0001 for profiles; filtered in `CollectDiagnostics`, not in the analysis), `IronMapperGenerate*` (step
-  `MethodSettings`: mapping files and registration), `IronMapperExcludeFromCodeCoverage` (step `CoverageSettings`: the
-  class declaration only). Tests that run code through the process-wide registry are in the xUnit collection
+  `MethodSettings`: mapping files and registration), `IronMapperExcludeFromCodeCoverage` and
+  `IronMapperGeneratedCodeAttribute` (step `CoverageSettings`: the class declaration only). IM0013 gets the class name as
+  its last message argument in `CollectDiagnostics` (step `ClassName`), so the plan does not depend on the assembly name. Tests that run code through the process-wide registry are in the xUnit collection
   `RegistryCollection` (`RegistrationGeneratorTests` turns the feature switch off process-wide).
 
 ### `src/IronMapper.CodeFixes` (netstandard2.0)
@@ -200,7 +207,9 @@ over assertions on the generated text. Also contains:
 ### `tests/IronMapper.Integration.Tests` (net10.0)
 The generator together with `IronMapper.Extensions.DI` and `Microsoft.Extensions.DependencyInjection`. References
 `IronMapper.Integration.Domain` and `IronMapper.Integration.Application` for the test of mappings in an assembly that
-nothing has used yet (`MapperRegistryAssemblyTests`, not run in parallel).
+nothing has used yet (`MapperRegistryAssemblyTests`, not run in parallel), and for `GeneratedTypeNamesArchitectureTests`
+(an ArchUnitNET layer rule over Application and the test assembly, both with mappings; `TngTech.ArchUnitNET.xUnit` is a
+dependency of this test project only).
 
 ### `tests/IronMapper.PackageConsumer` (+ `InternalLib`, `PublicLib`)
 Reference the packed `IronMapper` package (`PackageReference`), not the projects; built by `eng/verify-package.ps1`.
@@ -240,7 +249,8 @@ a PR (only the CI smoke check); the full run is a separate task before a release
   `IronMapperPackageVersion` + `IronMapperPackageSource`), because a project reference copies `.pdb`/XML docs into the
   publish folder and rebuilds `../src` inside every timed build.
 - **Results:** `benchmarks/results/<run>/RESULTS.md` (generated by `scripts/generate-report.ps1`, do not edit by hand):
-  the 1.2.0 release run in `results/1.2.0/` (with the comparison to `results/1.1.3-rerun/`, same session,
+  the 2.0.0 release run in `results/2.0.0/` (measured as 1.2.0 at `909da54`, the folder renamed and the reports
+  regenerated with the label 2.0.0; with the comparison to `results/1.1.3-rerun/`, same session,
   `scripts/compare-results.ps1` → `comparison.md`, embedded into RESULTS.md); `benchmarks/results/*.md` is a copy of the
   latest release run (the README and docs link there; only the README link in RESULTS.md differs); the 1.1.3 baseline
   of 18.10 is frozen in `benchmarks/results/baseline-1.1.3/`. Method and caveats: `benchmarks/README.md`.
@@ -271,7 +281,7 @@ pwsh ./scripts/run-all.ps1            # full run -> results/RESULTS.md; -Quick f
 |---|---|---|
 | Namespace root | `IronMapper` | `IronMapper.Attributes` |
 | Attributes | `*Attribute` suffix | `MapToAttribute` |
-| Generated methods | `MapTo{Dest}`, `MapTo{Dest}List`, `MapTo{Dest}Array` in `IronMapper.Generated.GeneratedMappers` | `user.MapToUserDto()` |
+| Generated methods | `MapTo{Dest}`, `MapTo{Dest}List`, `MapTo{Dest}Array` in `IronMapper.Generated.GeneratedMappers_{AssemblyName}` | `user.MapToUserDto()` |
 | Diagnostic IDs | `IM{4-digit}` | `IM0001` |
 | Profile classes | `*Profile` suffix | `UserProfile` |
 | Test classes | `{Subject}Tests` | `NameCollisionTests` |

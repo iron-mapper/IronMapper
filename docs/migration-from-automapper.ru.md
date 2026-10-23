@@ -13,10 +13,10 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | Откуда берётся код маппинга | План маппинга строится во время выполнения и компилируется из expression tree ([docs](https://docs.automapper.io/en/latest/Configuration.html)) | C#-код, сгенерированный при компиляции |
 | Ошибки конфигурации | Сообщает `AssertConfigurationIsValid()`, обычно вызываемый в unit-тесте ([docs](https://docs.automapper.io/en/latest/Configuration-validation.html)) | Часть — при сборке: диагностики IM00xx или ошибки C# в сгенерированном коде. Несколько объявленных диагностик пока не выдаются, см. [диагностики](diagnostics.ru.md) |
 | Сервис `IMapper` | Основной API | Необязательный (`IronMapper.Extensions.DI`); вызывает сгенерированные методы через делегаты сгенерированного реестра (до 1.1.4 включительно — через reflection) |
-| NativeAOT / trimming | Не поддерживается: предупреждения при публикации, падает при запуске ([результаты](../benchmarks/results/aot.md)) | Сгенерированные extension-методы: без предупреждений, работают. `IMapper`: без предупреждений, работает начиная с 1.2.0; до 1.1.4 включительно падал при запуске ([подробнее](advanced.ru.md#nativeaot-и-trimming)) |
+| NativeAOT / trimming | Не поддерживается: предупреждения при публикации, падает при запуске ([результаты](../benchmarks/results/aot.md)) | Сгенерированные extension-методы: без предупреждений, работают. `IMapper`: без предупреждений, работает начиная с 2.0.0; до 1.1.4 включительно падал при запуске ([подробнее](advanced.ru.md#nativeaot-и-trimming)) |
 | Лицензия | 14.x и ранее: MIT. 15.0+: RPL-1.5 или коммерческая лицензия, бесплатная Community-лицензия для подходящих организаций ([automapper.io](https://automapper.io/)) | MIT |
 
-Производительность и размер, IronMapper 1.2.0 против AutoMapper 16.2.0 (.NET 10, один компьютер; отношение к ручному
+Производительность и размер, IronMapper 2.0.0 против AutoMapper 16.2.0 (.NET 10, один компьютер; отношение к ручному
 коду): плоский объект 11,4 нс (×0,99) против 34,0 нс (×2,95); вложенный заказ 177,8 нс (×1,07) против 264,0 нс (×1,59;
 вложенные объекты в IronMapper настроены вручную через `ForMember(... MapFrom(...))`, см. ниже); холодный старт +1,3 мс
 против +72,1 мс к консольному приложению без маппера; framework-dependent publish +47,7 КБ против +1,17 МБ (AutoMapper
@@ -42,7 +42,7 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Поддерживается | `DiIntegrationTests.AddIronMapper_RegistersIMapper`, `MapperRegistryAssemblyTests`. Регистрирует `IMapper` и сгенерированные маппинги сборок; никакой конфигурации маппинга не строит и профили в контейнер не добавляет |
 | `mapper.Map<Dest>(source)` | `source.MapToDest()` **или** `mapper.Map<Dest>(source)` | Поддерживается | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`, `MapperRegistryTests`. `IMapper` использует runtime-тип source, затем его базовые типы |
 | `mapper.Map(source, destination)` | `source.MapToDest(destination)` **или** `mapper.Map<Src, Dest>(source, dest)` | Частично | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; пропускает свойства `init` |
-| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Частично | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` и `Map<IEnumerable<Dest>>` работают начиная с 1.2.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); до 1.1.4 включительно бросали `MappingException` |
+| `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Частично | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` и `Map<IEnumerable<Dest>>` работают начиная с 2.0.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); до 1.1.4 включительно бросали `MappingException` |
 | `ReverseMap()` | `.ReverseMap()` | Частично | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. Обратное направление сопоставляет только по именам; `ForMember`, `When`, хуки и `IncludeMembers` не переносятся |
 | `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Поддерживается | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` и другие `HookTests`. Не вызываются in-place перегрузкой |
 | `IncludeMembers(s => s.Sub)` | `.IncludeMembers(s => s.Sub, ...)` | Поддерживается | `IncludeMembersTests` (например, `IncludeMembers_ForMemberWins_OverIncludedMember`, `IncludeMembers_FirstMemberWins_OnDuplicatePropertyName`) |
@@ -101,7 +101,7 @@ dotnet add package IronMapper.Extensions.DI
 + using IronMapper.Interfaces;
 ```
 
-Интерфейс `IMapper` в IronMapper предоставляет `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)` и `MapCollection<TSource, TDest>(source)`. Коллекции маппятся по типу приёмника (`Map<List<Dest>>(list)`, начиная с 1.2.0, [#8](https://github.com/iron-mapper/IronMapper/issues/8)). Передачи опций/контекста в вызов нет ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
+Интерфейс `IMapper` в IronMapper предоставляет `Map<TDest>(source)`, `Map<TSource, TDest>(source)`, `Map<TSource, TDest>(source, destination)` и `MapCollection<TSource, TDest>(source)`. Коллекции маппятся по типу приёмника (`Map<List<Dest>>(list)`, начиная с 2.0.0, [#8](https://github.com/iron-mapper/IronMapper/issues/8)). Передачи опций/контекста в вызов нет ([#7](https://github.com/iron-mapper/IronMapper/issues/7)).
 
 ### 5. Опционально — переходи на extension methods
 

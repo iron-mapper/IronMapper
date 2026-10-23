@@ -26,7 +26,7 @@
     -Dry: BDN --job Dry (one iteration), 2 startup runs, build time N = 5 with 1 build: only checks that every command
     works (a few minutes); its numbers mean nothing.
 
-    -ResultsDir writes everything (reports and raw data) to another folder than results/, e.g. results/1.2.0 (relative to
+    -ResultsDir writes everything (reports and raw data) to another folder than results/, e.g. results/2.0.0 (relative to
     benchmarks/), through the environment variable IRONMAPPER_RESULTS_DIR. -UseLocalIronMapper measures the local
     sources of ../src instead of the IronMapper package of Directory.Packages.props: the build, the tests and the
     runtime benchmarks through project references (the environment variable UseLocalIronMapper=true, which every build
@@ -44,7 +44,7 @@
 .EXAMPLE
     pwsh ./scripts/run-all.ps1 -CheckOnly   # only the duration estimate and the environment checks
 .EXAMPLE
-    pwsh ./scripts/run-all.ps1 -UseLocalIronMapper -ResultsDir results/1.2.0    # the release run of the local sources
+    pwsh ./scripts/run-all.ps1 -UseLocalIronMapper -ResultsDir results/2.0.0    # the release run of the local sources
 #>
 [CmdletBinding()]
 param(

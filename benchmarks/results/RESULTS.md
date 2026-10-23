@@ -9,7 +9,7 @@
 |---|---|
 | Machine | 12th Gen Intel(R) Core(TM) i7-12650H (10 cores, 16 threads) · 64 GB RAM · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · .NET runtime 10.0.12 |
 | BenchmarkDotNet | 0.15.8 · Windows 11 (10.0.26300.9711) · .NET 10.0.12 (10.0.12, 10.0.1226.42308) · X64 |
-| Report generated | 2026-10-22 03:19 UTC |
+| Report generated | 2026-10-23 08:23 UTC |
 | Commit | `909da54` |
 | Run | Full, started 2026-10-21 19:17 UTC, total 2:29:58 (Build 0:00:11 · Tests 0:00:06 · Runtime 1:10:35 · RuntimeNet8 1:09:20 · Startup 0:02:59 · AOT 0:00:04 · Footprint 0:00:11 · BuildTime 0:06:29 · Report 0:00:02); re-measured separately after it (time the measurement finished): Startup 2026-10-22 02:36 UTC · BuildTime 2026-10-22 02:42 UTC |
 
@@ -46,15 +46,15 @@ One row per library. Times are BenchmarkDotNet means with the ratio to `Manual` 
 ## Compared with the previous release
 
 - **1.1.3** — `results/1.1.3-rerun`: published package, commit `909da54`, Full run started 2026-10-21 16:32 UTC
-- **1.2.0** — `results/1.2.0`: local sources, commit `909da54`, Full run started 2026-10-21 19:17 UTC
+- **2.0.0** — `results/2.0.0`: local sources, commit `909da54`, Full run started 2026-10-21 19:17 UTC
 
 Both runs come from one session on the same machine. Every library except IronMapper is the same package in both, so its change between the runs is the run-to-run spread (look at Manual and Mapperly); a change of IronMapper within that spread is not a change. Ratios are to Manual of the same run, which cancels most of the drift between the runs.
 
 ### Runtime, .NET 10
 
-Mean (×ratio to `Manual` of the same run), 1.1.3 → 1.2.0, and the change of the mean.
+Mean (×ratio to `Manual` of the same run), 1.1.3 → 2.0.0, and the change of the mean.
 
-| Scenario | Library | 1.1.3 | 1.2.0 | Change | Allocated |
+| Scenario | Library | 1.1.3 | 2.0.0 | Change | Allocated |
 |---|---|---:|---:|---:|---:|
 | Flat | Manual | 11.4 ns (×1.00) | 11.5 ns (×1.00) | +1 % | 168 B |
 | Flat | **IronMapper** | 11.2 ns (×0.98) | 11.4 ns (×0.99) | +2 % | 168 B |
@@ -111,9 +111,9 @@ Mean (×ratio to `Manual` of the same run), 1.1.3 → 1.2.0, and the change of t
 
 ### Runtime, .NET 8
 
-Mean (×ratio to `Manual` of the same run), 1.1.3 → 1.2.0, and the change of the mean.
+Mean (×ratio to `Manual` of the same run), 1.1.3 → 2.0.0, and the change of the mean.
 
-| Scenario | Library | 1.1.3 | 1.2.0 | Change | Allocated |
+| Scenario | Library | 1.1.3 | 2.0.0 | Change | Allocated |
 |---|---|---:|---:|---:|---:|
 | Flat | Manual | 14.9 ns (×1.00) | 15.2 ns (×1.00) | +2 % | 168 B |
 | Flat | **IronMapper** | 15.6 ns (×1.05) | 15.4 ns (×1.01) | −2 % | 168 B |
@@ -172,7 +172,7 @@ Mean (×ratio to `Manual` of the same run), 1.1.3 → 1.2.0, and the change of t
 
 Median process start + one mapping, framework-dependent, minus the `Baseline` console (no mapper) of the same run, ms. The last row is IronMapper's own part of the `IMapper` cold start: `IronMapper_IMapper` minus `Manual_DI` (hand-written mapping behind the same DI container).
 
-| Probe | 1.1.3, Δ ms | 1.2.0, Δ ms |
+| Probe | 1.1.3, Δ ms | 2.0.0, Δ ms |
 |---|---:|---:|
 | Manual | +0.7 | −0.2 |
 | Manual_DI | +15.4 | +15.3 |
@@ -187,7 +187,7 @@ Median process start + one mapping, framework-dependent, minus the `Baseline` co
 
 NativeAOT: does the executable run and print the right checksum, trim/AOT warnings of the publish. Δ sizes against the `Baseline` console of the same run (decimal units).
 
-| Probe | NativeAOT, 1.1.3 | NativeAOT, 1.2.0 | Δ executable (AOT), 1.1.3 | Δ executable (AOT), 1.2.0 | Δ publish (JIT), 1.1.3 | Δ publish (JIT), 1.2.0 |
+| Probe | NativeAOT, 1.1.3 | NativeAOT, 2.0.0 | Δ executable (AOT), 1.1.3 | Δ executable (AOT), 2.0.0 | Δ publish (JIT), 1.1.3 | Δ publish (JIT), 2.0.0 |
 |---|---|---|---:|---:|---:|---:|
 | Manual | works, 0 warnings | works, 0 warnings | +2.0 KB | +2.0 KB | +4.6 KB | +4.6 KB |
 | Manual_DI | works, 0 warnings | works, 0 warnings | +1.05 MB | +1.05 MB | +168.1 KB | +168.1 KB |
@@ -203,7 +203,7 @@ Packages (.nupkg): IronMapper 83.6 KB → 114.4 KB, IronMapper.Extensions.DI 35.
 
 Median `dotnet build --no-incremental` minus the `Baseline` project (models only) of the same run, seconds; generated code of IronMapper.
 
-| N | Library | 1.1.3, Δ s | 1.2.0, Δ s |
+| N | Library | 1.1.3, Δ s | 2.0.0, Δ s |
 |---:|---|---:|---:|
 | 50 | Manual | +0.03 | +0.07 |
 | 50 | **IronMapper** | +0.23 | +0.23 |
@@ -262,7 +262,7 @@ xychart-beta
 
 ## Runtime benchmarks
 
-Full BenchmarkDotNet tables (`[MemoryDiagnoser]`, ratio to `Manual`), .NET 10. Artifacts in all formats (Markdown, CSV, HTML, JSON): `results/1.2.0/raw/bdn/results/` (not committed).
+Full BenchmarkDotNet tables (`[MemoryDiagnoser]`, ratio to `Manual`), .NET 10. Artifacts in all formats (Markdown, CSV, HTML, JSON): `results/2.0.0/raw/bdn/results/` (not committed).
 
 ### Flat
 
@@ -430,7 +430,7 @@ LaunchCount=3
 
 ## Runtime benchmarks, .NET 8
 
-The same scenarios and settings on .NET 8. Artifacts: `results/1.2.0/raw/bdn-net8.0/results/` (not committed).
+The same scenarios and settings on .NET 8. Artifacts: `results/2.0.0/raw/bdn-net8.0/results/` (not committed).
 
 ### Flat (.NET 8)
 
@@ -621,10 +621,10 @@ Notes:
 
 - Nullable annotations: the benchmark models declare nested objects and collections non-nullable (`= null!`), because the timed data never contains `null`. Mapperly generates code from the nullable annotations: for a non-nullable member it emits no `null` check (a `null` there fails with `NullReferenceException`), for a nullable member it does. The `null` rows are therefore shown for both declarations; the nullable variant uses `NullableOrderEntity`/`NullableOrderDto` and `UserEntity?` → `UserDto?`. The other libraries do not read annotations; their results differ between the variants only where the configuration differs.
 - IronMapper, nullable nested object: the documented workaround `MapFrom(s => s.Customer!.MapToCustomerDto())` has no `null` check; a user who needs `null` → `null` has to write the check in the lambda (`s.Customer == null ? null : ...`).
-- IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); from 1.2.0 the `ArgumentNullException` arrives as it is.
+- IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); from 2.0.0 the `ArgumentNullException` arrives as it is.
 - `List<string>` → `List<string>`: IronMapper and Mapperly (by default, without `UseDeepCloning`) assign the same list; Mapster and AutoMapper create a new list. Collections with the same element type are kept out of the timed scenarios for this reason (BENCHMARK_SPEC.md, 4).
 - IronMapper, flattening: in `MappingProfile` mappings unmatched destination properties are skipped silently (IM0001 is reported for `[MapTo]`/`[MapFrom]` only, docs/diagnostics.md). This comparison configures IronMapper only through a profile, so the build gives no hint.
-- IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy `IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; from 1.2.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).
+- IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy `IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; from 2.0.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).
 - IronMapper, positional record: the mapping is not declared in the code, because it breaks the build (checked with IronMapper 1.1.3: CS7036 in the generated file, no IronMapper diagnostic).
 
 ## Cold start
@@ -1023,7 +1023,7 @@ Source generators work at compile time, runtime mappers at startup ([startup.md]
 Notes:
 
 - Δ vs Baseline includes everything the library adds to a build: the reference (and its analyzers), compiling the configuration code, and for the source generators the generator run and compiling the generated code.
-- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 1.2.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
+- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 2.0.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
 - Differences of a few tens of milliseconds are within the noise of a single build; compare the medians together with the min/max.
 - The generated projects, the warnings of the warmup builds and the ReportAnalyzer logs are kept in `probes/BuildProbe.*` and `results/raw/build-time/`.
 

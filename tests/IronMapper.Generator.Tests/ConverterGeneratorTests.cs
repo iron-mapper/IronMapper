@@ -306,7 +306,7 @@ public class ConverterGeneratorTests
         var diagnostic = Assert.Single(generatorDiagnostics);
         Assert.Equal("IM0015", diagnostic.Id);
         Assert.Contains("converter 'App.Tag.Upper' ([MapConverter] on 'App.Tag.Label')", diagnostic.GetMessage());
-        Assert.Contains("it is not accessible from the generated class IronMapper.Generated.GeneratedMappers (private)", diagnostic.GetMessage());
+        Assert.Contains("it is not accessible from the generated class in namespace IronMapper.Generated (private)", diagnostic.GetMessage());
         Assert.DoesNotContain(sources, s => s.Contains("MapToTagDto("));
     }
 

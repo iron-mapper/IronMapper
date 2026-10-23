@@ -16,7 +16,9 @@
        package referenced; a project without mappings; the Quick Start of README.md and README.ru.md, marked with
        <!-- quickstart:begin --> / <!-- quickstart:end -->) and the cases
        where it must not be added or must not get in the way (ImplicitUsings off, LangVersion 9,
-       IronMapperImplicitUsings=false, an explicit using next to the global one), and netstandard2.0/2.1 libraries
+       IronMapperImplicitUsings=false, an explicit using next to the global one; with EnforceCodeStyleInBuild and
+       IDE0005 as an error the explicit using must fail the build with IDE0005 at its line, and build with
+       IronMapperImplicitUsings=false), and netstandard2.0/2.1 libraries
        (the generated throw helper instead of ArgumentNullException.ThrowIfNull, the generated copy of
        ModuleInitializerAttribute, C# 8 without a module initializer). Each executable variant is also run.
        The feature switch IronMapper.Registration.IsSupported (buildTransitive/IronMapper.targets) is checked in the
@@ -27,8 +29,9 @@
        with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
        (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
        TreatWarningsAsErrors, none with it).
-       IronMapperGenerateInPlace/List/Array and IronMapperExcludeFromCodeCoverage: the public overloads and the attributes
-       of GeneratedMappers ([GeneratedCode] with the package version, [ExcludeFromCodeCoverage]) with the defaults and
+       IronMapperGenerateInPlace/List/Array, IronMapperExcludeFromCodeCoverage and IronMapperGeneratedCodeAttribute: the
+       public overloads and the attributes of the generated class GeneratedMappers_{AssemblyName} ([GeneratedCode] with the
+       package version, [ExcludeFromCodeCoverage]) with the defaults and
        with everything turned off; the registry used by IMapper maps List, array and in-place either way.
 
 .EXAMPLE
@@ -201,19 +204,27 @@ try {
         $path
     }
 
-    # A copy of Sources/ProfileUnmapped.cs in its own folder with an .editorconfig (applied by the path of the file).
-    function Export-WithEditorConfig([string] $name, [string] $severity) {
+    # A copy of a file of Sources/ in its own folder with an .editorconfig (applied by the path of the file).
+    function Export-WithEditorConfig([string] $name, [string] $rules, [string] $file = 'ProfileUnmapped.cs') {
         $folder = Join-Path $variantsRoot $name
         New-Item -ItemType Directory -Force -Path $folder | Out-Null
-        Copy-Item (Join-Path $sources 'ProfileUnmapped.cs') $folder
-        "root = true`n`n[*.cs]`ndotnet_diagnostic.IM0001.severity = $severity`n" |
-            Set-Content -Path (Join-Path $folder '.editorconfig') -NoNewline -Encoding utf8
-        Join-Path $folder 'ProfileUnmapped.cs'
+        Copy-Item (Join-Path $sources $file) $folder
+        "root = true`n`n[*.cs]`n$rules`n" | Set-Content -Path (Join-Path $folder '.editorconfig') -NoNewline -Encoding utf8
+        Join-Path $folder $file
     }
 
     # IM0001 in the build output: at the CreateMap call of ProfileUnmapped.cs (file, line, column).
     $createMapLine = (Select-String -Path (Join-Path $sources 'ProfileUnmapped.cs') -SimpleMatch 'CreateMap<').LineNumber
     $unmappedError = "ProfileUnmapped\.cs\($createMapLine,\d+\): error IM0001: Property 'Missing' on destination type 'OrderDto'"
+
+    # A strict code style (IDE0005 as an error in the build) and an explicit `using IronMapper.Generated;` next to the
+    # global one of the package: IDE0005 at that line. The compiler reports IDE0005 in the build only with
+    # GenerateDocumentationFile (CS1591 turned off: the consumer has no XML comments).
+    $strictStyle = "dotnet_diagnostic.IDE0005.severity = error`ndotnet_diagnostic.CS1591.severity = none"
+    $strictProperties = @('-p:EnforceCodeStyleInBuild=true', '-p:GenerateDocumentationFile=true')
+    $generatedUsingLine = (Select-String -Path (Join-Path $sources 'ExplicitUsingStrict.cs') -Pattern '^using IronMapper\.Generated;' |
+        Select-Object -First 1).LineNumber
+    $unnecessaryUsingError = "ExplicitUsingStrict\.cs\($generatedUsingLine,\d+\): error IDE0005:"
 
     $variants = @(
         @{ Name = 'no using, ImplicitUsings on'; Source = "$sources/NoUsing.cs"; GlobalUsing = $true; Output = 'NoUsing: OK' }
@@ -226,6 +237,12 @@ try {
            GlobalUsing = $true; Output = 'Alice' }
         @{ Name = 'explicit using next to the global one'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $true
            Output = 'ExplicitUsing: OK' }
+        @{ Name = 'explicit using, EnforceCodeStyleInBuild, IDE0005 as error (IDE0005 at the using)'
+           Source = (Export-WithEditorConfig 'strict-style' $strictStyle 'ExplicitUsingStrict.cs'); GlobalUsing = $true
+           BuildError = $unnecessaryUsingError; Properties = $strictProperties }
+        @{ Name = 'explicit using, EnforceCodeStyleInBuild, IDE0005 as error, IronMapperImplicitUsings=false'
+           Source = (Export-WithEditorConfig 'strict-style-off' $strictStyle 'ExplicitUsingStrict.cs'); GlobalUsing = $false
+           Output = 'ExplicitUsingStrict: OK'; Properties = $strictProperties + @('-p:IronMapperImplicitUsings=false') }
         @{ Name = 'ImplicitUsings off'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
            Output = 'ExplicitUsing: OK'; Properties = @('-p:ImplicitUsings=disable') }
         @{ Name = 'ImplicitUsings off, LangVersion 9'; Source = "$sources/ExplicitUsing.cs"; GlobalUsing = $false
@@ -253,7 +270,7 @@ try {
         @{ Name = 'netstandard2.0 library, C# 8 (registration without module initializer)'; Source = "$sources/ExplicitUsing.cs"
            GlobalUsing = $false; Run = $false
            Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library', '-p:ImplicitUsings=disable', '-p:LangVersion=8') }
-        # IM0001 for profile mappings (IronMapperReportUnmappedInProfiles, off by default in 1.x). BuildError: the build
+        # IM0001 for profile mappings (IronMapperReportUnmappedInProfiles, off by default). BuildError: the build
         # must fail and its output must match this pattern.
         @{ Name = 'profile with an unmapped property, IronMapperReportUnmappedInProfiles not set'
            Source = "$sources/ProfileUnmapped.cs"; GlobalUsing = $true; Output = 'ProfileUnmapped: OK' }
@@ -261,18 +278,19 @@ try {
            Source = "$sources/ProfileUnmapped.cs"; GlobalUsing = $true; BuildError = $unmappedError
            Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
         @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity error, TreatWarningsAsErrors=false'
-           Source = (Export-WithEditorConfig 'editorconfig-error' 'error'); GlobalUsing = $true; BuildError = $unmappedError
+           Source = (Export-WithEditorConfig 'editorconfig-error' 'dotnet_diagnostic.IM0001.severity = error'); GlobalUsing = $true; BuildError = $unmappedError
            Properties = @('-p:IronMapperReportUnmappedInProfiles=true', '-p:TreatWarningsAsErrors=false') }
         @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity none'
-           Source = (Export-WithEditorConfig 'editorconfig-none' 'none'); GlobalUsing = $true; Output = 'ProfileUnmapped: OK'
+           Source = (Export-WithEditorConfig 'editorconfig-none' 'dotnet_diagnostic.IM0001.severity = none'); GlobalUsing = $true; Output = 'ProfileUnmapped: OK'
            Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
         # Optional overloads and the attributes of the generated class (Sources/GeneratedOptions.cs checks them by reflection).
         @{ Name = 'generated class attributes and overloads, defaults'; Source = "$sources/GeneratedOptions.cs"; GlobalUsing = $true
            Output = 'GeneratedOptions: OK' }
-        @{ Name = 'IronMapperGenerateInPlace/List/Array=false, IronMapperExcludeFromCodeCoverage=true'
+        @{ Name = 'IronMapperGenerateInPlace/List/Array=false, IronMapperExcludeFromCodeCoverage=true, IronMapperGeneratedCodeAttribute=false'
            Source = "$sources/GeneratedOptions.cs"; GlobalUsing = $true; Output = 'GeneratedOptions: OK'
            Properties = @('-p:IronMapperGenerateInPlace=false', '-p:IronMapperGenerateList=false', '-p:IronMapperGenerateArray=false',
-                          '-p:IronMapperExcludeFromCodeCoverage=true', '-p:DefineConstants=OVERLOADS_OFF') }
+                          '-p:IronMapperExcludeFromCodeCoverage=true', '-p:IronMapperGeneratedCodeAttribute=false',
+                          '-p:DefineConstants=OVERLOADS_OFF') }
     )
 
     $index = 0

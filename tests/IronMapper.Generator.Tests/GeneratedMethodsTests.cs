@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using IronMapper.Generator.Analysis;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
@@ -315,6 +316,51 @@ public class GeneratedMethodsTests
         Assert.Single(result.Sources, s => s.Contains("GeneratedCode(\"IronMapper\""));
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("true", true)]
+    [InlineData("", true)]
+    [InlineData("false", false)]
+    [InlineData("FALSE", false)]
+    public void GeneratedCodeAttribute_OnByDefault_OffWithTheProperty(string? value, bool marked)
+    {
+        var properties = new Dictionary<string, string>();
+        if (value is not null) properties["IronMapperGeneratedCodeAttribute"] = value;
+
+        var result = Run(new[] { Types.Replace("public class User {", "[IronMapper.Attributes.MapTo(typeof(UserDto))] public class User {") }, properties);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(marked, result.ClassAttributes.OfType<System.CodeDom.Compiler.GeneratedCodeAttribute>().Any());
+        Assert.Equal(marked, result.Sources.Any(s => s.Contains("GeneratedCode(\"IronMapper\"")));
+        // Independent of IronMapperExcludeFromCodeCoverage (off here).
+        Assert.DoesNotContain(result.ClassAttributes, a => a is System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute);
+    }
+
+    [Fact]
+    public void ChangingGeneratedCodeAttribute_RegeneratesOnlyTheClassDeclaration()
+    {
+        var compilation = GeneratorTestHelper.CreateCompilation(new[]
+        {
+            Types.Replace("public class User {", "[IronMapper.Attributes.MapTo(typeof(UserDto))] public class User {"),
+        });
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new[] { new IronMapperGenerator().AsSourceGenerator() },
+            optionsProvider: TestOptionsProvider.FromBuildProperties(new Dictionary<string, string>()),
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+        driver = driver.RunGenerators(compilation);
+
+        driver = driver.WithUpdatedAnalyzerConfigOptions(TestOptionsProvider.FromBuildProperties(
+            new Dictionary<string, string> { ["IronMapperGeneratedCodeAttribute"] = "false" }));
+        var result = Assert.Single(driver.RunGenerators(compilation).GetRunResult().Results);
+
+        var changed = result.TrackedOutputSteps.SelectMany(s => s.Value).SelectMany(step => step.Outputs)
+            .Where(o => o.Reason is IncrementalStepRunReason.Modified or IncrementalStepRunReason.New)
+            .ToList();
+        Assert.Single(changed);
+        Assert.Contains(result.GeneratedSources, s => s.HintName == "GeneratedMappers.g.cs"
+            && !s.SourceText.ToString().Contains("GeneratedCode("));
+    }
+
     [Fact]
     public void ChangingExcludeFromCodeCoverage_RegeneratesOnlyTheClassDeclaration()
     {
@@ -365,7 +411,7 @@ public class GeneratedMethodsTests
 
     /// <summary>
     /// Runs the generator with the MSBuild <paramref name="properties"/>, compiles, loads the assembly and returns the
-    /// public methods of <c>GeneratedMappers</c> (<c>name/parameter count</c>) and the result of <c>Program.Run()</c> if
+    /// public methods of the generated class (<c>name/parameter count</c>) and the result of <c>Program.Run()</c> if
     /// the sources declare it.
     /// </summary>
     private static Result Run(string[] sources, Dictionary<string, string> properties)
@@ -393,7 +439,7 @@ public class GeneratedMethodsTests
         {
             stream.Position = 0;
             var assembly = context.LoadFromStream(stream);
-            var mappers = assembly.GetType("IronMapper.Generated.GeneratedMappers", throwOnError: true)!;
+            var mappers = assembly.GetType("IronMapper.Generated." + GeneratedClassName.For(assembly.GetName().Name), throwOnError: true)!;
             var methods = mappers.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Select(m => $"{m.Name}/{m.GetParameters().Length}").ToHashSet();
             var attributes = mappers.GetCustomAttributes(inherit: false).Cast<Attribute>().ToList();

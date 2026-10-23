@@ -25,7 +25,7 @@ var shopItem = new Shop.Item { Name = "a" }.MapToItemDto();
 var stockItem = new Stock.Item { Name = "c" }.MapToItemDto();
 var tagDto = new Tag { Label = "t" }.MapToTagDto();
 
-// Referenced libraries that also use IronMapper: InternalLib has only internal maps (its GeneratedMappers is
+// Referenced libraries that also use IronMapper: InternalLib has only internal maps (its generated class is
 // internal and invisible here), PublicLib has public maps called from this assembly.
 var internalLib = InternalLib.InternalLibApi.Describe("s", 3);
 var productDto = new PublicLib.Product { Name = "p" }.MapToProductDto();
@@ -33,8 +33,11 @@ var priceDtos = new[] { new PublicLib.Price { Amount = 2.5m } }.MapToPriceDtoArr
 var productTarget = new PublicLib.ProductDto();
 new PublicLib.Product { Name = "q" }.MapToProductDto(productTarget);
 var publicLibInternal = PublicLib.PublicLibApi.Reveal("r");
-var internalLibClass = typeof(InternalLib.InternalLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
-var publicLibClass = typeof(PublicLib.PublicLibApi).Assembly.GetType("IronMapper.Generated.GeneratedMappers");
+// One class per assembly, GeneratedMappers_{assembly name with . as _}.
+var internalLibClass = typeof(InternalLib.InternalLibApi).Assembly.GetType(
+    "IronMapper.Generated.GeneratedMappers_IronMapper_PackageConsumer_InternalLib");
+var publicLibClass = typeof(PublicLib.PublicLibApi).Assembly.GetType(
+    "IronMapper.Generated.GeneratedMappers_IronMapper_PackageConsumer_PublicLib");
 
 // Name collision inside PublicLib: one source, two destinations named MemberDto (IM0013, suppressed there). The
 // qualified methods are public and called from here; their List/Array call MapToX(x) by the qualified simple name.

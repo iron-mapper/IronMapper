@@ -6,7 +6,7 @@ namespace Comparison.Mappers.IronMapper;
 
 /// <summary>
 /// The DI path: <c>AddIronMapper</c> + <see cref="IIronMapper"/> resolved once. Up to 1.1.x the mapper finds and calls the
-/// generated methods through reflection (<c>MethodInfo.Invoke</c>); from 1.2.0 through the generated registry (delegates).
+/// generated methods through reflection (<c>MethodInfo.Invoke</c>); from 2.0.0 through the generated registry (delegates).
 /// </summary>
 public static class IronMapperDiSetup
 {

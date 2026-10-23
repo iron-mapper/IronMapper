@@ -9,7 +9,7 @@
 |---|---|
 | Machine | 12th Gen Intel(R) Core(TM) i7-12650H (10 cores, 16 threads) · 64 GB RAM · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.401 · .NET runtime 10.0.12 |
 | BenchmarkDotNet | 0.15.8 · Windows 11 (10.0.26300.9711) · .NET 10.0.12 (10.0.12, 10.0.1226.42308) · X64 |
-| Report generated | 2026-10-22 03:19 UTC |
+| Report generated | 2026-10-23 08:23 UTC |
 | Commit | `909da54` |
 | Run | Full, started 2026-10-21 16:32 UTC, total 2:21:35 (Build 0:00:09 · Tests 0:00:06 · Runtime 1:07:47 · RuntimeNet8 1:04:55 · Startup 0:02:51 · AOT 0:00:04 · Footprint 0:00:11 · BuildTime 0:05:30 · Report 0:00:02); re-measured separately after it (time the measurement finished): Startup 2026-10-22 02:27 UTC · BuildTime 2026-10-22 02:33 UTC |
 
@@ -446,10 +446,10 @@ Notes:
 
 - Nullable annotations: the benchmark models declare nested objects and collections non-nullable (`= null!`), because the timed data never contains `null`. Mapperly generates code from the nullable annotations: for a non-nullable member it emits no `null` check (a `null` there fails with `NullReferenceException`), for a nullable member it does. The `null` rows are therefore shown for both declarations; the nullable variant uses `NullableOrderEntity`/`NullableOrderDto` and `UserEntity?` → `UserDto?`. The other libraries do not read annotations; their results differ between the variants only where the configuration differs.
 - IronMapper, nullable nested object: the documented workaround `MapFrom(s => s.Customer!.MapToCustomerDto())` has no `null` check; a user who needs `null` → `null` has to write the check in the lambda (`s.Customer == null ? null : ...`).
-- IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); from 1.2.0 the `ArgumentNullException` arrives as it is.
+- IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); from 2.0.0 the `ArgumentNullException` arrives as it is.
 - `List<string>` → `List<string>`: IronMapper and Mapperly (by default, without `UseDeepCloning`) assign the same list; Mapster and AutoMapper create a new list. Collections with the same element type are kept out of the timed scenarios for this reason (BENCHMARK_SPEC.md, 4).
 - IronMapper, flattening: in `MappingProfile` mappings unmatched destination properties are skipped silently (IM0001 is reported for `[MapTo]`/`[MapFrom]` only, docs/diagnostics.md). This comparison configures IronMapper only through a profile, so the build gives no hint.
-- IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy `IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; from 1.2.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).
+- IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy `IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; from 2.0.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).
 - IronMapper, positional record: the mapping is not declared in the code, because it breaks the build (checked with IronMapper 1.1.3: CS7036 in the generated file, no IronMapper diagnostic).
 
 ## Cold start
@@ -869,7 +869,7 @@ Source generators work at compile time, runtime mappers at startup ([startup.md]
 Notes:
 
 - Δ vs Baseline includes everything the library adds to a build: the reference (and its analyzers), compiling the configuration code, and for the source generators the generator run and compiling the generated code.
-- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 1.2.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
+- IronMapper and Mapperly spend about the same time in the generator itself; the rest of the difference is compiling the generated code. IronMapper emits one file per pair with a mapping method, an in-place overload and the `List`/`Array` overloads (with `ArgumentNullException` checks; 1.1.x with LINQ for collections, 2.0.0 with shared loops), Mapperly one file with one method per pair, so IronMapper gives the compiler several times more code (see **Generated code**).
 - Differences of a few tens of milliseconds are within the noise of a single build; compare the medians together with the min/max.
 - The generated projects, the warnings of the warmup builds and the ReportAnalyzer logs are kept in `probes/BuildProbe.*` and `results/raw/build-time/`.
 

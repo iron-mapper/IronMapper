@@ -12,7 +12,7 @@ namespace IronMapper.Generator.Analysis;
 
 /// <summary>
 /// Rewrites the body of a lambda written in a <c>MappingProfile</c> constructor so that it can be
-/// emitted into <c>IronMapper.Generated.GeneratedMappers</c>, a class with no <c>using</c> directives
+/// emitted into <c>IronMapper.Generated.GeneratedMappers_{AssemblyName}</c>, a class with no <c>using</c> directives
 /// and no profile instance:
 /// <list type="bullet">
 ///   <item>lambda parameters are renamed by symbol (string literals and member names are untouched);</item>

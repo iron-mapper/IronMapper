@@ -12,7 +12,7 @@ The specification of this suite is [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md).
 |---|---|---|
 | `Manual` | — | Hand-written code, the **baseline** of every comparison |
 | `IronMapper` | IronMapper (NuGet) | Source generator: generated extension methods (`source.MapToXxx()`) |
-| `IronMapper_IMapper` | IronMapper + IronMapper.Extensions.DI | `IMapper` from dependency injection (up to 1.1.x: reflection lookup, then `MethodInfo.Invoke` per call; from 1.2.0: the delegates of the generated registry) |
+| `IronMapper_IMapper` | IronMapper + IronMapper.Extensions.DI | `IMapper` from dependency injection (up to 1.1.x: reflection lookup, then `MethodInfo.Invoke` per call; from 2.0.0: the delegates of the generated registry) |
 | `Mapperly` | Riok.Mapperly | Source generator: `[Mapper]` partial class |
 | `Mapster` | Mapster | Runtime: own `TypeAdapterConfig`, `Compile()` in setup, `Adapt<TSource, TDest>(config)` |
 | `AutoMapper` | AutoMapper | Runtime: `MapperConfiguration`, `CreateMapper()` in setup |
@@ -92,7 +92,7 @@ for the scripts (MSBuild reads environment variables as properties).
 - **`IronMapper_StaticFormat` is a workaround**, not the documented converter API. It maps the salary in
   CustomConfig with `MapFrom(s => SalaryFormat.Format(s.Salary))` instead of `UseConverter<SalaryConverter>()`, only
   to show the cost of creating the converter: up to 1.1.x the code generated for `UseConverter<T>()` calls
-  `new T().Convert(...)` on every mapping; from 1.2.0 a converter without state (`SalaryConverter` is one) is created
+  `new T().Convert(...)` on every mapping; from 2.0.0 a converter without state (`SalaryConverter` is one) is created
   once and reused. The `IronMapper` row uses `UseConverter<T>()`, as a user would.
 - **IronMapper configures nested single objects through `MapFrom`.** IronMapper does not map nested single objects
   automatically; the documented workaround is `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested
@@ -102,7 +102,7 @@ for the scripts (MSBuild reads environment variables as properties).
   Mapperly use `new List<T>(count)` + loop. Part of the 1.1.3 collection difference to `Manual` comes from this. Under
   NativeAOT the same LINQ `Select` made the executable ~230 KB larger than with Mapperly, because it needs the NativeAOT
   runtime type loader (verified in isolation, see [results/baseline-1.1.3/aot.md](results/baseline-1.1.3/aot.md)).
-  From 1.2.0 the generated code uses loops of a known size like `Manual` (no LINQ, no delegates).
+  From 2.0.0 the generated code uses loops of a known size like `Manual` (no LINQ, no delegates).
 - **Mapperly enumerates nested collections through `IReadOnlyCollection<T>`.** The generated
   `MapToListOfOrderLineDto(IReadOnlyCollection<OrderLineEntity>)` uses `foreach` over the interface. In Nested the JIT
   devirtualizes it for `List<T>` (guarded by a type check) and removes the boxed enumerator, so the allocation equals
@@ -110,8 +110,8 @@ for the scripts (MSBuild reads environment variables as properties).
   allocated again for every order: +40 B per order in `B/item`, and part of Mapperly's time difference to `Manual`
   there (JIT output checked with `DisassemblyDiagnoser`).
 - **`IronMapper_IMapper`** up to 1.1.x goes through reflection (`MethodInfo.Invoke` per call) and does not work under
-  NativeAOT; from 1.2.0 it calls the generated methods through the delegates of the generated registry and works under
-  NativeAOT. Collections use `MapCollection` + `ToList()` with both (`Map<List<T>>` works from 1.2.0, issue #8).
+  NativeAOT; from 2.0.0 it calls the generated methods through the delegates of the generated registry and works under
+  NativeAOT. Collections use `MapCollection` + `ToList()` with both (`Map<List<T>>` works from 2.0.0, issue #8).
 - **`Manual_DI`** (cold start only: `StartupBenchmark` and `probes/StartupProbe.Manual_DI`) is `Manual` resolved from
   the same Microsoft.Extensions.DependencyInjection container as `IronMapper_IMapper`. `IronMapper_IMapper` minus
   `Manual_DI` is what IronMapper adds on top of the container.
@@ -165,7 +165,7 @@ pwsh ./scripts/run-all.ps1 -Quick       # smoke test (~20 min): --job short, few
 pwsh ./scripts/run-all.ps1 -CheckOnly   # only the estimate and the environment checks
 pwsh ./scripts/run-all.ps1 -Dry         # checks that every command works (~5 min): --job Dry, 2 startup runs, N = 5
 # A release run: the local sources into results/<version>, the published package into another folder.
-pwsh ./scripts/run-all.ps1 -UseLocalIronMapper -ResultsDir results/1.2.0
+pwsh ./scripts/run-all.ps1 -UseLocalIronMapper -ResultsDir results/2.0.0
 pwsh ./scripts/run-all.ps1 -ResultsDir results/1.1.3-rerun
 ./scripts/run-all.sh                    # the same on Linux/macOS
 ```
@@ -175,10 +175,10 @@ cleaned before each run, then a check of both reports; summary in `../artifacts/
 comparison of the two runs, which `generate-report.ps1` embeds into the RESULTS.md of the second:
 
 ```bash
-pwsh ./scripts/run-benchmarks.ps1        # published package -> results/1.1.3-rerun, local sources -> results/1.2.0
+pwsh ./scripts/run-benchmarks.ps1        # published package -> results/1.1.3-rerun, local sources -> results/2.0.0
 pwsh ./scripts/run-benchmarks.ps1 -Dry   # checks the commands (~10 min); results to ../artifacts/bench-dry/
-pwsh ./scripts/compare-results.ps1 -Baseline results/1.1.3-rerun -Current results/1.2.0   # results/1.2.0/comparison.md
-pwsh ./scripts/generate-report.ps1       # with IRONMAPPER_RESULTS_DIR=results/1.2.0: RESULTS.md with the comparison
+pwsh ./scripts/compare-results.ps1 -Baseline results/1.1.3-rerun -Current results/2.0.0   # results/2.0.0/comparison.md
+pwsh ./scripts/generate-report.ps1       # with IRONMAPPER_RESULTS_DIR=results/2.0.0: RESULTS.md with the comparison
 ```
 
 `run-benchmarks.ps1` requires the branch `main` and a clean tree (changes under `benchmarks/results/` are allowed; with
@@ -230,7 +230,7 @@ local sources: the build, the tests and the runtime benchmarks through project r
 cold start, NativeAOT, size and build time through the local sources packed as `<Version>-local.<timestamp>` into
 `raw/local-packages` (MSBuild properties `IronMapperPackageVersion` and `IronMapperPackageSource`, see
 `Directory.Packages.props`). A project reference is not what a package user gets: it copies the `.pdb` and XML docs into
-the publish folder (the 1.2.0 run showed +107 KB instead of +48 KB) and rebuilds `../src` inside every timed
+the publish folder (the 2.0.0 run showed +107 KB instead of +48 KB) and rebuilds `../src` inside every timed
 `dotnet build --no-incremental` (+1.2 s at any N). RESULTS.md lists IronMapper as "local sources" with the commit and
 the package version used.
 
@@ -263,9 +263,9 @@ probes/BuildProbe.*          generated by run-build-time.ps1 (not committed)
 tools/MstatReport            NativeAOT size breakdown from ILC .mstat files
 scripts/                     run-all, run-benchmarks (release run), run-startup, run-aot, run-footprint, run-build-time,
                              compare-results, generate-report
-results/                     reports of the latest release (RESULTS.md and the per-area pages): a copy of results/1.2.0
-results/1.2.0/               the 1.2.0 release run (local sources) with the comparison to results/1.1.3-rerun
-results/1.1.3-rerun/         the published 1.1.3, measured in the same session as results/1.2.0
-results/baseline-1.1.3/      frozen copy of the 1.1.3 reports of 18.10.2026, the reference for the 1.2.0 targets
+results/                     reports of the latest release (RESULTS.md and the per-area pages): a copy of results/2.0.0
+results/2.0.0/               the 2.0.0 release run (local sources) with the comparison to results/1.1.3-rerun
+results/1.1.3-rerun/         the published 1.1.3, measured in the same session as results/2.0.0
+results/baseline-1.1.3/      frozen copy of the 1.1.3 reports of 18.10.2026, the reference for the 2.0.0 targets
                              (raw/ of every folder is not committed)
 ```

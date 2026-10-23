@@ -7,8 +7,9 @@ namespace IronMapper.Generator.Analysis.Models;
 /// <summary>
 /// What the generated code may use in the user's compilation (rule "only APIs available in the user's compilation"):
 /// <c>ArgumentNullException.ThrowIfNull</c> (.NET 6+), <c>DoesNotReturnAttribute</c>, module initializers (C# 9) and
-/// <c>ModuleInitializerAttribute</c> (.NET 5+). Compared by value, so it is recomputed for every compilation but changes
-/// the output only when the target framework or the language version changes.
+/// <c>ModuleInitializerAttribute</c> (.NET 5+); and the name of the generated class, which depends on the assembly name
+/// (<see cref="GeneratedClassName"/>). Compared by value, so it is recomputed for every compilation but changes the output
+/// only when the target framework, the language version or the assembly name changes.
 /// </summary>
 internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
 {
@@ -16,8 +17,10 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     public const string ThrowHelperName = "ThrowArgumentNullException";
 
     public GeneratedCodeOptions(bool useThrowIfNull, bool hasDoesNotReturn, bool supportsModuleInitializers,
-        bool hasModuleInitializerAttribute, bool hasGeneratedCodeAttribute = true, bool hasExcludeFromCodeCoverage = true)
+        bool hasModuleInitializerAttribute, bool hasGeneratedCodeAttribute = true, bool hasExcludeFromCodeCoverage = true,
+        string className = GeneratedClassName.Prefix)
     {
+        ClassName = className;
         UseThrowIfNull = useThrowIfNull;
         HasDoesNotReturn = hasDoesNotReturn;
         SupportsModuleInitializers = supportsModuleInitializers;
@@ -25,6 +28,12 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
         HasGeneratedCodeAttribute = hasGeneratedCodeAttribute;
         HasExcludeFromCodeCoverage = hasExcludeFromCodeCoverage;
     }
+
+    /// <summary>
+    /// Name of the generated class in <c>IronMapper.Generated</c>: <c>GeneratedMappers_{AssemblyName}</c>
+    /// (<see cref="GeneratedClassName.For"/>), declared by every generated file of the assembly.
+    /// </summary>
+    public string ClassName { get; }
 
     /// <summary><c>ArgumentNullException.ThrowIfNull(object, string)</c> exists and is accessible.</summary>
     public bool UseThrowIfNull { get; }
@@ -89,7 +98,8 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
 
         return new GeneratedCodeOptions(useThrowIfNull, hasDoesNotReturn, supportsModuleInitializers, hasModuleInitializerAttribute,
             IsAccessible(compilation, "System.CodeDom.Compiler.GeneratedCodeAttribute"),
-            IsAccessible(compilation, "System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute"));
+            IsAccessible(compilation, "System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute"),
+            GeneratedClassName.For(compilation.AssemblyName));
     }
 
     private static bool IsAccessible(Compilation compilation, string metadataName)
@@ -118,7 +128,8 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
            && SupportsModuleInitializers == other.SupportsModuleInitializers
            && HasModuleInitializerAttribute == other.HasModuleInitializerAttribute
            && HasGeneratedCodeAttribute == other.HasGeneratedCodeAttribute
-           && HasExcludeFromCodeCoverage == other.HasExcludeFromCodeCoverage;
+           && HasExcludeFromCodeCoverage == other.HasExcludeFromCodeCoverage
+           && ClassName == other.ClassName;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratedCodeOptions);
@@ -126,5 +137,6 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     /// <inheritdoc/>
     public override int GetHashCode()
         => (UseThrowIfNull ? 1 : 0) | (HasDoesNotReturn ? 2 : 0) | (SupportsModuleInitializers ? 4 : 0)
-           | (HasModuleInitializerAttribute ? 8 : 0) | (HasGeneratedCodeAttribute ? 16 : 0) | (HasExcludeFromCodeCoverage ? 32 : 0);
+           | (HasModuleInitializerAttribute ? 8 : 0) | (HasGeneratedCodeAttribute ? 16 : 0) | (HasExcludeFromCodeCoverage ? 32 : 0)
+           | (StringComparer.Ordinal.GetHashCode(ClassName) << 6);
 }

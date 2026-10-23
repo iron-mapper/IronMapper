@@ -1,4 +1,4 @@
-// DI path: ServiceProvider + IMapper (up to 1.1.x reflection + MethodInfo.Invoke inside; from 1.2.0 the generated registry).
+// DI path: ServiceProvider + IMapper (up to 1.1.x reflection + MethodInfo.Invoke inside; from 2.0.0 the generated registry).
 using Comparison.Mappers.IronMapper;
 using Comparison.Models.Data;
 using Comparison.Models.Nested;

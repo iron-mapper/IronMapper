@@ -100,7 +100,7 @@ internal sealed class ConverterAnalyzer
         if (named.IsStatic) return "it is static";
         if (named.IsAbstract) return "it is abstract";
         if (!_compilation.IsSymbolAccessibleWithin(named, _compilation.Assembly))
-            return $"it is not accessible from the generated class IronMapper.Generated.GeneratedMappers ({SymbolHelpers.ToKeyword(named.DeclaredAccessibility)})";
+            return $"it is not accessible from the generated class in namespace IronMapper.Generated ({SymbolHelpers.ToKeyword(named.DeclaredAccessibility)})";
 
         // A struct always has a parameterless constructor.
         if (named.IsValueType) return null;

@@ -55,7 +55,7 @@ UserDto[] arr = entities.MapToUserDtoArray();
 и читается `foreach`; любая другая последовательность читается `foreach` в растущий список. Без LINQ и делегатов:
 каждый элемент маппится прямым вызовом `MapToUserDto`.
 
-Начиная с 1.2.0 эти циклы написаны один раз на проект, в двух обобщённых методах `GeneratedMappers`
+Начиная с 2.0.0 эти циклы написаны один раз на проект, в двух обобщённых методах сгенерированного класса
 (`MapElementsToList`, `MapElementsToArray`); `MapToUserDtoList` — однострочный вызов с маленькой закрытой структурой
 маппинга, чей `Map` вызывает `MapToUserDto`. Структура передаётся аргументом типа, поэтому среда выполнения компилирует
 отдельную копию цикла для каждого маппинга, где вызов прямой и может быть встроен: метод коллекции занимает несколько
@@ -153,7 +153,7 @@ In-place перегрузка только присваивает замапле
 
 - Сгенерированные extension-методы (`source.MapToDto()`) — обычный скомпилированный C# без reflection.
 - `IMapper` из `IronMapper.Extensions.DI` (`RuntimeMapper`) вызывает те же сгенерированные методы через делегаты,
-  без reflection (начиная с 1.2.0). Для каждой сборки с маппингами генератор выпускает регистрацию
+  без reflection (начиная с 2.0.0). Для каждой сборки с маппингами генератор выпускает регистрацию
   (`GeneratedMappers.Registration.g.cs`): инициализатор модуля (`[ModuleInitializer]`) передаёт её в
   `IronMapper.Registration.MapperRegistry`, а тот регистрирует маппинги при создании первого `IMapper` (для сборки, к
   которой обратились позже, — при следующем маппинге). Инициализатор модуля только кладёт в список один делегат на
@@ -177,8 +177,10 @@ In-place перегрузка только присваивает замапле
   [Регистрация для IMapper](configuration.ru.md#регистрация-для-imapper-в-приложениях-с-trimming-и-nativeaot).
 - **C# 8** (`LangVersion` ниже 9) не поддерживает инициализаторы модулей: регистрация генерируется без
   `[ModuleInitializer]`, и `IMapper` не найдёт маппинги этой сборки, пока вы не вызовете
-  `IronMapper.Generated.GeneratedMappers.RegisterIronMapperMappings()` один раз при старте (метод `internal`, поэтому
-  вызывайте его из этой сборки). Для целей без `ModuleInitializerAttribute` (`netstandard`, .NET Framework) в сборку
+  `RegisterIronMapperMappings()` сгенерированного класса сборки один раз при старте, например
+  `IronMapper.Generated.GeneratedMappers_MyCompany_Mappings.RegisterIronMapperMappings()` для сборки `MyCompany.Mappings`
+  (метод `internal`, поэтому вызывайте его из этой сборки; до 1.1.4 включительно класс назывался `GeneratedMappers`, см.
+  [Решения из нескольких проектов](configuration.ru.md#решения-из-нескольких-проектов)). Для целей без `ModuleInitializerAttribute` (`netstandard`, .NET Framework) в сборку
   генерируется internal-копия атрибута.
 - `Map<TSource, TDest>(source)` использует маппинг точной пары: чтение статического поля и вызов делегата. Если его
   нет, а также для `Map<TDest>(object)` маппинг ищется по типу: runtime-тип источника, затем его базовые типы
@@ -190,7 +192,7 @@ In-place перегрузка только присваивает замапле
   `User → UserDto`. Они вызывают сгенерированные `MapToUserDtoList`/`MapToUserDtoArray`, поэтому результат —
   `List<UserDto>` (для `T[]` — массив).
 - `RuntimeMapper.Map(object source, Type sourceType, Type destinationType)` и `MapperRegistry.Map` маппят по `Type`.
-  В интерфейсе `IMapper` этого метода нет: новый член интерфейса сломал бы другие его реализации в 1.x.
+  В интерфейсе `IMapper` этого метода нет: новый член интерфейса сломал бы другие его реализации.
 - `IMapper.MapCollection<TSource, TDest>` маппит весь источник во время вызова и возвращает `List<TDest>` (с типом
   `IEnumerable<TDest>`); повторное перечисление результата не маппит заново. До 1.1.4 включительно метод возвращал
   ленивую последовательность, которая маппила при каждом перечислении и бросала исключение для `null`-источника
@@ -198,7 +200,7 @@ In-place перегрузка только присваивает замапле
 
 ### Производительность
 
-IronMapper 1.2.0, .NET 10.0.12 и .NET 8, Intel Core i7-12650H; среднее время и отношение к ручному коду. Полный
+IronMapper 2.0.0, .NET 10.0.12 и .NET 8, Intel Core i7-12650H; среднее время и отношение к ручному коду. Полный
 отчёт, методика, другие библиотеки и сравнение с 1.1.3, измеренной в той же сессии:
 [`benchmarks/results/RESULTS.md`](../benchmarks/results/RESULTS.md) (на английском).
 
@@ -222,8 +224,8 @@ IronMapper 1.2.0, .NET 10.0.12 и .NET 8, Intel Core i7-12650H; среднее �
   нет LINQ и делегатов (циклы с известным размером, см.
   [Вложенные collection-свойства](#вложенные-collection-свойства)); 1.1.3 использовала `Enumerable.Select` + `ToList` и
   давала ×1,25. Оставшийся разрыв в Nested — проверки на null в сгенерированных методах: из-за них JIT не встраивает
-  `MapToAddressDto` в `MapToCustomerDto` (проверено `DisassemblyDiagnoser`). В 1.x это документированное поведение; в
-  1.3.0 для вложенных объектов планируется вызов внутреннего метода без проверки.
+  `MapToAddressDto` в `MapToCustomerDto` (проверено `DisassemblyDiagnoser`). Это документированное поведение; в
+  2.1.0 для вложенных объектов планируется вызов внутреннего метода без проверки.
 - Разница в коллекциях в несколько процентов — в пределах разброса между запусками: на 1 000 заказов в этом прогоне
   `IMapper` быстрее extension-методов, которые он вызывает, а отдельный прогон только IronMapper дал ×1,01.
 - Холодный старт чувствителен к шуму, смотрите на порядок величины (AutoMapper +72,1 мс, Mapster +98,2 мс). Пробы
@@ -248,7 +250,7 @@ IronMapper 1.2.0, .NET 10.0.12 и .NET 8, Intel Core i7-12650H; среднее �
   приложении нет: без `IronMapper.Extensions.DI` trimmer её удаляет (см.
   [Регистрация для IMapper](configuration.ru.md#регистрация-для-imapper-в-приложениях-с-trimming-и-nativeaot)); CI
   проверяет, что в `tests/IronMapper.AotProbe` её нет, а с `IronMapperRegistration=true` она есть.
-- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): совместимы начиная с 1.2.0** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)). Они используют
+- **`IMapper` / `AddIronMapper` (IronMapper.Extensions.DI): совместимы начиная с 2.0.0** ([#26](https://github.com/iron-mapper/IronMapper/issues/26)). Они используют
   сгенерированный реестр (см. [IMapper и сгенерированные extension-методы](#imapper-и-сгенерированные-extension-методы)),
   а не reflection по сгенерированному коду. CI публикует `tests/IronMapper.AotProbe.DI` для .NET 8 и .NET 10, не
   допуская ни одного предупреждения trimming/AOT, и запускает его: `AddIronMapper`, `Map` по объявленному и

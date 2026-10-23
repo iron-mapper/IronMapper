@@ -5,7 +5,7 @@
 Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0016`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Текущее состояние** (`main`, не выпущенная 1.2.0):
+**Текущее состояние** (2.0.0):
 
 | ID | Уровень | Название | Выдаётся? |
 |---|---|---|---|
@@ -58,8 +58,8 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 (без учёта регистра) и нет `[MapProperty]`, указывающего на него.
 
 **Когда выдаётся:** для маппингов `[MapTo]` / `[MapFrom]`. Для маппингов `MappingProfile` — только с
-`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (в 1.x выключено по умолчанию, в 2.0
-планируется включить; см. [Несопоставленные свойства в профилях](configuration.ru.md#несопоставленные-свойства-в-профилях)).
+`<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` (по умолчанию выключено, в следующей мажорной
+версии планируется включить; см. [Несопоставленные свойства в профилях](configuration.ru.md#несопоставленные-свойства-в-профилях)).
 В профиле свойство destination считается сопоставленным, если его настраивает `ForMember` (`MapFrom`, `Ignore`,
 `UseConverter`), если его даёт `IncludeMembers` или source-свойство с тем же именем, или если на нём `[Ignore]`. Маппинг с
 `ConvertUsing` IM0001 не получает (converter создаёт весь объект). Обратный маппинг `ReverseMap()` не проверяется: он
@@ -221,11 +221,11 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Куда указывает:** атрибут `[MapTo]`/`[MapFrom]` или вызов `CreateMap`.
 
-**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class IronMapper.Generated.GeneratedMappers cannot access it. Make the type and all types that contain it public or internal.`
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: type '{2}' is {3}, so the generated class in namespace IronMapper.Generated cannot access it. Make the type and all types that contain it public or internal.`
 
 **Причина:** тип source или destination, один из содержащих его типов или один из аргументов обобщённого типа —
 вложенный тип с доступом `private`, `protected` или `private protected`. Сгенерированные методы находятся в классе
-верхнего уровня `IronMapper.Generated.GeneratedMappers` и не могут ссылаться на такие типы.
+верхнего уровня `IronMapper.Generated.GeneratedMappers_{ИмяСборки}` и не могут ссылаться на такие типы.
 
 **Когда выдаётся:** для маппингов `[MapTo]` / `[MapFrom]` и `MappingProfile`. Пропускается только этот маппинг;
 остальные маппинги проекта генерируются.
@@ -241,7 +241,7 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Куда указывает:** член или тип в лямбде.
 
-**Сообщение:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class IronMapper.Generated.GeneratedMappers, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
+**Сообщение:** `A lambda in MappingProfile '{0}' uses '{1}', but '{2}' is {3}. Profile lambdas are copied into the generated class in namespace IronMapper.Generated, which cannot access it. Make '{2}' internal (or public). The mapping was not generated.`
 
 **Причина:** лямбда в `MapFrom`, `When`, `ConvertUsing`, `BeforeMap`/`AfterMap` или `AddTransformer` ссылается на
 член или тип с доступом `private`, `protected` или `private protected` (или на член такого типа) — обычно это
@@ -278,14 +278,15 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Куда указывает:** определение маппинга, получившего уточнённое имя (атрибут, вызов `CreateMap` или `ReverseMap()`).
 
-**Сообщение:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}(); the collection methods are {3}List and {3}Array.`
+**Сообщение:** `Several mappings from '{0}' have a destination type named '{1}', so the mapping to '{2}' is generated as '{3}' instead of '{4}'. Call it as source.{3}() or IronMapper.Generated.{5}.{3}(source); the collection methods are {3}List and {3}Array.`
 
 **Причина:** один source-тип маппится на несколько destination-типов с одинаковым простым именем (разные пространства
 имён, вложенность в разные типы или разные аргументы типа). `MapTo{Name}` был бы объявлен дважды (`CS0111`), поэтому
 такие маппинги получают уточнённые имена, например `MapToAdminUserDto` и `MapToPublicUserDto` или `MapToBoxOfInt32`.
 Правило описано в [Имена методов и коллизии](configuration.ru.md#один-source-тип-несколько-destination-типов-с-одинаковым-простым-именем).
 
-**Как исправить:** вызывайте метод по имени из сообщения или переименуйте один из destination-типов, чтобы вернуть
+**Как исправить:** вызывайте метод по имени из сообщения — как метод расширения или на сгенерированном классе проекта
+(`{5}` в сообщении, `GeneratedMappers_{ИмяСборки}`), — или переименуйте один из destination-типов, чтобы вернуть
 `MapTo{Name}`. Если уточнённые имена вас устраивают, отключите предупреждение: `<NoWarn>$(NoWarn);IM0013</NoWarn>`.
 
 ---
@@ -321,7 +322,7 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
   с параметрами);
 - его конструктор без параметров `private` или `protected`;
 - это абстрактный класс, интерфейс, статический класс или открытый generic-тип (`typeof(Converter<>)`);
-- сгенерированный класс `IronMapper.Generated.GeneratedMappers` не имеет к нему доступа (вложенный `private`-тип).
+- сгенерированный класс `IronMapper.Generated.GeneratedMappers_{ИмяСборки}` не имеет к нему доступа (вложенный `private`-тип).
 
 До этой диагностики сборка падала с `CS7036`, `CS1729`, `CS0122` или `CS0144` внутри сгенерированного файла.
 

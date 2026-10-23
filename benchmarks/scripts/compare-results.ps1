@@ -13,7 +13,7 @@
     start (process, JIT; IronMapper_IMapper also over Manual_DI); NativeAOT; size; build time.
 
 .EXAMPLE
-    pwsh ./scripts/compare-results.ps1 -Baseline results/1.1.3-rerun -Current results/1.2.0
+    pwsh ./scripts/compare-results.ps1 -Baseline results/1.1.3-rerun -Current results/2.0.0
 #>
 [CmdletBinding()]
 param(
@@ -21,7 +21,7 @@ param(
     [Parameter(Mandatory)] [string] $Baseline,
     [Parameter(Mandatory)] [string] $Current,
     [string] $BaselineLabel = '1.1.3',
-    [string] $CurrentLabel = '1.2.0'
+    [string] $CurrentLabel = '2.0.0'
 )
 
 $ErrorActionPreference = 'Stop'
