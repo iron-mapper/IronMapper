@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Diagnostic `IM0002` (error) is reported** for a destination property that the generated assignment cannot fill:
+  the types have no implicit conversion (`int?` → `int`, `long` → `int`, `string` → `Guid`, an enum → another enum,
+  `List<string>` → `string[]`), a nested object of another type (`Address` → `AddressDto`, not mapped automatically
+  yet), a collection whose elements have no mapping, or a `MapFrom` expression of another type. It points to the
+  destination property (attribute mappings), the `CreateMap` or `ReverseMap()` call, or the `MapFrom` expression, and
+  says what to add (a converter, `MapFrom`, the missing mapping, `[Ignore]`/`Ignore()`). The property is not generated;
+  the rest of the mapping is. Up to 2.0.0 the build failed inside the generated file (`CS0029`, `CS0266`, `CS1061`), and
+  `IM0002` was declared but never reported. Mappings that compiled with 2.0.0 get no `IM0002`: the check accepts every
+  implicit conversion (also user-defined operators and `dynamic`), and an element mapping is found also through a base
+  type or interface of the source element, in a referenced assembly, or as a hand-written extension method that the
+  generated call binds to. A mapping with `ConvertUsing` is checked too, because its in-place overload assigns the
+  properties. See [IM0002](docs/diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping).
+
+### Build
+
+- Tests: `IncompatiblePropertyTypesTests` (attributes, profiles, `IncludeMembers`, `ReverseMap()`, `MapFrom`, collection
+  elements, implicit conversions and element mappings that must not be reported, an element mapping added or removed
+  in another file in the IDE); snapshot scenario `IncompatibleProperties`. `eng/verify-package.ps1`: an incompatible
+  property fails the build with `IM0002` at the destination property and with no error inside a generated file. The
+  generated code of mappings without `IM0002` does not change (the existing snapshots are the same).
+
 ## [2.0.0] - 2026-10-23
 
 ### Breaking changes

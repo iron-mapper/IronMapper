@@ -166,8 +166,8 @@ internal static class ProfileAnalyzer
         if (sourceSymbol is null || destSymbol is null) return System.Array.Empty<MappingDescriptor>();
 
         // Walk calls from innermost (CreateMap) outward, collecting config.
-        // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType)
-        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)>();
+        // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType, the type of the MapFrom expression)
+        var forMemberConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)>();
         var includedMembers = new List<string>();
         string? whenConditionBody = null;
         ConverterReference? wholeObjectConverter = null;
@@ -200,7 +200,7 @@ internal static class ProfileAnalyzer
                     // Standalone .Ignore(dest => dest.Prop) — not inside ForMember
                     var ignoreDestProp = ExtractMemberName(inv.ArgumentList.Arguments[0].Expression);
                     if (ignoreDestProp is not null)
-                        forMemberConfigs.Add((ignoreDestProp, null, true, null));
+                        forMemberConfigs.Add((ignoreDestProp, null, true, null, null));
                     break;
 
                 case "When" when inv.ArgumentList.Arguments.Count == 1:
@@ -262,7 +262,7 @@ internal static class ProfileAnalyzer
             beforeMapBody, afterMapBody, transformers, profileName, createMapLocation,
             // ConvertUsing replaces the whole mapping: no property is left unmapped.
             reportUnmapped: wholeObjectConverter is null && wholeObjectLambdaBody is null,
-            model, ct);
+            PropertyTypeCheck.Origin.Profile, model, ct);
         // Null only when a converter type did not resolve.
         if (forward is null) skippedUnresolved = true;
         else
@@ -280,7 +280,7 @@ internal static class ProfileAnalyzer
             // IncludeMembers is intentionally not propagated to the reverse mapping.
             var reverse = BuildDescriptorFromProfile(
                 destSymbol, sourceSymbol,
-                new List<(string, string?, bool, ConverterReference?)>(),
+                new List<(string, string?, bool, ConverterReference?, MapFromType?)>(),
                 ImmutableArray<string>.Empty,
                 whenCondition: null,
                 wholeObjectConverter: null,
@@ -291,7 +291,7 @@ internal static class ProfileAnalyzer
                 // Not checked, as in AutoMapper (a reverse map is created with MemberList.None): it maps by name only and
                 // ForMember does not apply to it. Declare it with CreateMap to have it checked.
                 reportUnmapped: false,
-                model, ct);
+                PropertyTypeCheck.Origin.ReverseMap, model, ct);
             if (reverse is not null)
                 results.Add(reverse.WithOrigin(
                     origin + ":reverse", $"ReverseMap() in MappingProfile '{profileName}'", originRank: 1,
@@ -303,7 +303,7 @@ internal static class ProfileAnalyzer
 
     private static void ParseForMember(
         InvocationExpressionSyntax inv,
-        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)> configs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -326,7 +326,7 @@ internal static class ProfileAnalyzer
 
         if (optMethod == "Ignore")
         {
-            configs.Add((destPropName, null, true, null));
+            configs.Add((destPropName, null, true, null, null));
             return;
         }
 
@@ -335,7 +335,7 @@ internal static class ProfileAnalyzer
             // UseConverter<TConverter>() — extract generic type argument.
             var converter = GetConverterTypeArgument(optBody, model, ct);
             if (converter is not null)
-                configs.Add((destPropName, null, false, converter));
+                configs.Add((destPropName, null, false, converter, null));
             return;
         }
 
@@ -343,7 +343,12 @@ internal static class ProfileAnalyzer
         {
             var mapFromArg = optBody.ArgumentList.Arguments[0].Expression;
             var body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
-            configs.Add((destPropName, body, false, null));
+            // The type of the expression the lambda returns (IM0002 when it cannot be assigned to the property).
+            var expression = (mapFromArg as LambdaExpressionSyntax)?.ExpressionBody;
+            var mapFrom = expression is null
+                ? (MapFromType?)null
+                : new MapFromType(model.GetTypeInfo(expression, ct).Type, LocationInfo.From(expression));
+            configs.Add((destPropName, body, false, null, mapFrom));
         }
     }
 
@@ -366,6 +371,20 @@ internal static class ProfileAnalyzer
         return typeArgument is not null && model.GetTypeInfo(typeArgument, ct).Type is INamedTypeSymbol resolved
             ? new ConverterReference(resolved, location)
             : null;
+    }
+
+    /// <summary>The type of a <c>MapFrom</c> expression and where it is written (IM0002).</summary>
+    private readonly struct MapFromType
+    {
+        public MapFromType(ITypeSymbol? type, LocationInfo? location)
+        {
+            Type = type;
+            Location = location;
+        }
+
+        public ITypeSymbol? Type { get; }
+
+        public LocationInfo? Location { get; }
     }
 
     /// <summary>A converter type of <c>UseConverter&lt;T&gt;()</c>/<c>ConvertUsing&lt;T&gt;()</c> and where it is written.</summary>
@@ -483,7 +502,7 @@ internal static class ProfileAnalyzer
     private static MappingDescriptor? BuildDescriptorFromProfile(
         INamedTypeSymbol sourceSymbol,
         INamedTypeSymbol destSymbol,
-        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter)> forMemberConfigs,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> forMemberConfigs,
         ImmutableArray<string> includedMembers,
         string? whenCondition,
         ConverterReference? wholeObjectConverter,
@@ -494,6 +513,7 @@ internal static class ProfileAnalyzer
         string profileName,
         LocationInfo? origin,
         bool reportUnmapped,
+        PropertyTypeCheck.Origin checkOrigin,
         SemanticModel model,
         CancellationToken ct)
     {
@@ -538,15 +558,15 @@ internal static class ProfileAnalyzer
             sourcePropsByName[p.Name] = p;
 
         // Index ForMember configs by dest property name.
-        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, ConverterReference? converter)>(
+        var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)>(
             System.StringComparer.OrdinalIgnoreCase);
-        foreach (var (dp, lb, ign, cvt) in forMemberConfigs)
-            configByDest[dp] = (lb, ign, cvt);
+        foreach (var (dp, lb, ign, cvt, mf) in forMemberConfigs)
+            configByDest[dp] = (lb, ign, cvt, mf);
 
         // Build included-member resolution lookup (first-member-wins on name conflicts).
         // Key: dest property name (case-insensitive)
         // Value: (lambdaBody to emit, typeFqn of the nested property for transformer matching)
-        var includedResolution = new Dictionary<string, (string lambdaBody, string typeFqn)>(
+        var includedResolution = new Dictionary<string, (string lambdaBody, string typeFqn, IPropertySymbol property, string display)>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var memberName in includedMembers)
         {
@@ -564,7 +584,7 @@ internal static class ProfileAnalyzer
                     ? $"source.{memberName} != null ? {access} : default!"
                     : access;
                 var typeFqn = nestedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                includedResolution[nestedProp.Name] = (lambdaBody, typeFqn);
+                includedResolution[nestedProp.Name] = (lambdaBody, typeFqn, nestedProp, $"{sourceSymbol.Name}.{memberName}.{nestedProp.Name}");
             }
         }
 
@@ -574,6 +594,10 @@ internal static class ProfileAnalyzer
             ? null
             : converters.Add(wholeObjectConverter.Value.Type, $"ConvertUsing in MappingProfile '{profileName}'",
                 wholeObjectConverter.Value.Location, ct);
+
+        // IM0002 for the properties the generated code assigns. Also with ConvertUsing: it replaces MapToX(source), but the
+        // in-place overload (public or the private one for IMapper) still assigns the properties.
+        var compilation = model.Compilation;
 
         foreach (var destProp in destProps)
         {
@@ -588,10 +612,18 @@ internal static class ProfileAnalyzer
                     ? null
                     : converters.Add(cfg.converter.Value.Type, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'",
                         cfg.converter.Value.Location, ct);
+                var skipped = false;
+                if (!cfg.isIgnore && converter is null && cfg.lambdaBody is not null && cfg.mapFrom is { } mapFrom
+                    && PropertyTypeCheck.CheckMapFrom(compilation, mapFrom.Type, destProp, destSymbol, mapFrom.Location ?? origin) is { } wrong)
+                {
+                    diagnostics.Add(wrong);
+                    skipped = true;
+                }
+
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name, // fallback name
                     destPropertyName: destProp.Name,
-                    isIgnored: cfg.isIgnore,
+                    isIgnored: cfg.isIgnore || skipped,
                     converterType: converter?.FullName,
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
@@ -603,24 +635,42 @@ internal static class ProfileAnalyzer
             {
                 var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
                 var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var skipped = false;
+                var missingElementPairs = default(EquatableArray<string>);
+                var sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
+                var incompatible = collection is null
+                    ? PropertyTypeCheck.CheckAssignment(compilation, namedProp.Type, destProp.Type, sourceDisplay, destProp,
+                        destSymbol, checkOrigin, origin)
+                    : MappingAnalyzer.CheckCollection(compilation, collection, namedProp, destProp, sourceDisplay, destSymbol,
+                        origin, out missingElementPairs);
+                if (incompatible is { } found)
+                {
+                    diagnostics.Add(found);
+                    skipped = collection is null;
+                }
+
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
                     destPropertyName: destProp.Name,
-                    isIgnored: false,
+                    isIgnored: skipped,
                     converterType: null,
                     needsNullCheck: namedProp.Type.IsReferenceType,
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     sourcePropertyTypeFqn: typeFqn,
-                    collection: collection));
+                    collection: collection,
+                    missingElementPairs: missingElementPairs));
             }
             // Priority 3: IncludeMembers flattening.
             else if (includedResolution.TryGetValue(destProp.Name, out var included))
             {
+                var incompatible = PropertyTypeCheck.CheckAssignment(compilation, included.property.Type, destProp.Type,
+                    included.display, destProp, destSymbol, checkOrigin, origin);
+                if (incompatible is not null) diagnostics.Add(incompatible.Value);
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name,
                     destPropertyName: destProp.Name,
-                    isIgnored: false,
+                    isIgnored: incompatible is not null,
                     converterType: null,
                     needsNullCheck: false,
                     lambdaBody: included.lambdaBody,

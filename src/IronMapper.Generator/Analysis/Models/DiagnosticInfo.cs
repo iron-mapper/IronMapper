@@ -60,6 +60,15 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     public DiagnosticInfo WithMessageArg(string value)
         => new(Descriptor, MessageArgs.AsImmutableArray().Add(value), Location, AdditionalLocations, Properties);
 
+    /// <summary>The value of the property <paramref name="key"/>, or <see langword="null"/>.</summary>
+    public string? GetProperty(string key)
+    {
+        var prefix = key + "=";
+        foreach (var entry in Properties)
+            if (entry.StartsWith(prefix, StringComparison.Ordinal)) return entry.Substring(prefix.Length);
+        return null;
+    }
+
     /// <summary>A copy with the property <paramref name="key"/> set to <paramref name="value"/>.</summary>
     public DiagnosticInfo WithProperty(string key, string value)
         => new(Descriptor, MessageArgs, Location, AdditionalLocations, Properties.AsImmutableArray().Add(key + "=" + value));

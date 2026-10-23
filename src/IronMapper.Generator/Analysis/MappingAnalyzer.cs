@@ -283,6 +283,25 @@ internal static class MappingAnalyzer
                 var isIgnored = HasIgnoreAttribute(sourceProp);
                 // An ignored property does not use its converter, so the converter is not checked.
                 var converter = isIgnored ? null : GetConverter(sourceProp, converters, ct);
+                // IM0002: a value the generated assignment cannot take is not generated (as if ignored), instead of a
+                // CS0029/CS0266/CS1061 in the generated file.
+                var missingElementPairs = default(EquatableArray<string>);
+                if (!isIgnored && converter is null)
+                {
+                    var location = LocationInfo.From(destProp) ?? origin;
+                    var sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
+                    var incompatible = collection is null
+                        ? PropertyTypeCheck.CheckAssignment(compilation, sourceProp.Type, destProp.Type, sourceDisplay, destProp,
+                            destSymbol, PropertyTypeCheck.Origin.Attribute, location)
+                        : CheckCollection(compilation, collection, sourceProp, destProp, sourceDisplay, destSymbol, location,
+                            out missingElementPairs);
+                    if (incompatible is { } found)
+                    {
+                        diagnostics.Add(found);
+                        isIgnored = collection is null;
+                    }
+                }
+
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: sourceProp.Name,
                     destPropertyName: destProp.Name,
@@ -292,7 +311,8 @@ internal static class MappingAnalyzer
                     lambdaBody: null,
                     isInitOnly: isInitOnly,
                     collection: collection,
-                    converterIsCached: converter?.IsCached ?? false));
+                    converterIsCached: converter?.IsCached ?? false,
+                    missingElementPairs: missingElementPairs));
                 continue;
             }
 
@@ -413,6 +433,26 @@ internal static class MappingAnalyzer
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// IM0002 of a collection property mapped element by element (<see cref="PropertyTypeCheck.CheckCollection"/>): the
+    /// diagnostic, reported only when the plan generates no mapping of the element types, and those pairs
+    /// (<paramref name="missingElementPairs"/>, empty when a referenced assembly maps the elements).
+    /// </summary>
+    internal static DiagnosticInfo? CheckCollection(Compilation compilation, CollectionMapping collection,
+        IPropertySymbol sourceProp, IPropertySymbol destProp, string sourceDisplay, INamedTypeSymbol destSymbol,
+        LocationInfo? location, out EquatableArray<string> missingElementPairs)
+    {
+        missingElementPairs = default;
+        if (!SymbolHelpers.TryGetCollectionElementType(sourceProp.Type, out var sourceElement) || sourceElement is null
+            || !SymbolHelpers.TryGetCollectionElementType(destProp.Type, out var destElement) || destElement is null)
+            return null;
+
+        var diagnostic = PropertyTypeCheck.CheckCollection(compilation, collection, sourceElement, destElement, sourceDisplay,
+            destProp, destSymbol, location, out var mappedElsewhere);
+        if (!mappedElsewhere) missingElementPairs = PropertyTypeCheck.ElementPairKeys(sourceElement, destElement);
+        return diagnostic;
     }
 
     private static bool HasAnyConverter(ImmutableArray<PropertyMappingDescriptor>.Builder mappings)

@@ -46,6 +46,17 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
         return _byOrigin.TryGetValue(origin, out var found) ? found : null;
     }
 
+    /// <summary>
+    /// A mapping of one of the type pairs <paramref name="pairKeys"/> is generated (IM0002 for a collection element: the
+    /// pairs of the source element type and its base types and interfaces, <see cref="PropertyTypeCheck.ElementPairKeys"/>).
+    /// </summary>
+    public bool GeneratesAny(IEnumerable<string> pairKeys)
+    {
+        foreach (var key in pairKeys)
+            if (GetMethodName(key) is not null) return true;
+        return false;
+    }
+
     /// <summary>Returns the generated method name for the type pair <paramref name="pairKey"/>, or <see langword="null"/> when it is not generated.</summary>
     public string? GetMethodName(string pairKey)
     {

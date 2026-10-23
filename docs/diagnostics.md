@@ -5,12 +5,12 @@
 IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Current status** (2.0.0):
+**Current status** (`main`, unreleased 2.1.0):
 
 | ID | Severity | Title | Reported? |
 |---|---|---|---|
 | IM0001 | Warning | Unmapped destination property | Yes — `[MapTo]`/`[MapFrom]`; profiles with `IronMapperReportUnmappedInProfiles` |
-| IM0002 | Error | Incompatible property types | **Not reported yet** |
+| IM0002 | Error | Property types are incompatible or have no mapping | Yes — attributes and profiles (from 2.1.0) |
 | IM0003 | Error | Type in `[MapTo]`/`[MapFrom]` cannot be mapped | Yes — open generic types and arrays; an unresolved type is reported by the compiler only |
 | IM0004 | Error | Cyclic mapping detected | **Not reported yet** |
 | IM0005 | Warning | Empty MappingProfile | Yes |
@@ -38,8 +38,8 @@ dotnet_diagnostic.IM0001.severity = error   # or warning, suggestion, none
 without a location (only in the Error List), so neither the per-file `.editorconfig` severities nor the code fixes
 applied to them.
 
-When a problem has no working diagnostic (for example, a property type mismatch), the build fails with
-a regular C# error (`CS0029`, `CS7036`, …) inside the generated `*.g.cs` file instead.
+When a problem has no working diagnostic (for example, a positional record as the destination), the build fails with
+a regular C# error (`CS7036`, …) inside the generated `*.g.cs` file instead.
 
 A type that does not resolve (`typeof(Missing)` in `[MapTo]`/`[MapFrom]`, a type argument of `CreateMap`, a converter
 type) is reported by the compiler at your code (`CS0246`, `CS0234`, `CS0122`, …). The generator skips that mapping, so
@@ -78,17 +78,43 @@ they use `MemberList.None`); declare it with `CreateMap` to have it checked.
 
 ---
 
-## IM0002 — Incompatible property types
+## IM0002 — Property types are incompatible or have no mapping
 
-**Severity:** Error · **Not reported yet**
+**Severity:** Error (from 2.1.0; up to 2.0.0 declared, never reported)
 
-**Message (declared):** `Property '{0}': source type '{1}' cannot be assigned to destination type '{2}'. Add [MapConverter] or implement ITypeConverter<{1}, {2}>.`
+**Points to:** the destination property (`[MapTo]`/`[MapFrom]`; the attribute when the destination type is in another
+assembly), the `CreateMap` call (a profile, matched by name or `IncludeMembers`), the `ReverseMap()` call, or the
+expression of `MapFrom`.
 
-**Current behavior:** the generator does not check property types. A mismatch (including a nested object
-of a different type, e.g. `Address` → `AddressDto`) produces a C# compile error such as `CS0029` in the
-generated file.
+**Message:** `Property '{0}' of '{1}' is not mapped: {2}` — `{2}` names the source and destination types and says what
+to add, for example:
 
-**Fix:** use `[MapConverter]`, `opt.UseConverter<T>()` or `opt.MapFrom(...)` for that property.
+- `'Order.Count' is 'int?', which cannot be assigned to 'int'. Add [MapConverter(typeof(...))] (an ITypeConverter<int?, int>) to the source property, map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].`
+- `the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'. Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.`
+- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. …`
+- `the MapFrom expression is 'int?', which cannot be assigned to 'int'. …`
+
+**Cause:** the generated assignment `destination.X = source.X` would not compile:
+
+- the types have no implicit conversion (`int?` → `int`, `long` → `int`, `string` → `Guid`, an enum → another enum,
+  `List<string>` → `string[]`); checked like the compiler does (`Compilation.ClassifyConversion`), so everything that
+  converts implicitly is accepted (`int` → `long`, `int` → `int?`, a derived type → its base type, user-defined
+  implicit operators, `dynamic`);
+- a nested object of another type (`Address` → `AddressDto`): not mapped automatically yet (planned for 2.1.0, issue
+  [#23](https://github.com/iron-mapper/IronMapper/issues/23));
+- a collection whose element types differ and no mapping maps them: none in the project (also through a base type or
+  an interface of the source element), and no accessible `MapTo…` extension method of a referenced assembly or a
+  hand-written one that the generated call binds to;
+- a `MapFrom` expression of another type than the destination property.
+
+Up to 2.0.0 these failed inside the generated file (`CS0029`, `CS0266`, `CS1061`). Now the property is not generated
+(the destination keeps its default value), the rest of the mapping is, and the build fails with `IM0002` at your code.
+A mapping with `ConvertUsing` is checked too: `ConvertUsing` replaces `MapToX(source)`, but the in-place overload still
+assigns the properties.
+
+**Fix:** convert the value (`[MapConverter]`, `opt.UseConverter<T>()`, a `MapFrom` that converts), add the missing
+mapping, or ignore the property (`[Ignore]`, `opt.Ignore()`). For `ReverseMap()`, declare the reverse mapping with
+`CreateMap` and configure the property there.
 
 ---
 

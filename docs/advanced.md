@@ -5,15 +5,10 @@
 ## Nested objects
 
 Nested **single** objects are **not mapped automatically yet**. When a source and a destination property have
-the same name but different types, the generator emits a plain assignment:
-
-```csharp
-// generated for Customer → CustomerDto
-Address = source.Address,   // error CS0029: cannot convert Address to AddressDto
-```
-
-The build then fails inside the generated file (no IronMapper diagnostic is reported, see
-[IM0002](diagnostics.md#im0002--incompatible-property-types)).
+the same name but different types (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`), the build fails
+with error [IM0002](diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping) at the destination
+property (or at `CreateMap` in a profile), and the property is not generated. Up to 2.0.0 the generator emitted
+`Address = source.Address` and the build failed with `CS0029` inside the generated file.
 
 **Workaround (profile):** map the nested property explicitly with `MapFrom`. The lambda is emitted into the
 generated class, where the other generated `MapTo*` methods are in scope:

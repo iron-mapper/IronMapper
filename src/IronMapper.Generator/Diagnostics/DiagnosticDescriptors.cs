@@ -19,16 +19,18 @@ internal static class DiagnosticDescriptors
         description: "Add a matching property to the source type, use [MapProperty] to map from a differently-named property, or use [Ignore] on the destination property to suppress this warning. For profile (CreateMap) mappings it is reported only with <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>; there use ForMember(d => d.X, o => o.Ignore()) or MapFrom.");
 
     /// <summary>
-    /// IM0002 — Source and destination property types are incompatible and no converter is specified.
+    /// IM0002 — A destination property cannot be assigned from its source: the types are incompatible, a nested object is
+    /// not mapped automatically, or the elements of a collection have no mapping. The property is not generated; the
+    /// third argument says why and what to add (<see cref="Analysis.PropertyTypeCheck"/>).
     /// </summary>
     public static readonly DiagnosticDescriptor IncompatiblePropertyTypes = new(
         id: "IM0002",
-        title: "Incompatible property types",
-        messageFormat: "Property '{0}': source type '{1}' cannot be assigned to destination type '{2}'. Add [MapConverter] or implement ITypeConverter<{1}, {2}>.",
+        title: "Property types are incompatible or have no mapping",
+        messageFormat: "Property '{0}' of '{1}' is not mapped: {2}",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The source and destination property types are not compatible. Provide a custom ITypeConverter to convert between them.");
+        description: "The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.");
 
     /// <summary>
     /// IM0003 — The type in <c>typeof(...)</c> of [MapTo] or [MapFrom] resolves but cannot be mapped (an open generic type,

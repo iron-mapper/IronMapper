@@ -24,8 +24,9 @@ exceptions and `AddIronMapper`, `MapCollection`): see
 - **Configuration errors at build time, partly.** For `[MapTo]`/`[MapFrom]` an unmatched destination property is
   warning `IM0001`, a wrong `[MapProperty]` name is error `IM0006`, an inaccessible type is `IM0010`
   ([diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)). Profile mappings get
-  fewer checks (`IM0001` for them is opt-in from 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), and incompatible property types fail as a C# error in
-  the generated file.
+  fewer checks (`IM0001` for them is opt-in from 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)).
+  Incompatible property types and collection elements without a mapping are error `IM0002` at your code (from 2.1.0;
+  up to 2.0.0 a C# error in the generated file).
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.5 ns per object (.NET 10). Nested objects are a
   little slower (×1.07 on .NET 10, ×1.09 on .NET 8; 1.1.3: ×1.25), see
   [Performance](https://github.com/iron-mapper/IronMapper#performance).
@@ -249,8 +250,8 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 ## Known limitations
 
 - **Nested single objects are not mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)). For `Customer.Address` → `CustomerDto.Address`
-  the generator emits `Address = source.Address`, and the build fails with `CS0029` in the generated file.
-  Workaround: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Nested collections are
+  the build fails with error `IM0002` at the destination property (from 2.1.0; up to 2.0.0 with `CS0029` in the
+  generated file). Workaround: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Nested collections are
   mapped.
 - **Positional records as destination types do not compile** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): the generator always uses an object
   initializer. Records and classes with `init` properties work.
@@ -264,8 +265,9 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 - **A `null` source throws `ArgumentNullException`**, also when it is declared nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
-  `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` fail with a C# error in the generated file;
-  use `MapFrom` or a converter. Declared diagnostics `IM0002` and `IM0004` are not reported yet.
+  `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` fail with error `IM0002` at your code (from
+  2.1.0; up to 2.0.0 with a C# error in the generated file); use `MapFrom` or a converter. Declared diagnostic `IM0004`
+  is not reported yet.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Also: up to 1.1.4 diagnostics have no source location (from 2.0.0 they point to the line); `IMapper` has no per-call context

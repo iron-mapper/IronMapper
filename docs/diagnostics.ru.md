@@ -5,12 +5,12 @@
 Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0016`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
-**Текущее состояние** (2.0.0):
+**Текущее состояние** (`main`, не выпущенная 2.1.0):
 
 | ID | Уровень | Название | Выдаётся? |
 |---|---|---|---|
 | IM0001 | Warning | Несопоставленное свойство destination | Да — `[MapTo]`/`[MapFrom]`; профили с `IronMapperReportUnmappedInProfiles` |
-| IM0002 | Error | Несовместимые типы свойств | **Пока не выдаётся** |
+| IM0002 | Error | Несовместимые типы свойств или нет маппинга | Да — атрибуты и профили (начиная с 2.1.0) |
 | IM0003 | Error | Тип в `[MapTo]`/`[MapFrom]` нельзя смапить | Да — открытые generic-типы и массивы; неразрешённый тип сообщает только компилятор |
 | IM0004 | Error | Обнаружен циклический маппинг | **Пока не выдаётся** |
 | IM0005 | Warning | Пустой MappingProfile | Да |
@@ -37,8 +37,8 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 `<NoWarn>` и `<WarningsAsErrors>` в файле проекта тоже работают. До 1.1.4 включительно все диагностики выдавались без
 места в коде (только в списке ошибок), поэтому ни уровни `.editorconfig` для файлов, ни code fix'ы к ним не применялись.
 
-Если для проблемы нет работающей диагностики (например, несовпадение типов свойств), сборка падает
-с обычной ошибкой C# (`CS0029`, `CS7036`, …) внутри сгенерированного файла `*.g.cs`.
+Если для проблемы нет работающей диагностики (например, позиционный record как destination), сборка падает
+с обычной ошибкой C# (`CS7036`, …) внутри сгенерированного файла `*.g.cs`.
 
 Тип, который не разрешается (`typeof(Missing)` в `[MapTo]`/`[MapFrom]`, аргумент типа `CreateMap`, тип converter),
 сообщает компилятор в вашем коде (`CS0246`, `CS0234`, `CS0122`, …). Генератор пропускает этот маппинг, поэтому второй
@@ -77,17 +77,43 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 ---
 
-## IM0002 — Несовместимые типы свойств
+## IM0002 — Несовместимые типы свойств или нет маппинга
 
-**Уровень:** Error · **Пока не выдаётся**
+**Уровень:** Error (начиная с 2.1.0; до 2.0.0 включительно была объявлена, но не выдавалась)
 
-**Сообщение (объявлено):** `Property '{0}': source type '{1}' cannot be assigned to destination type '{2}'. Add [MapConverter] or implement ITypeConverter<{1}, {2}>.`
+**Куда указывает:** на свойство destination (`[MapTo]`/`[MapFrom]`; на атрибут, если тип destination в другой сборке),
+на вызов `CreateMap` (профиль, сопоставление по имени или `IncludeMembers`), на вызов `ReverseMap()` или на выражение
+`MapFrom`.
 
-**Текущее поведение:** генератор не проверяет типы свойств. Несовпадение (в том числе вложенный объект
-другого типа, например `Address` → `AddressDto`) приводит к ошибке компиляции C#, например `CS0029`,
-в сгенерированном файле.
+**Сообщение:** `Property '{0}' of '{1}' is not mapped: {2}` — в `{2}` названы типы source и destination и что добавить,
+например:
 
-**Как исправить:** используйте `[MapConverter]`, `opt.UseConverter<T>()` или `opt.MapFrom(...)` для этого свойства.
+- `'Order.Count' is 'int?', which cannot be assigned to 'int'. Add [MapConverter(typeof(...))] (an ITypeConverter<int?, int>) to the source property, map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].`
+- `the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'. Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.`
+- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. …`
+- `the MapFrom expression is 'int?', which cannot be assigned to 'int'. …`
+
+**Причина:** сгенерированное присваивание `destination.X = source.X` не скомпилировалось бы:
+
+- у типов нет неявного преобразования (`int?` → `int`, `long` → `int`, `string` → `Guid`, enum → другой enum,
+  `List<string>` → `string[]`); проверка такая же, как у компилятора (`Compilation.ClassifyConversion`), поэтому всё,
+  что преобразуется неявно, принимается (`int` → `long`, `int` → `int?`, производный тип → базовый, пользовательские
+  неявные операторы, `dynamic`);
+- вложенный объект другого типа (`Address` → `AddressDto`): пока не маппится автоматически (запланировано в 2.1.0,
+  issue [#23](https://github.com/iron-mapper/IronMapper/issues/23));
+- коллекция, у которой типы элементов разные и их не маппит ни один маппинг: ни в проекте (в том числе через базовый
+  тип или интерфейс элемента источника), ни доступный метод расширения `MapTo…` проекта-зависимости или написанный
+  вручную, к которому привязывается сгенерированный вызов;
+- выражение `MapFrom` другого типа, чем свойство destination.
+
+До 2.0.0 включительно это давало ошибку внутри сгенерированного файла (`CS0029`, `CS0266`, `CS1061`). Теперь свойство не
+генерируется (у destination остаётся значение по умолчанию), остальной маппинг генерируется, а сборка падает с `IM0002`
+в вашем коде. Маппинг с `ConvertUsing` тоже проверяется: `ConvertUsing` заменяет `MapToX(source)`, но in-place
+перегрузка по-прежнему присваивает свойства.
+
+**Как исправить:** преобразуйте значение (`[MapConverter]`, `opt.UseConverter<T>()`, `MapFrom` с преобразованием),
+добавьте недостающий маппинг или проигнорируйте свойство (`[Ignore]`, `opt.Ignore()`). Для `ReverseMap()` объявите
+обратный маппинг через `CreateMap` и настройте свойство там.
 
 ---
 
