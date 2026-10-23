@@ -259,6 +259,40 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task IncompatibleProperties() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        // IM0002: Count (int? -> int), Address (a nested object) and Lines (no mapping for the elements) are not
+        // generated; Id and Name are.
+        [MapTo(typeof(OrderDto))]
+        public class Order
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = "";
+            public int? Count { get; set; }
+            public Address Address { get; set; } = new();
+            public List<Line> Lines { get; set; } = new();
+        }
+
+        public class OrderDto
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = "";
+            public int Count { get; set; }
+            public AddressDto Address { get; set; } = new();
+            public List<LineDto> Lines { get; set; } = new();
+        }
+
+        public class Address { public string City { get; set; } = ""; }
+        public class AddressDto { public string City { get; set; } = ""; }
+        public class Line { public string Sku { get; set; } = ""; }
+        public class LineDto { public string Sku { get; set; } = ""; }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

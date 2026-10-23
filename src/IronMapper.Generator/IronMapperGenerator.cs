@@ -203,6 +203,11 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                     if (isProfile && !settings.ReportUnmappedInProfiles
                                   && diagnostic.Descriptor == DiagnosticDescriptors.UnmappedDestinationProperty)
                         continue;
+                    // IM0002 of a collection element: only when no mapping of the element types is generated (the same
+                    // condition skips the property in the generated code, MapperCodeEmitter.IsElementMappingMissing).
+                    if (diagnostic.GetProperty(PropertyTypeCheck.MissingElementPairsKey) is { } pairs
+                        && plan.GeneratesAny(pairs.Split('|')))
+                        continue;
                     builder.Add(diagnostic);
                 }
             }

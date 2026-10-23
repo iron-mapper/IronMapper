@@ -1,0 +1,64 @@
+﻿{
+  Diagnostics: [
+    {
+      Location: /*
+    public string Name { get; set; } = "";
+    public int Count { get; set; }
+               ^^^^^
+    public AddressDto Address { get; set; } = new();
+*/
+ : (21,15)-(21,20),
+      Message: Property 'Count' of 'App.OrderDto' is not mapped: 'Order.Count' is 'int?', which cannot be assigned to 'int'. Add [MapConverter(typeof(...))] (an ITypeConverter<int?, int>) to the source property, map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].,
+      Severity: Error,
+      Descriptor: {
+        Id: IM0002,
+        Title: Property types are incompatible or have no mapping,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
+        Category: IronMapper,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: /*
+    public int Count { get; set; }
+    public AddressDto Address { get; set; } = new();
+                      ^^^^^^^
+    public List<LineDto> Lines { get; set; } = new();
+*/
+ : (22,22)-(22,29),
+      Message: Property 'Address' of 'App.OrderDto' is not mapped: 'Order.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. Map it with [MapConverter(typeof(...))] (an ITypeConverter<App.Address, App.AddressDto>) on the source property, or in a profile with CreateMap<App.Address, App.AddressDto>() and ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto())); or mark the destination property [Ignore].,
+      Severity: Error,
+      Descriptor: {
+        Id: IM0002,
+        Title: Property types are incompatible or have no mapping,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
+        Category: IronMapper,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: /*
+    public AddressDto Address { get; set; } = new();
+    public List<LineDto> Lines { get; set; } = new();
+                         ^^^^^
+}
+*/
+ : (23,25)-(23,30),
+      Message: Property 'Lines' of 'App.OrderDto' is not mapped: the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'. Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.,
+      Severity: Error,
+      Descriptor: {
+        Id: IM0002,
+        Title: Property types are incompatible or have no mapping,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
+        Category: IronMapper,
+        DefaultSeverity: Error,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

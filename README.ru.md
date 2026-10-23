@@ -25,7 +25,9 @@ English version: [README.md](https://github.com/iron-mapper/IronMapper/blob/main
 - **Ошибки конфигурации — при сборке, но не все.** Для `[MapTo]`/`[MapFrom]` несопоставленное свойство приёмника
   даёт предупреждение `IM0001`, неверное имя в `[MapProperty]` — ошибку `IM0006`, недоступный тип — `IM0010`
   ([диагностики](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)). Для профилей проверок
-  меньше (`IM0001` для них включается флагом, начиная с 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)), а несовместимые типы свойств дают ошибку C# в сгенерированном файле.
+  меньше (`IM0001` для них включается флагом, начиная с 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)).
+  Несовместимые типы свойств и элементы коллекций без маппинга — ошибка `IM0002` в вашем коде (начиная с 2.1.0; до
+  2.0.0 включительно — ошибка C# в сгенерированном файле).
 - **Плоские объекты — со скоростью ручного кода:** 11,4 нс против 11,5 нс на объект (.NET 10). Вложенные объекты
   немного медленнее (×1,07 на .NET 10, ×1,09 на .NET 8; в 1.1.3 — ×1,25), см.
   [Производительность](https://github.com/iron-mapper/IronMapper/blob/main/README.ru.md#производительность).
@@ -253,7 +255,8 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
 ## Известные ограничения
 
 - **Вложенные одиночные объекты не маппятся автоматически** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)). Для `Customer.Address` → `CustomerDto.Address`
-  генератор пишет `Address = source.Address`, и сборка падает с `CS0029` в сгенерированном файле. Обходной путь:
+  сборка падает с ошибкой `IM0002` на свойстве приёмника (начиная с 2.1.0; до 2.0.0 включительно — с `CS0029` в
+  сгенерированном файле). Обходной путь:
   `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Вложенные коллекции маппятся.
 - **Позиционные record в качестве приёмника не компилируются** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): генератор всегда использует
   инициализатор объекта. Record и классы со свойствами `init` работают.
@@ -266,8 +269,9 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
 - **`null` на входе бросает `ArgumentNullException`**, даже если источник объявлен nullable (`UserEntity?`) ([#27](https://github.com/iron-mapper/IronMapper/issues/27)).
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
-  `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` дают ошибку C# в сгенерированном файле;
-  используйте `MapFrom` или конвертер. Объявленные диагностики `IM0002` и `IM0004` пока не выдаются.
+  `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` дают ошибку `IM0002` в вашем коде (начиная с
+  2.1.0; до 2.0.0 включительно — ошибку C# в сгенерированном файле); используйте `MapFrom` или конвертер. Объявленная
+  диагностика `IM0004` пока не выдаётся.
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Кроме того: до 1.1.4 включительно у диагностик нет места в исходном коде (начиная с 2.0.0 они указывают на строку); в `IMapper` нельзя передать контекст в вызов

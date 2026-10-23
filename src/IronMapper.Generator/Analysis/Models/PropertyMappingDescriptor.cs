@@ -88,6 +88,13 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <summary>Fully qualified destination element type, or <see langword="null"/>.</summary>
     public string? CollectionDestElementFqn { get; }
 
+    /// <summary>
+    /// IM0002 for a collection element: the element type pairs of which this compilation must generate one, otherwise the
+    /// property is not generated (<see cref="MappingPlan.GeneratesAny"/>); empty when the elements need no mapping of
+    /// this compilation (not a mapped collection, or a referenced assembly maps them).
+    /// </summary>
+    public EquatableArray<string> MissingElementPairs { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
@@ -100,6 +107,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="includedMemberTypeFqn">The FQN of the nested property type when this property was resolved via IncludeMembers, or <see langword="null"/> otherwise.</param>
     /// <param name="collection">The element mapping when source and destination are collections of different element types, or <see langword="null"/>.</param>
     /// <param name="converterIsCached">When <see langword="true"/> the generated code reuses one instance of <paramref name="converterType"/>.</param>
+    /// <param name="missingElementPairs">See <see cref="MissingElementPairs"/>.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -111,8 +119,10 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         string? sourcePropertyTypeFqn = null,
         string? includedMemberTypeFqn = null,
         CollectionMapping? collection = null,
-        bool converterIsCached = false)
+        bool converterIsCached = false,
+        EquatableArray<string> missingElementPairs = default)
     {
+        MissingElementPairs = missingElementPairs;
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
         IsIgnored = isIgnored;
@@ -151,7 +161,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && CollectionElementPairKey == other.CollectionElementPairKey
             && CollectionSourceKind == other.CollectionSourceKind
             && CollectionSourceTypeFqn == other.CollectionSourceTypeFqn
-            && CollectionDestElementFqn == other.CollectionDestElementFqn;
+            && CollectionDestElementFqn == other.CollectionDestElementFqn
+            && MissingElementPairs.Equals(other.MissingElementPairs);
     }
 
     /// <inheritdoc/>
@@ -177,6 +188,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + (CollectionSourceKind?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionSourceTypeFqn?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionDestElementFqn?.GetHashCode() ?? 0);
+        hash = hash * 31 + MissingElementPairs.GetHashCode();
         return hash;
     }
 }

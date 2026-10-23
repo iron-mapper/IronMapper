@@ -29,6 +29,8 @@
        with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
        (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
        TreatWarningsAsErrors, none with it).
+       IM0002: an attribute mapping with an incompatible property type fails the build with IM0002 at the destination
+       property and with no error inside a generated file.
        IronMapperGenerateInPlace/List/Array, IronMapperExcludeFromCodeCoverage and IronMapperGeneratedCodeAttribute: the
        public overloads and the attributes of the generated class GeneratedMappers_{AssemblyName} ([GeneratedCode] with the
        package version, [ExcludeFromCodeCoverage]) with the defaults and
@@ -217,6 +219,12 @@ try {
     $createMapLine = (Select-String -Path (Join-Path $sources 'ProfileUnmapped.cs') -SimpleMatch 'CreateMap<').LineNumber
     $unmappedError = "ProfileUnmapped\.cs\($createMapLine,\d+\): error IM0001: Property 'Missing' on destination type 'OrderDto'"
 
+    # IM0002 in the build output: at OrderDto.Count of IncompatibleProperty.cs (the destination property), and no error
+    # inside a generated file (BuildErrorNot).
+    $countLine = (Select-String -Path (Join-Path $sources 'IncompatibleProperty.cs') -Pattern '^\s+public int Count' |
+        Select-Object -First 1).LineNumber
+    $incompatibleError = "IncompatibleProperty\.cs\($countLine,\d+\): error IM0002: Property 'Count' of 'OrderDto' is not mapped"
+
     # A strict code style (IDE0005 as an error in the build) and an explicit `using IronMapper.Generated;` next to the
     # global one of the package: IDE0005 at that line. The compiler reports IDE0005 in the build only with
     # GenerateDocumentationFile (CS1591 turned off: the consumer has no XML comments).
@@ -283,6 +291,10 @@ try {
         @{ Name = 'IronMapperReportUnmappedInProfiles=true, .editorconfig severity none'
            Source = (Export-WithEditorConfig 'editorconfig-none' 'dotnet_diagnostic.IM0001.severity = none'); GlobalUsing = $true; Output = 'ProfileUnmapped: OK'
            Properties = @('-p:IronMapperReportUnmappedInProfiles=true') }
+        # IM0002: an incompatible property fails the build at the user's code, not inside a generated file.
+        @{ Name = 'incompatible property type (IM0002 at the destination property, nothing in the generated files)'
+           Source = "$sources/IncompatibleProperty.cs"; GlobalUsing = $true; BuildError = $incompatibleError
+           BuildErrorNot = '\.g\.cs\(\d+,\d+\): error' }
         # Optional overloads and the attributes of the generated class (Sources/GeneratedOptions.cs checks them by reflection).
         @{ Name = 'generated class attributes and overloads, defaults'; Source = "$sources/GeneratedOptions.cs"; GlobalUsing = $true
            Output = 'GeneratedOptions: OK' }
@@ -310,6 +322,10 @@ try {
             if ($LASTEXITCODE -eq 0 -or $buildOutput -notmatch $variant.BuildError) {
                 Write-Host $buildOutput
                 throw "Variant '$($variant.Name)': expected the build to fail with '$($variant.BuildError)' (exit code $LASTEXITCODE)"
+            }
+            if ($variant.ContainsKey('BuildErrorNot') -and $buildOutput -match $variant.BuildErrorNot) {
+                Write-Host $buildOutput
+                throw "Variant '$($variant.Name)': the build output must not match '$($variant.BuildErrorNot)'"
             }
             continue
         }

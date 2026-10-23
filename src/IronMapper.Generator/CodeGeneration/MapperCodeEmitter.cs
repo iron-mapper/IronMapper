@@ -108,7 +108,7 @@ internal static class MapperCodeEmitter
 
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || prop.IsInitOnly) continue;
+                if (prop.IsIgnored || prop.IsInitOnly || IsElementMappingMissing(prop, plan)) continue;
                 sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
             }
 
@@ -123,7 +123,7 @@ internal static class MapperCodeEmitter
             sb.AppendLine("            {");
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored) continue;
+                if (prop.IsIgnored || IsElementMappingMissing(prop, plan)) continue;
                 sb.Append("                ");
                 sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers, scope) + ",");
             }
@@ -154,7 +154,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (prop.IsIgnored || prop.IsInitOnly) continue;
+            if (prop.IsIgnored || prop.IsInitOnly || IsElementMappingMissing(prop, plan)) continue;
             sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
         }
         sb.AppendLine("        }");
@@ -204,7 +204,7 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (!UsesCollectionHelper(prop)) continue;
+            if (!UsesCollectionHelper(prop) || IsElementMappingMissing(prop, plan)) continue;
             sb.AppendLine();
             EmitCollectionHelper(sb, prop, scope, plan);
         }
@@ -594,6 +594,14 @@ internal static class MapperCodeEmitter
     /// </summary>
     private static bool UsesCollectionHelper(PropertyMappingDescriptor prop)
         => !prop.IsIgnored && prop.LambdaBody is null && prop.ConverterType is null && prop.CollectionElementMapMethod is not null;
+
+    /// <summary>
+    /// IM0002: the elements of a collection property have no mapping (none of
+    /// <see cref="PropertyMappingDescriptor.MissingElementPairs"/> is generated); the property is not generated, so the
+    /// file compiles (it used to fail with CS1061). The diagnostic is reported by <c>CollectDiagnostics</c>.
+    /// </summary>
+    internal static bool IsElementMappingMissing(PropertyMappingDescriptor prop, MappingPlan plan)
+        => UsesCollectionHelper(prop) && prop.MissingElementPairs.Length > 0 && !plan.GeneratesAny(prop.MissingElementPairs);
 
     /// <summary>Name of the collection helper of <paramref name="prop"/>, unique within the class through the helper scope.</summary>
     private static string CollectionHelperName(PropertyMappingDescriptor prop, string scope)
