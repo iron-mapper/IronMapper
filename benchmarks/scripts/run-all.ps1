@@ -184,6 +184,7 @@ function Invoke-Step([string] $name, [scriptblock] $action) {
 # Runs dotnet with the output in a log file; throws with the log tail on failure.
 function Invoke-Dotnet([string] $logName, [string[]] $arguments) {
     $log = Join-Path $logDir $logName
+    Write-Host "    log: $log"
     & dotnet @arguments *> $log
     if ($LASTEXITCODE -ne 0) {
         $tail = (Get-Content $log -Tail 30) -join "`n"

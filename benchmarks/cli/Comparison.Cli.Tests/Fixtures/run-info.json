@@ -1,0 +1,18 @@
+{
+  "Started": "2026-10-24 08:35 UTC",
+  "Machine": "Intel(R) Core(TM) Ultra 7 155H (16 cores, 22 threads) · 15 GB RAM · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.402 · .NET runtime 10.0.13",
+  "Branch": "main",
+  "Commit": "253e90c00df23218fe489224dcc57af716bb17a5",
+  "Uncommitted": false,
+  "DiffSha256": "E3B0C44298FC1C14",
+  "PublishedVersion": "2.0.0",
+  "PublishedCommit": "2510efa402f0125e77b6a16afe92e4d0465cf885",
+  "Filter": [
+    "*.FlatBenchmark.*"
+  ],
+  "Frameworks": [
+    "net10.0"
+  ],
+  "Job": "Dry (one iteration; numbers mean nothing)",
+  "Dry": true
+}

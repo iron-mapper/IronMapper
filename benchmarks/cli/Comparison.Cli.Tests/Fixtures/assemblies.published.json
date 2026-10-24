@@ -1,0 +1,28 @@
+{
+  "Host": {
+    "Directory": "C:\\Users\\algmironov\\source\\repos\\IronMapper\\benchmarks\\src\\Comparison.Benchmarks\\bin\\Release\\net10.0",
+    "AssetsFile": "C:\\Users\\algmironov\\source\\repos\\IronMapper\\benchmarks\\src\\Comparison.Mappers\\obj\\project.assets.json",
+    "Packages": [
+      "IronMapper/2.0.0",
+      "IronMapper.Extensions.DI/2.0.0"
+    ],
+    "ProjectReferences": [],
+    "Version": "2.0.0+2510efa402f0125e77b6a16afe92e4d0465cf885",
+    "Sha512": "D786A1A33626CEFFDADF9295E23D533A248249D5E2362B33E9A2C84EA157BB602D8172A67E56780F758FCDF93CDBA4677E625524F319DD3710B69D2AD103FBE5",
+    "SameBytesAs": "package lib/net10.0"
+  },
+  "ChildBuilds": {
+    "Directory": "C:\\Users\\algmironov\\source\\repos\\IronMapper\\benchmarks\\src\\Comparison.Benchmarks\\bin\\Release\\net10.0\\Comparison.Benchmarks-Dry-1\\bin\\Release\\net10.0",
+    "AssetsFile": "C:\\Users\\algmironov\\source\\repos\\IronMapper\\benchmarks\\src\\Comparison.Benchmarks\\bin\\Release\\net10.0\\Comparison.Benchmarks-Dry-1\\obj\\Comparison.Mappers\\project.assets.json",
+    "Packages": [
+      "IronMapper/2.0.0",
+      "IronMapper.Extensions.DI/2.0.0"
+    ],
+    "ProjectReferences": [],
+    "Version": "2.0.0+2510efa402f0125e77b6a16afe92e4d0465cf885",
+    "Sha512": "D786A1A33626CEFFDADF9295E23D533A248249D5E2362B33E9A2C84EA157BB602D8172A67E56780F758FCDF93CDBA4677E625524F319DD3710B69D2AD103FBE5",
+    "SameBytesAs": "package lib/net10.0"
+  },
+  "Problems": [],
+  "ExitCode": 0
+}

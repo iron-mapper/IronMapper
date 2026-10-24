@@ -169,6 +169,9 @@ Another published version: `IronMapperPackageVersion=<version>` (environment var
 
 ## How to run
 
+The commands below are the reference; [Benchmark CLI](#benchmark-cli-benchps1) is an interactive front end for
+`run-quick.ps1` and `run-all.ps1` with progress (`./bench.ps1`).
+
 Everything, in order, then `results/RESULTS.md` (about 1.5 h on the reference machine; the script prints an
 estimate and checks the environment first):
 
@@ -303,6 +306,68 @@ pwsh -NoProfile -File ./scripts/run-quick.ps1 -Dry                 # --job Dry: 
 
 These numbers are for a decision in a PR, not for publication: the published numbers come only from the full run.
 
+### Benchmark CLI (`bench.ps1`)
+
+An interactive front end for `run-quick.ps1` and `run-all.ps1`. It runs those scripts, unchanged, with the parameters
+you choose, prints the exact `pwsh ...` command before each run, and shows progress from the scripts' output and logs.
+The scripts stay the reference (CI, the published results and the commands above use them); everything the CLI does
+can be done with them.
+
+Starting it needs PowerShell 7 (`pwsh`; Windows PowerShell 5.1, `powershell.exe`, cannot run the scripts):
+
+```powershell
+cd benchmarks
+./bench.ps1            # menu: Quick A/B, Full run, Results
+./bench.ps1 --help     # the commands and their flags
+```
+
+The first start builds the CLI (`cli/Comparison.Cli`, 10–30 s); later starts take about 2 s. If PowerShell says
+"running scripts is disabled on this system", start it as `pwsh -File ./bench.ps1` (same arguments). Linux and macOS:
+`./bench.sh`.
+
+Without the menu — to reproduce a run, in CI, or from another tool — the same choices are flags, and the command runs at
+once, without a question. A flag that is left out is not passed: the script's default applies.
+
+```powershell
+./bench.ps1 quick --filter Nested,InPlace --frameworks net10.0,net8.0   # run-quick.ps1 -Filter '*.NestedBenchmark.*,*.InPlaceBenchmark.*' -Frameworks 'net10.0,net8.0'
+./bench.ps1 quick --filter Flat --frameworks net10.0 --dry               # checks the commands in a few minutes
+./bench.ps1 quick --check-only                                            # only the pre-flight checks
+./bench.ps1 full                                                          # the full run as published (run-all.ps1)
+./bench.ps1 full --local --results-dir results/2.1.0                      # a release run of the local sources
+./bench.ps1 full --mode dry --results-dir ../artifacts/bench-dry          # checks every command; results/ stays untouched
+./bench.ps1 full --check-only                                             # the estimate and the environment checks
+./bench.ps1 results                                                       # finished runs: ../artifacts/quick/*, results/*/RESULTS.md
+./bench.ps1 results 20261024-113550                                       # one run: statuses and summary tables
+./bench.ps1 results summarize 20261024-113550                             # run-quick.ps1 -SummarizeOnly
+```
+
+`--filter` takes the benchmark class names (`Flat`, `Nested`, `Collection`, `CustomConfig`, `InPlace`, `DiOverhead`);
+lists are comma-separated. A menu run ends with the equivalent `./bench.ps1 ...` command.
+
+The menu keeps the committed reports safe: for a Quick or Dry full run it proposes its own folder,
+`../artifacts/bench-<mode>-<yyyyMMdd-HHmmss>`, passed as `-ResultsDir` (`results/` only if you type it), and it offers
+`-Force` for too little free memory only for Quick and Dry. A Full run then stops at the failed check: with too little
+memory its numbers are distorted or the NativeAOT publish fails; `./bench.ps1 full --force` is there if you decide
+otherwise. The subcommands pass exactly what you give them (the script's default folder is `results/`; the CLI warns
+when a Quick or Dry run would write there).
+
+- **Progress.** The stages (build and run of each variant and framework; the steps of `run-all.ps1`) with state and
+  time; for BenchmarkDotNet the cases done and in total, the current benchmark, the launch and BenchmarkDotNet's ETA,
+  read from its log; otherwise the last line of the log. When the current log has not grown for 5 minutes, the CLI
+  shows "no log output for N min" with the log's path; the run goes on. With the output redirected (or `--plain`) the
+  progress is printed line by line.
+- **Ctrl+C.** The first one asks whether to stop; `y` (or a second Ctrl+C) kills the script and every process it
+  started (dotnet, BenchmarkDotNet), prints where the partial results are, and exits with 130. In line-by-line mode the
+  first Ctrl+C stops. On Linux the script runs in its own session (`setsid`, when present), so this works the same; on
+  macOS the terminal's Ctrl+C also reaches the script, which stops at once; the CLI then kills what is left.
+- **Exit code**: the script's. **Sleep**: while a run is in progress the machine is kept awake (Windows:
+  `SetThreadExecutionState`; macOS: `caffeinate`; Linux: `systemd-inhibit`, when present).
+- **Windows console.** The scripts run in a hidden console switched to UTF-8 (`cmd /c "chcp 65001 && pwsh ..."`), so
+  their logs are the same as from a UTF-8 terminal.
+- **Build.** `cli/` has its own `Directory.Build.props` and `Directory.Packages.props` and is not part of
+  `IronMapper.Comparison.slnx`: its packages (Spectre.Console) do not appear in `RESULTS.md`, `UseLocalIronMapper` does
+  not affect it, and `run-all.ps1` and CI do not build it. Tests: `dotnet test cli/Comparison.Cli.Tests`.
+
 ## Layout
 
 ```
@@ -313,8 +378,10 @@ tests/Comparison.Tests       equivalence, deep copy, in-place, edge cases → fe
 probes/StartupProbe.*        one console per library (cold start, NativeAOT, size)
 probes/BuildProbe.*          generated by run-build-time.ps1 (not committed)
 tools/MstatReport            NativeAOT size breakdown from ILC .mstat files
-scripts/                     run-all, run-benchmarks (release run), run-startup, run-aot, run-footprint, run-build-time,
-                             compare-results, generate-report
+scripts/                     run-all, run-benchmarks (release run), run-quick (A/B), run-startup, run-aot, run-footprint,
+                             run-build-time, compare-results, generate-report
+cli/Comparison.Cli           the benchmark CLI (bench.ps1, bench.sh): menu, flags and progress over run-quick and run-all
+cli/Comparison.Cli.Tests     its tests (parsers on recorded script output and logs)
 results/                     reports of the latest release (RESULTS.md and the per-area pages): a copy of results/2.0.0
 results/2.0.0/               the 2.0.0 release run (local sources) with the comparison to results/1.1.3-rerun
 results/1.1.3-rerun/         the published 1.1.3, measured in the same session as results/2.0.0

@@ -1,0 +1,5 @@
+Exception: C:\Users\algmironov\source\repos\IronMapper\benchmarks\scripts\run-quick.ps1:415
+Line |
+ 415 |  … nt -gt 0) { throw "Pre-flight failed:`n  " + ($problems -join "`n  ") …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Pre-flight failed:   Branch: main (expected no-such-branch)

@@ -1,0 +1,11 @@
+IronMapper comparison benchmarks — Full run
+IronMapper: package of Directory.Packages.props; results: results
+Expected duration on the reference machine: ~163 min (Build 1, Tests 1, Runtime 70, RuntimeNet8 70, Startup 8, AOT 1, Footprint 1, BuildTime 10, Report 1)
+Close other applications and keep the machine on mains power: background load changes the numbers.
+
+Environment:
+  [ok  ] .NET SDK: dotnet --version = 10.0.402 (10.0.4xx expected)
+  [FAIL] Free memory: 3.0 GB free, 4 GB needed for the NativeAOT publish
+  [ok  ] AutoMapper license: C:\Users\algmironov\.automapper\license.txt exists
+  [ok  ] NativeAOT toolchain: C++ tools in C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools
+
