@@ -298,6 +298,15 @@ a PR (only the CI smoke check); the full run is a separate task before a release
   `pwsh ./scripts/run-benchmarks.ps1` (maintainer, branch `main`, clean tree except `benchmarks/results/`; `-Dry` writes to
   `artifacts/bench-dry/`). A run records its commit in `raw/run-info.json`; scenarios measured again after it with the
   single scripts are listed in the Run row of RESULTS.md.
+- **CLI** (`benchmarks/cli/Comparison.Cli`, started with `benchmarks/bench.ps1` / `bench.sh`): menu, flags (`quick`,
+  `full`, `results`) and progress over `run-quick.ps1` and `run-all.ps1`. The scripts stay the source of truth: the CLI
+  passes only the parameters the user changed (defaults read from `param()` through the PowerShell AST), reads the
+  artifacts (`assemblies.json`: only `ExitCode` and `Problems`) and never re-implements a check. Own
+  `Directory.Build.props`/`Directory.Packages.props` in `cli/` (Spectre would otherwise appear in RESULTS.md through
+  `Get-PackageVersions`), not in `IronMapper.Comparison.slnx`, not under `src/tests/probes/tools` (`Clear-BuildOutputs`).
+  On Windows a script runs as `cmd /c "chcp 65001 && pwsh -File ..."` in a hidden console: with the console's OEM code
+  page pwsh would write dotnet's UTF-8 output into the logs as mojibake. Tests on recorded output:
+  `dotnet test benchmarks/cli/Comparison.Cli.Tests`. Docs: `benchmarks/README.md`, "Benchmark CLI".
 
 ```bash
 cd benchmarks
@@ -305,6 +314,7 @@ dotnet test IronMapper.Comparison.slnx -c Release -p:UseLocalIronMapper=true    
 UseLocalIronMapper=true dotnet run -c Release -f net10.0 --project src/Comparison.Benchmarks -- --filter '*.NestedBenchmark.*'
 pwsh ./scripts/run-quick.ps1          # A/B: published 2.0.0 vs ../src (Nested, InPlace; net10.0, net8.0) -> artifacts/quick/
 pwsh ./scripts/run-all.ps1            # full run -> results/RESULTS.md; -Quick for a shorter local run
+./bench.ps1                           # CLI: menu; or ./bench.ps1 quick --dry / full --check-only / results
 ```
 
 ---

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Interactive front end for benchmarks/scripts (run-quick.ps1, run-all.ps1): collects the parameters, runs the script
+    with pwsh and shows its progress. The scripts stay the source of truth; see benchmarks/README.md, "Benchmark CLI".
+    Not part of IronMapper.Comparison.slnx (run-all.ps1 and CI build and test that solution).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Comparison.Cli</RootNamespace>
+    <AssemblyName>Comparison.Cli</AssemblyName>
+    <!-- Spectre.Console.Cli ships translated help texts; the CLI's output is English on every machine. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" />
+    <PackageReference Include="Spectre.Console.Cli" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Comparison.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

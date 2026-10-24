@@ -1,0 +1,91 @@
+Equivalent command, in benchmarks/ (C:\Users\algmironov\source\repos\IronMapper\benchmarks):
+  pwsh -NoProfile -NonInteractive -File ./scripts/run-all.ps1 -Dry -UseLocalIronMapper -ResultsDir ../artifacts/bench-cli-dry -Force
+Sleep: system sleep blocked (SetThreadExecutionState)
+IronMapper comparison benchmarks — Dry run
+IronMapper: local sources (../src); results: ../artifacts/bench-cli-dry
+Expected duration on the reference machine: ~13 min (Build 1, Tests 1, Runtime 2, RuntimeNet8 2, Startup 3, AOT 1, Footprint 1, BuildTime 1, Report 1)
+Close other applications and keep the machine on mains power: background load changes the numbers.
+
+Environment:
+  [ok  ] .NET SDK: dotnet --version = 10.0.402 (10.0.4xx expected)
+  [ok  ] Free memory: 4.1 GB free, 4 GB needed for the NativeAOT publish
+  [ok  ] AutoMapper license: C:\Users\algmironov\.automapper\license.txt exists
+  [ok  ] NativeAOT toolchain: C++ tools in C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools
+
+==> Build (~1 min) — 14:01
+    log: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\run-all\build.log
+    done in 0:00:09
+==> Tests (~1 min) — 14:01
+    log: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\run-all\tests.log
+    done in 0:00:06
+==> Runtime (~2 min) — 14:01
+    log: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\run-all\bdn-runtime.log
+[14:01:39] Runtime: 0/53
+[14:02:09] Runtime: 15/53 · CollectionBenchmark.Mapperly [Count=100000] · ETA 0h 0m
+    done in 0:01:06
+==> RuntimeNet8 (~2 min) — 14:02
+    log: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\run-all\bdn-runtime-net8.0.log
+[14:02:39] RuntimeNet8: 0/53
+[14:03:10] RuntimeNet8: 17/53 · CollectionBenchmark.AutoMapper [Count=100000] · ETA 0h 0m
+    done in 0:00:56
+IronMapper from here on: local sources packed as 2.0.0-local.20261024110328
+==> Startup (~3 min) — 14:03
+RID: win-x64; modes: Jit, Aot; runs: 2 (+1 warmup)
+Publishing Baseline (Jit)...
+Publishing Manual (Jit)...
+Publishing Manual_DI (Jit)...
+Publishing IronMapper (Jit)...
+Publishing IronMapper_IMapper (Jit)...
+Publishing Mapperly (Jit)...
+Publishing Mapster (Jit)...
+Publishing AutoMapper (Jit)...
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\startup-jit.csv
+Free memory before NativeAOT publish: 2,9 GB
+Publishing Baseline (Aot)...
+Publishing Manual (Aot)...
+Publishing Manual_DI (Aot)...
+Publishing IronMapper (Aot)...
+Publishing IronMapper_IMapper (Aot)...
+Publishing Mapperly (Aot)...
+Publishing Mapster (Aot)...
+Publishing AutoMapper (Aot)...
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\startup-aot.csv
+Running StartupBenchmark (BenchmarkDotNet, ColdStart)...
+[14:05:59] Startup: 1/7 · StartupBenchmark.Manual_DI · launch 14/20 · ETA 0h 0m
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\startup.md
+    done in 0:02:52
+==> AOT (~1 min) — 14:06
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\aot-size-breakdown.md
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\aot.md
+    done in 0:00:04
+==> Footprint (~1 min) — 14:06
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\footprint.md
+    done in 0:00:12
+==> BuildTime (~1 min) — 14:06
+Generated 6 BuildProbe projects in C:\Users\algmironov\source\repos\IronMapper\benchmarks\probes
+Measuring BuildProbe.Baseline.N5...
+Measuring BuildProbe.Manual.N5...
+Measuring BuildProbe.IronMapper.N5...
+Measuring BuildProbe.Mapperly.N5...
+Measuring BuildProbe.Mapster.N5...
+Measuring BuildProbe.AutoMapper.N5...
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\raw\build-time.csv
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\build-time.md
+    done in 0:00:38
+==> Report (~1 min) — 14:07
+Written: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\RESULTS.md
+    done in 0:00:01
+All done in 0:06:17. Results: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\RESULTS.md
+
+../artifacts/bench-cli-dry: Dry, started 2026-10-24 11:01 UTC, total 0:06:16 (Build 0:00:10 · Tests 0:00:07 · Runtime 0:01:07 · RuntimeNet8 0:00:57 · Startup 0:02:53 · AOT 0:00:05 · Footprint 0:00:13 · BuildTime 0:00:39)
+Commit: 3deaba5 + uncommitted changes
+| Library | Flat | Nested | Collection (100k) | Allocated (100k) | Cold start, Δ ms | NativeAOT | Δ publish (JIT) | Δ executable (AOT) | Δ build, s |
+| Manual | 1.32 ms (×1.00) | 1.98 ms (×1.00) | 453.47 ms (×1.00) | 163.26 MB (×1.00) | 3.3 | yes | +4.6 KB | +2.0 KB | 0.00 |
+| IronMapper | 1.18 ms (×0.90) | 2.23 ms (×1.12) | 265.55 ms (×0.59) | 163.26 MB (×1.00) | 5.3 | yes | +48.3 KB | +3.1 KB | +0.17 |
+| IronMapper_IMapper | 1.40 ms (×1.06) | 2.29 ms (×1.15) | 275.72 ms (×0.61) | 164.06 MB (×1.00) | 26.7 | yes | +223.9 KB | +1.50 MB | – |
+| Mapperly | 1.15 ms (×0.87) | 1.95 ms (×0.98) | 246.85 ms (×0.54) | 167.26 MB (×1.02) | 4.1 | yes | +38.5 KB | +22.0 KB | +0.11 |
+| Mapster | 640.90 µs (×0.49) | 6.32 ms (×3.19) | 228.32 ms (×0.50) | 163.26 MB (×1.00) | 129.2 | no | +244.8 KB | +3.99 MB | +0.09 |
+| AutoMapper | 4.26 ms (×3.23) | 6.17 ms (×3.11) | 277.92 ms (×0.61) | 185.00 MB (×1.13) | 84.2 | no | +1.17 MB | +5.16 MB | +0.08 |
+Report: C:\Users\algmironov\source\repos\IronMapper\benchmarks\..\artifacts\bench-cli-dry\RESULTS.md
+Raw data and logs: C:\Users\algmironov\source\repos\IronMapper\artifacts\bench-cli-dry\raw (run-info.json, run-all/*.log)
+Done.

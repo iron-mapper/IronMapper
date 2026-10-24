@@ -1,0 +1,15 @@
+  Определение проектов для восстановления...
+  Восстановлен C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Models\Comparison.Models.csproj (за 96 мс).
+  Восстановлен C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Mappers.IronMapperStaticFormat\Comparison.Mappers.IronMapperStaticFormat.csproj (за 318 мс).
+  Восстановлен C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Mappers\Comparison.Mappers.csproj (за 317 мс).
+  Восстановлен C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Benchmarks\Comparison.Benchmarks.csproj (за 344 мс).
+  Comparison.Models -> C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Models\bin\Release\net10.0\Comparison.Models.dll
+  Comparison.Mappers -> C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Mappers\bin\Release\net10.0\Comparison.Mappers.dll
+  Comparison.Mappers.IronMapperStaticFormat -> C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Mappers.IronMapperStaticFormat\bin\Release\net10.0\Comparison.Mappers.IronMapperStaticFormat.dll
+  Comparison.Benchmarks -> C:\Users\algmironov\source\repos\IronMapper\benchmarks\src\Comparison.Benchmarks\bin\Release\net10.0\Comparison.Benchmarks.dll
+
+Сборка успешно завершена.
+    Предупреждений: 0
+    Ошибок: 0
+
+Прошло времени 00:00:07.20
