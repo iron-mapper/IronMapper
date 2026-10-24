@@ -37,7 +37,9 @@ internal static class FullWizard
             AnsiConsole.MarkupLine("[grey]Quick and Dry numbers are not for publication; they get their own folder (passed as -ResultsDir).[/]");
             results = AnsiConsole.Prompt(new TextPrompt<string>("Results folder, relative to benchmarks/").DefaultValue(own)).Trim();
             if (IsPublishedResults(results))
+            {
                 AnsiConsole.MarkupLine("[yellow]This replaces the committed reports in results/ with numbers not for publication.[/]");
+            }
         }
         else
         {
@@ -46,7 +48,10 @@ internal static class FullWizard
 
         bool net8Runtime = BenchEnvironment.RuntimeMajors().Contains(8);
         if (!net8Runtime)
+        {
             AnsiConsole.MarkupLine("[yellow]No .NET 8 runtime: the net8.0 runtime benchmarks cannot run.[/]");
+        }
+
         bool skipNet8 = AnsiConsole.Prompt(new ConfirmationPrompt("Skip the runtime benchmarks on net8.0?") { DefaultValue = !net8Runtime });
         bool lowMemory = AnsiConsole.Prompt(new ConfirmationPrompt("NativeAOT with a single ILC thread (less memory, slower)?") { DefaultValue = false });
 
@@ -68,7 +73,10 @@ internal static class FullWizard
             (int code, IReadOnlyList<PreflightCheck> checks, _) = await FullRunner.CheckAsync(check).ConfigureAwait(false);
             var failed = checks.Where(c => c.Mark == CheckMark.Fail).ToList();
             if (code == 0 && failed.Count == 0)
+            {
                 break;
+            }
+
             bool onlyMemory = failed.Count > 0 && failed.All(c => c.Name == "Free memory");
             if (onlyMemory && !options.Force && MayOfferForce(mode) &&
                 AnsiConsole.Prompt(new ConfirmationPrompt("Too little free memory for the NativeAOT publish. Continue anyway (-Force)?") { DefaultValue = false }))

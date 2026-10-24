@@ -35,7 +35,9 @@ internal static partial class ScriptError
                 .Where(text => text.Length > 0)
                 .ToList();
             if (message.Count > 0)
+            {
                 return string.Join(Environment.NewLine, message);
+            }
         }
         return string.Join(Environment.NewLine, stderr.Where(line => !string.IsNullOrWhiteSpace(line)).Select(line => line.TrimEnd()));
     }

@@ -38,10 +38,15 @@ internal sealed class BenchPaths
             for (DirectoryInfo? dir = new(start); dir is not null; dir = dir.Parent)
             {
                 if (File.Exists(Path.Combine(dir.FullName, SolutionFile)))
+                {
                     return new BenchPaths(dir.FullName);
+                }
+
                 string nested = Path.Combine(dir.FullName, "benchmarks");
                 if (File.Exists(Path.Combine(nested, SolutionFile)))
+                {
                     return new BenchPaths(nested);
+                }
             }
         }
         throw new InvalidOperationException($"Cannot find the benchmarks folder ({SolutionFile}) above {AppContext.BaseDirectory} or the current directory.");
@@ -52,11 +57,9 @@ internal sealed class BenchPaths
     /// <summary>The folders of this process (set once at startup).</summary>
     public static BenchPaths Current
     {
-        get => _current ?? throw new InvalidOperationException("BenchPaths.Current is not set.");
-        set => _current = value;
+        get => field ?? throw new InvalidOperationException("BenchPaths.Current is not set.");
+        set;
     }
-
-    private static BenchPaths? _current;
 
     /// <summary>A path relative to the benchmarks folder with '/' (the working directory of the scripts).</summary>
     public string RelativeToBenchmarks(string path) =>

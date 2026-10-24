@@ -39,7 +39,13 @@ internal sealed class QuickMonitor : IRunMonitor
 
     public IReadOnlyList<PreflightCheck> Checks
     {
-        get { lock (_gate) return _checks.ToList(); }
+        get
+        {
+            lock (_gate)
+            {
+                return _checks.ToList();
+            }
+        }
     }
 
     public IReadOnlyList<string> PartialArtifacts
@@ -50,9 +56,15 @@ internal sealed class QuickMonitor : IRunMonitor
             {
                 var paths = new List<string>();
                 if (Root is not null && Directory.Exists(Root))
+                {
                     paths.Add(Root);
+                }
+
                 if (_current?.Tail is { Exists: true } tail)
+                {
                     paths.Add(tail.Path);
+                }
+
                 return paths;
             }
         }
@@ -92,7 +104,9 @@ internal sealed class QuickMonitor : IRunMonitor
                     break;
             }
             if (!_inSummaryEcho && !string.IsNullOrWhiteSpace(line))
+            {
                 _lastStdout = line.Trim();
+            }
         }
     }
 
@@ -101,20 +115,27 @@ internal sealed class QuickMonitor : IRunMonitor
         lock (_gate)
         {
             if (!string.IsNullOrWhiteSpace(line))
+            {
                 _lastStderr = line.Trim();
+            }
         }
     }
 
     public void Poll(DateTime nowUtc)
     {
         lock (_gate)
+        {
             _current?.Poll();
+        }
     }
 
     private void CreatePhases(IReadOnlyList<string> frameworks)
     {
         if (_phases.Count > 0)
+        {
             return;
+        }
+
         foreach (string framework in frameworks)
         {
             foreach (string variant in QuickRun.Variants)
@@ -135,7 +156,10 @@ internal sealed class QuickMonitor : IRunMonitor
             case QuickStageKind.Build:
                 phase.Start(now);
                 if (Root is not null)
+                {
                     phase.Follow(Path.Combine(runDir, "build.log"), now, benchmarkDotNet: false);
+                }
+
                 _current = phase;
                 break;
             case QuickStageKind.Run:
@@ -147,14 +171,20 @@ internal sealed class QuickMonitor : IRunMonitor
                 }
                 phase.Start(now);
                 if (Root is not null)
+                {
                     phase.Follow(Path.Combine(runDir, "run.log"), now, benchmarkDotNet: true);
+                }
+
                 _current = phase;
                 break;
             default:
                 phase.Poll();
                 phase.Finish(now, RunStatus.Classify(stage.Text) == RunState.Ok, stage.Text);
                 if (_current == phase)
+                {
                     _current = null;
+                }
+
                 break;
         }
     }
@@ -190,7 +220,10 @@ internal sealed class QuickMonitor : IRunMonitor
                 // The detail column gets what the terminal has left: icon, name, time and the grid padding are fixed.
                 int detailWidth = Math.Max(20, AnsiConsole.Profile.Width - _phases.Max(p => p.Name.Length) - 16);
                 foreach (Phase phase in _phases)
+                {
                     grid.AddRow(new Markup(phase.Icon(nowUtc)), new Markup(Markup.Escape(phase.Name)), Detail(phase, detailWidth), new Markup($"[grey]{Phase.Duration(phase.Elapsed(nowUtc))}[/]"));
+                }
+
                 rows.Add(grid);
             }
             if (_phases.All(p => p.State == PhaseState.Pending) && RunsPlanned is null)
@@ -202,13 +235,25 @@ internal sealed class QuickMonitor : IRunMonitor
             }
 
             if (_current?.Tail is { } tail)
+            {
                 rows.Add(new Markup($"[grey]log: {Markup.Escape(tail.Path)}[/]"));
+            }
+
             if (HangWarning(nowUtc) is { } warning)
+            {
                 rows.Add(new Markup($"[yellow]{Markup.Escape(warning)}[/]"));
+            }
+
             if (_lastStderr is not null)
+            {
                 rows.Add(new Markup($"[red]{Markup.Escape(Shorten(_lastStderr, 160))}[/]"));
+            }
+
             if (Header is not null && _current is null && _phases.Count > 0 && _phases.All(p => p.State is PhaseState.Done or PhaseState.Failed))
+            {
                 rows.Add(new Markup("[grey]Writing summary.md...[/]"));
+            }
+
             return new Rows(rows);
         }
     }
@@ -261,10 +306,16 @@ internal sealed class QuickMonitor : IRunMonitor
     {
         DateTime last = _current?.LastActivityUtc(_lastStdoutUtc) ?? _lastStdoutUtc;
         if (_current is null && _lastStdoutUtc > last)
+        {
             last = _lastStdoutUtc;
+        }
+
         TimeSpan silent = nowUtc - last;
         if (silent < Phase.HangThreshold)
+        {
             return null;
+        }
+
         string where = _current?.Tail?.Path is { } path ? $"log: {path}" : $"last output: {_lastStdout}";
         return $"no log output for {(int)silent.TotalMinutes} min ({where}); the run is not stopped";
     }

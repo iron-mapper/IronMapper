@@ -56,7 +56,10 @@ internal sealed class LogTail
             Exists = true;
             // Truncation to a few bytes counts as "older" only by time; a stale file is skipped entirely.
             if (File.GetLastWriteTimeUtc(handle) < _notBeforeUtc)
+            {
                 return lines;
+            }
+
             long length = RandomAccess.GetLength(handle);
             if (length < _position)
             {
@@ -65,7 +68,9 @@ internal sealed class LogTail
                 _decoder.Reset();
             }
             if (length == _position)
+            {
                 return lines;
+            }
 
             byte[] buffer = new byte[Math.Min(length - _position, 1 << 20)];
             char[] chars = new char[buffer.Length + 1];
@@ -73,7 +78,10 @@ internal sealed class LogTail
             {
                 int read = RandomAccess.Read(handle, buffer.AsSpan(0, (int)Math.Min(buffer.Length, length - _position)), _position);
                 if (read <= 0)
+                {
                     break;
+                }
+
                 int start = _position == 0 && read >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF ? 3 : 0;
                 _position += read;
                 int count = _decoder.GetChars(buffer, start, read - start, chars, 0);

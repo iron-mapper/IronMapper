@@ -20,18 +20,17 @@ namespace Comparison.Cli.Processes;
 internal sealed partial class ScriptProcess : IDisposable
 {
     private readonly Process _process;
-    private readonly Task<int> _exited;
 
     private ScriptProcess(Process process, Task<int> exited)
     {
         _process = process;
-        _exited = exited;
+        Exited = exited;
     }
 
     public int Id => _process.Id;
 
     /// <summary>Completes with the exit code once the process has exited and both streams are read to the end.</summary>
-    public Task<int> Exited => _exited;
+    public Task<int> Exited { get; }
 
     /// <summary>The encoding of the script's redirected output: UTF-8 everywhere (on Windows through chcp 65001).</summary>
     public static Encoding OutputEncoding { get; } = new UTF8Encoding(false);
@@ -40,8 +39,8 @@ internal sealed partial class ScriptProcess : IDisposable
     {
         ProcessStartInfo info = CreateStartInfo(command);
         var process = new Process { StartInfo = info, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) onStdout(StripAnsi(e.Data)); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) onStderr(StripAnsi(e.Data)); };
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) { onStdout(StripAnsi(e.Data)); } };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { onStderr(StripAnsi(e.Data)); } };
         process.Start();
         // -NonInteractive already refuses prompts; a closed stdin makes sure nothing waits for input.
         process.StandardInput.Close();
@@ -72,9 +71,14 @@ internal sealed partial class ScriptProcess : IDisposable
             string? setsid = OperatingSystem.IsLinux() ? Tools.FindOnPath("setsid") : null;
             info = new ProcessStartInfo(setsid ?? pwsh);
             if (setsid is not null)
+            {
                 info.ArgumentList.Add(pwsh);
+            }
+
             foreach (string arg in command.PwshArguments)
+            {
                 info.ArgumentList.Add(arg);
+            }
         }
         info.WorkingDirectory = command.WorkingDirectory;
         info.UseShellExecute = false;
@@ -95,7 +99,10 @@ internal sealed partial class ScriptProcess : IDisposable
     internal static string CmdQuote(string arg)
     {
         if (arg.IndexOfAny(['"', '%', '\r', '\n']) >= 0)
+        {
             throw new ArgumentException($"An argument with \", % or a line break cannot be passed to the script: {arg}");
+        }
+
         int trailing = arg.Length - arg.TrimEnd('\\').Length;
         return "\"" + arg + new string('\\', trailing) + "\"";
     }
@@ -113,7 +120,9 @@ internal sealed partial class ScriptProcess : IDisposable
         try
         {
             if (!_process.HasExited)
+            {
                 _process.Kill(entireProcessTree: true);
+            }
         }
         catch (InvalidOperationException)
         {
@@ -121,7 +130,7 @@ internal sealed partial class ScriptProcess : IDisposable
         }
         try
         {
-            await _exited.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            await Exited.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

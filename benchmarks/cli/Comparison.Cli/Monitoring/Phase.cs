@@ -66,18 +66,25 @@ internal sealed class Phase(string name)
         State = ok ? PhaseState.Done : PhaseState.Failed;
         EndedUtc = nowUtc;
         if (note is not null)
+        {
             Note = note;
+        }
     }
 
     public void Poll()
     {
         if (Tail is null)
+        {
             return;
+        }
+
         foreach (string line in Tail.Poll())
         {
             Bdn?.Feed(line);
             if (!string.IsNullOrWhiteSpace(line))
+            {
                 LastLine = line.Trim();
+            }
         }
     }
 
@@ -88,7 +95,10 @@ internal sealed class Phase(string name)
     {
         DateTime last = StartedUtc ?? fallbackUtc;
         if (Tail?.LastGrowthUtc is { } growth && growth > last)
+        {
             last = growth;
+        }
+
         return last;
     }
 
@@ -96,7 +106,10 @@ internal sealed class Phase(string name)
     public string Progress()
     {
         if (Bdn is { Recognized: true })
+        {
             return Bdn.Describe();
+        }
+
         return LastLine ?? "";
     }
 

@@ -27,13 +27,22 @@ internal sealed class InterruptHandler : IDisposable
     /// <summary>Completes when the user pressed Ctrl+C and should be asked whether to stop.</summary>
     public Task ConfirmRequested
     {
-        get { lock (_gate) return _confirmRequested.Task; }
+        get
+        {
+            lock (_gate)
+            {
+                return _confirmRequested.Task;
+            }
+        }
     }
 
     /// <summary>Marks the question as open: another Ctrl+C now stops the run.</summary>
     public void BeginConfirm()
     {
-        lock (_gate) _confirming = true;
+        lock (_gate)
+        {
+            _confirming = true;
+        }
     }
 
     /// <summary>The user answered: stop, or go on (a later Ctrl+C asks again).</summary>
@@ -45,7 +54,9 @@ internal sealed class InterruptHandler : IDisposable
             _confirmRequested = NewSignal();
         }
         if (stop)
+        {
             RequestStop();
+        }
     }
 
     public void RequestStop()

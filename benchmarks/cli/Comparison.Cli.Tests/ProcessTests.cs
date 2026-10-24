@@ -113,7 +113,10 @@ public class ProcessTests
     public void ArgumentsCmdCannotCarry_AreRefused(string arg)
     {
         if (!OperatingSystem.IsWindows())
+        {
             return;
+        }
+
         Assert.Throws<ArgumentException>(() => ScriptProcess.CmdQuote(arg));
     }
 
@@ -133,7 +136,9 @@ public class ProcessTests
         Task<ScriptResult> run = ScriptRunner.RunAsync(new ScriptCommand(script, [], dir.Path), line =>
         {
             if (line.StartsWith("child ", StringComparison.Ordinal))
+            {
                 childPid.TrySetResult(int.Parse(line[6..]));
+            }
         }, _ => { }, interrupts);
 
         int pid = await childPid.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
@@ -184,7 +189,9 @@ public class ProcessTests
         {
             Assert.False(string.IsNullOrEmpty(guard.Status));
             if (OperatingSystem.IsWindows())
+            {
                 Assert.True(guard.Active, guard.Status);
+            }
         }
     }
 

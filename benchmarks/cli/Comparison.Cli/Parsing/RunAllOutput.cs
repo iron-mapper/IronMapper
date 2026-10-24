@@ -35,17 +35,35 @@ internal static partial class RunAllOutput
     {
         Match m;
         if ((m = StepStarted().Match(line)).Success)
+        {
             return new RunAllStepStarted(m.Groups["step"].Value, int.Parse(m.Groups["min"].Value, CultureInfo.InvariantCulture));
+        }
+
         if ((m = StepDone().Match(line)).Success)
+        {
             return new RunAllStepDone(ParseDuration(m.Groups[1].Value));
+        }
+
         if ((m = Log().Match(line)).Success)
+        {
             return new RunAllLog(m.Groups[1].Value.Trim());
+        }
+
         if ((m = Done().Match(line)).Success)
+        {
             return new RunAllDone(ParseDuration(m.Groups["elapsed"].Value), m.Groups["file"].Success ? m.Groups["file"].Value.Trim() : null);
+        }
+
         if ((m = ResultsDir().Match(line)).Success)
+        {
             return new RunAllResultsDir(m.Groups[1].Value.Trim());
+        }
+
         if ((m = Mode().Match(line)).Success)
+        {
             return new RunAllMode(m.Groups[1].Value);
+        }
+
         if ((m = Plan().Match(line)).Success)
         {
             var steps = PlanItem().Matches(m.Groups["steps"].Value)

@@ -9,7 +9,9 @@ public class BdnProgressTests
     {
         var progress = new BdnProgress();
         foreach (string line in Fixture.Lines("bdn-flat-dry.run.log"))
+        {
             progress.Feed(line);
+        }
 
         Assert.True(progress.Recognized);
         Assert.True(progress.Finished);
@@ -28,7 +30,9 @@ public class BdnProgressTests
         {
             progress.Feed(line);
             if (line.StartsWith("// Benchmark: FlatBenchmark.IronMapper:", StringComparison.Ordinal))
+            {
                 break;
+            }
         }
 
         Assert.Equal(1, progress.Completed);
@@ -41,12 +45,14 @@ public class BdnProgressTests
     public void TwoClasses_TheTotalIsTheRunsNotTheClasss()
     {
         var progress = new BdnProgress();
-        var completedWhenSecondClassStarts = -1;
+        int completedWhenSecondClassStarts = -1;
         foreach (string line in Fixture.Lines("bdn-two-classes-dry.run.log"))
         {
             progress.Feed(line);
             if (line.StartsWith("// Benchmark: InPlaceBenchmark.Manual:", StringComparison.Ordinal))
+            {
                 completedWhenSecondClassStarts = progress.Completed;
+            }
         }
 
         // "// Found 6 benchmarks:" appears once per class and must not replace the 12 of the whole run.
