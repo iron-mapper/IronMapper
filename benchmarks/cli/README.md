@@ -116,6 +116,35 @@ it). When a script's output changes:
 The current fixtures come from a ru-RU Windows machine (decimal comma, Russian MSBuild messages); keep at least one
 fixture with a non-English culture when re-recording elsewhere.
 
+### Fixtures from Windows, tests on every platform
+
+The tests run on ubuntu and windows (CI), but the fixtures hold what the scripts printed on Windows. **A test never
+gives a path or text from a fixture to a function whose result depends on the platform:**
+
+- **Paths** in fixtures use `\` (`log: C:\...\build.log`, `Output: C:\...`). `Path.GetFileName`,
+  `GetDirectoryName`, `GetExtension` and the like split only at `/` on Linux and macOS and return the whole path. Use
+  `Fixture.FileName(path)` (both separators) for the name of a recorded path. When the CLI itself must work with the
+  path (follow a log, list a folder), replace the recorded path by a temporary folder of the test before feeding the
+  line, as `QuickMonitorTests` does with `Output:`; on Linux the scripts write `/` and the CLI needs no change. Paths a
+  test builds itself come from `Path.Combine` with relative parts or a `Fixture.NewTempDir()`, never a literal
+  `C:\...`. Comparing a recorded path as a string (`Assert.Equal(@"C:\...", ...)`, `EndsWith`) is fine.
+- **Line endings** of a checked-out fixture depend on the platform (`.gitattributes`: `*.md` CRLF everywhere, the
+  other fixtures LF on Linux and macOS, CRLF on Windows), so a test that reads a fixture as one string checks only one
+  of them on each machine. Read lines with `Fixture.Lines` (either ending), and test a parser of whole text with both
+  endings through `Fixture.Text(name, newline)` (`[InlineData("\r\n")]`, `[InlineData("\n")]`, as in
+  `ArtifactTests` and `LogTailTests`). Do not split on `Environment.NewLine` or `'\n'` in a test.
+- **Check on Linux** before a PR when tests or fixtures change (the CI job is not a required check):
+
+  ```bash
+  # in the repository root, after git add: the index as a Linux checkout (LF), in the .NET SDK image (pwsh included).
+  # MSYS_NO_PATHCONV=1: Git Bash on Windows would otherwise turn /src into a Windows path; elsewhere it does nothing.
+  tree=$(git write-tree)
+  MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/src:ro" mcr.microsoft.com/dotnet/sdk:10.0 bash -c "
+    git config --global --add safe.directory '*' && mkdir /work &&
+    git -C /src archive $tree benchmarks | tar -x -C /work && cd /work/benchmarks/cli &&
+    dotnet test Comparison.Cli.Tests -c Release"
+  ```
+
 ## Adding a flag
 
 A script parameter that the CLI should pass (example: `-Foo` of `run-quick.ps1`):

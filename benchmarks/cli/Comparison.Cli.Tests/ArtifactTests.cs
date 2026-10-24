@@ -8,7 +8,7 @@ public class ArtifactTests
     public void AssembliesJson_OfARealRun_IsOk()
     {
         // Its ChildBuilds is an object, not an array (ConvertTo-Json unwraps one element); only ExitCode and Problems count.
-        RunStatus status = RunStatus.FromJson(Fixture.Text("assemblies.published.json"), @"C:\run");
+        RunStatus status = RunStatus.FromJson(Fixture.Text("assemblies.published.json"), Path.Combine("x", "run"));
         Assert.Equal(RunState.Ok, status.State);
         Assert.Equal("ok", status.Text);
     }
@@ -92,10 +92,12 @@ public class ArtifactTests
         Assert.All(runs[1].Runs, r => Assert.Equal(RunState.NotRun, r.Status.State));
     }
 
-    [Fact]
-    public void SummaryMarkdown_GivesTheFrameworkTable()
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    public void SummaryMarkdown_GivesTheFrameworkTable(string newline)
     {
-        MarkdownDocument document = MarkdownDocument.Parse(Fixture.Text("summary.md"));
+        MarkdownDocument document = MarkdownDocument.Parse(Fixture.Text("summary.md", newline));
         MarkdownTable table = document.TableAfter("net10.0")!;
         Assert.Equal(9, table.Headers.Count);
         Assert.Equal("Benchmark", table.Headers[0]);
@@ -107,13 +109,15 @@ public class ArtifactTests
         Assert.Contains(document.Blocks, b => b is MarkdownText t && t.Lines.Contains("Published: ok. Local: ok."));
     }
 
-    [Fact]
-    public void ResultsMarkdown_GivesRunCommitAndSummary()
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    public void ResultsMarkdown_GivesRunCommitAndSummary(string newline)
     {
         using Fixture.TempDir root = Fixture.NewTempDir();
         string dir = Path.Combine(root.Path, "2.0.0");
         Directory.CreateDirectory(dir);
-        File.Copy(Fixture.PathOf("RESULTS.2.0.0.head.md"), Path.Combine(dir, "RESULTS.md"));
+        File.WriteAllText(Path.Combine(dir, "RESULTS.md"), Fixture.Text("RESULTS.2.0.0.head.md", newline));
         File.WriteAllText(Path.Combine(root.Path, "RESULTS.md"), "# x\n\n> **Dry run** (`run-all.ps1 -Dry`)\n\n| | |\n|---|---|\n| Run | Dry, started x |\n");
 
         IReadOnlyList<ResultsRun> runs = ResultsRun.List(root.Path);
@@ -124,7 +128,7 @@ public class ArtifactTests
         Assert.Equal("909da54", runs[1].Commit);
         Assert.StartsWith("Full, started 2026-10-21 19:17 UTC, total 2:29:58 (Build 0:00:11", runs[1].Run);
 
-        MarkdownTable summary = MarkdownDocument.Parse(Fixture.Text("RESULTS.2.0.0.head.md")).TableAfter("Summary")!;
+        MarkdownTable summary = MarkdownDocument.Parse(Fixture.Text("RESULTS.2.0.0.head.md", newline)).TableAfter("Summary")!;
         Assert.Equal("Library", summary.Headers[0]);
         Assert.Equal(["Manual", "IronMapper", "IronMapper_IMapper", "Mapperly", "Mapster", "AutoMapper"], summary.Rows.Select(r => r[0]));
     }

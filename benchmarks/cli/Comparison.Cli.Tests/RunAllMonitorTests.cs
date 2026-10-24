@@ -31,7 +31,7 @@ public class RunAllMonitorTests
         {
             monitor.OnStdout(line);
             if (RunAllOutput.Parse(line) is RunAllLog log)
-                logs.Add(Path.GetFileName(log.Path));
+                logs.Add(Fixture.FileName(log.Path));
         }
         monitor.Complete(0, interrupted: false);
 
