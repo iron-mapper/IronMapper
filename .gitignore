@@ -18,6 +18,7 @@ packages/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+!benchmarks/cli/Comparison.Cli/Artifacts/
 
 # Visual Studio
 .vs/
