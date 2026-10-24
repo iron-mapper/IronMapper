@@ -46,12 +46,19 @@
 .EXAMPLE
     pwsh -NoProfile -File benchmarks/scripts/run-quick.ps1 -Filter '*.NestedBenchmark.*' -Frameworks net8.0
 .EXAMPLE
+    pwsh -NoProfile -File benchmarks/scripts/run-quick.ps1 -Filter '*.FlatBenchmark.*,*.NestedBenchmark.*' -Frameworks net10.0,net8.0
+    # Several values separated by commas, also with -File (which passes "net10.0,net8.0" as one string).
+.EXAMPLE
     pwsh -NoProfile -File benchmarks/scripts/run-quick.ps1 -Dry
 .EXAMPLE
     pwsh -NoProfile -File benchmarks/scripts/run-quick.ps1 -SummarizeOnly artifacts/quick/20261024-090000
 #>
 param(
+    # BenchmarkDotNet filter patterns. Several patterns can also be given separated by commas, which works with -File as
+    # well; the comma always separates patterns, so a pattern containing one (BDN parameters such as "(A: 1, B: 2)")
+    # cannot be passed.
     [string[]] $Filter = @('*.NestedBenchmark.*', '*.InPlaceBenchmark.*'),
+    # Target frameworks, run one after the other; also separated by commas (with -File: -Frameworks net10.0,net8.0).
     [string[]] $Frameworks = @('net10.0', 'net8.0'),
     [string] $PublishedVersion = '2.0.0',
     # The branch that must be checked out (not checked when empty).
@@ -62,6 +69,10 @@ param(
     # Only write summary.md of an existing run folder (artifacts/quick/<stamp>) again; nothing is built or measured.
     [string] $SummarizeOnly = ''
 )
+
+# `pwsh -File` passes "a,b" as one string (an array parameter gets no second value there): split on commas.
+$Filter = @($Filter -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$Frameworks = @($Frameworks -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
