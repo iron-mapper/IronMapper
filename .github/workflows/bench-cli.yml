@@ -1,0 +1,38 @@
+name: Benchmark CLI
+
+# Build and tests of the benchmark CLI (benchmarks/cli), only for pull requests that change benchmarks/. A workflow of
+# its own: a paths filter on ci.yml would skip its required checks in every other PR. No push trigger, and not a
+# required check in the ruleset (a PR without changes under benchmarks/ never gets it).
+on:
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'benchmarks/**'
+
+jobs:
+  cli:
+    name: Benchmark CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The CLI runs on Windows (bench.ps1) and Linux/macOS (bench.sh); the process tests differ by OS
+        # (cmd /c chcp 65001 on Windows, setsid on Linux). pwsh is preinstalled on both runners.
+        os: [ ubuntu-latest, windows-latest ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        working-directory: benchmarks/cli
+        run: dotnet build Comparison.Cli.Tests -c Release
+
+      - name: Test
+        working-directory: benchmarks/cli
+        run: dotnet test Comparison.Cli.Tests -c Release --no-build

@@ -142,6 +142,8 @@ BenchmarkDotNet 0.15.8, .NET 10.0.12, Windows 11, Intel Core i7-12650H. Полн
   заказов время определяет сборщик мусора (полный отчёт).
 - .NET 8 (тот же прогон): Flat ×1,01, Nested ×1,09, коллекция 1 000 ×1,02, in-place ×0,93; `IMapper` на Flat ×1,37.
 - Один компьютер. Mapster.Tool (генератор кода Mapster) не измерялся.
+- Воспроизвести у себя: [Run it yourself](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md#run-it-yourself)
+  (`./bench.ps1` в `benchmarks/`; на английском).
 
 ---
 

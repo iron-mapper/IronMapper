@@ -18,6 +18,8 @@ packages/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+# Source folder of the benchmark CLI (namespace Comparison.Cli.Artifacts), not build output. Git on Windows and macOS
+# ignores case, so artifacts/ above would hide it.
 !benchmarks/cli/Comparison.Cli/Artifacts/
 
 # Visual Studio

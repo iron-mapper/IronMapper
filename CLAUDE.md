@@ -53,7 +53,7 @@ IronMapper/
 ├── eng/verify-aot.ps1                # dotnet pack + NativeAOT publish of the AOT probes (net8.0, net10.0)
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings-as-errors)
 ├── .editorconfig                      # C# code style
-└── .github/workflows/                 # ci.yml (build, test, pack & verify, NativeAOT probes, benchmarks smoke), publish.yml (tag v* → NuGet)
+└── .github/workflows/                 # ci.yml (build, test, pack & verify, NativeAOT probes, benchmarks smoke), bench-cli.yml (PRs touching benchmarks/**), publish.yml (tag v* → NuGet)
 ```
 
 ---
@@ -306,7 +306,11 @@ a PR (only the CI smoke check); the full run is a separate task before a release
   `Get-PackageVersions`), not in `IronMapper.Comparison.slnx`, not under `src/tests/probes/tools` (`Clear-BuildOutputs`).
   On Windows a script runs as `cmd /c "chcp 65001 && pwsh -File ..."` in a hidden console: with the console's OEM code
   page pwsh would write dotnet's UTF-8 output into the logs as mojibake. Tests on recorded output:
-  `dotnet test benchmarks/cli/Comparison.Cli.Tests`. Docs: `benchmarks/README.md`, "Benchmark CLI".
+  `dotnet test benchmarks/cli/Comparison.Cli.Tests`; in CI only for pull requests that change `benchmarks/**`
+  (`.github/workflows/bench-cli.yml`, ubuntu and windows; no push trigger, not a required check). `Comparison.Cli/Artifacts/`
+  is source code: the root `.gitignore` re-includes it (`artifacts/` matches it on a case-insensitive file system). Docs:
+  `benchmarks/README.md` ("Run it yourself", "Benchmark CLI"); for its developers `benchmarks/cli/README.md` (layout,
+  progress sources, fixtures, adding a flag or a script).
 
 ```bash
 cd benchmarks
