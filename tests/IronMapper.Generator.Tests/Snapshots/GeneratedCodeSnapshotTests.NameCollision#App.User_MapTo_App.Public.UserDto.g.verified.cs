@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.Public.UserDto MapToPublicUserDto(this global::App.User source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToPublicUserDtoCore(source);
+        }
+
+        private static global::App.Public.UserDto MapToPublicUserDtoCore(global::App.User source)
+        {
             return new global::App.Public.UserDto
             {
                 Name = source.Name,
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToPublicUserDtoCore(source, destination);
+        }
+
+        private static void MapToPublicUserDtoCore(global::App.User source, global::App.Public.UserDto destination)
+        {
             destination.Name = source.Name;
         }
 

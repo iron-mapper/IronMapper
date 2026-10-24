@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         internal static global::App.LedgerDto MapToLedgerDto(this global::App.Ledger source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToLedgerDtoCore(source);
+        }
+
+        private static global::App.LedgerDto MapToLedgerDtoCore(global::App.Ledger source)
+        {
             return new global::App.LedgerDto
             {
                 Code = source.Code,
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToLedgerDtoCore(source, destination);
+        }
+
+        private static void MapToLedgerDtoCore(global::App.Ledger source, global::App.LedgerDto destination)
+        {
             destination.Code = source.Code;
         }
 

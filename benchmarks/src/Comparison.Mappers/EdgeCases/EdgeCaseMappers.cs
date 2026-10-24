@@ -83,9 +83,14 @@ public sealed class IronMapperEdgeCaseProfile : MappingProfile
         CreateMap<OrderEntity, OrderFlatDto>();
         // CreateMap<PointEntity, PointRecordDto>() does not compile, see EdgeCaseMappers.IronMapperPositionalRecord.
 
+#if IRONMAPPER_NESTED_OBJECTS
+        // From 2.1 the nullable nested object is mapped automatically, with a null check (null → null).
+        CreateMap<NullableOrderEntity, NullableOrderDto>();
+#else
         // Same documented nested-object workaround as in ComparisonProfile; the lambda has no null check of its own.
         CreateMap<NullableOrderEntity, NullableOrderDto>()
             .ForMember(d => d.Customer, o => o.MapFrom(s => s.Customer!.MapToCustomerDto()));
+#endif
     }
 }
 

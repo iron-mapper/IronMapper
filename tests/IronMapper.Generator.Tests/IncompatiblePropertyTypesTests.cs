@@ -8,9 +8,9 @@ using Xunit;
 namespace IronMapper.Generator.Tests;
 
 /// <summary>
-/// IM0002: a destination property that the generated assignment cannot fill — incompatible types, a nested object (not
-/// mapped automatically yet), a collection whose elements have no mapping. Up to 2.0 the build failed inside the generated
-/// file (CS0029/CS0266, CS1061). Now: one IM0002 at the user's code, the property is not generated, the rest of the mapping
+/// IM0002: a destination property that the generated assignment cannot fill — incompatible types, a nested object or a
+/// collection whose type pair has no mapping (nested objects with a mapping: <see cref="NestedObjectTests"/>). Up to 2.0 the
+/// build failed inside the generated file (CS0029/CS0266, CS1061). Now: one IM0002 at the user's code, the property is not generated, the rest of the mapping
 /// is generated and works. Mappings that compiled with 2.0 get no IM0002 (the false-positive tests below).
 /// </summary>
 public class IncompatiblePropertyTypesTests
@@ -80,7 +80,7 @@ public class IncompatiblePropertyTypesTests
     }
 
     [Fact]
-    public void Attribute_NestedObjectWithoutAutomaticMapping_IM0002SaysNotMappedAutomatically()
+    public void Attribute_NestedObjectWithoutMapping_IM0002SaysAddMappingForThePair()
     {
         var source = """
             using IronMapper.Attributes;
@@ -91,7 +91,6 @@ public class IncompatiblePropertyTypesTests
             public class Customer { public string Name { get; set; } = ""; public Address Address { get; set; } = new(); }
             public class CustomerDto { public string Name { get; set; } = ""; public AddressDto Address { get; set; } = new(); }
 
-            [MapTo(typeof(AddressDto))]
             public class Address { public string City { get; set; } = ""; }
             public class AddressDto { public string City { get; set; } = ""; }
             """;
@@ -102,8 +101,8 @@ public class IncompatiblePropertyTypesTests
         var diagnostic = Assert.Single(IM0002(generatorDiagnostics));
         Assert.Equal("Address", At(diagnostic));
         var message = diagnostic.GetMessage();
-        Assert.Contains("'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet.", message);
-        Assert.Contains("ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))", message);
+        Assert.Contains("'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto', and there is no mapping from 'App.Address' to 'App.AddressDto'.", message);
+        Assert.Contains("Add [MapTo(typeof(App.AddressDto))] to 'App.Address', [MapFrom(typeof(App.Address))] to 'App.AddressDto', or CreateMap<App.Address, App.AddressDto>() in a profile.", message);
         Assert.DoesNotContain(generated, s => s.Contains("Address = source.Address"));
     }
 
@@ -569,7 +568,7 @@ public class IncompatiblePropertyTypesTests
     }
 
     [Fact]
-    public void Profile_NestedObjectWithMapping_IM0002UntilNestedObjectsAreMappedAutomatically()
+    public void Profile_NestedObjectWithMapping_MappedWithoutIM0002()
     {
         var source = """
             using IronMapper.Configuration;
@@ -594,8 +593,7 @@ public class IncompatiblePropertyTypesTests
         var (_, generatorDiagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
         AssertNoErrors(errors);
-        var message = Assert.Single(IM0002(generatorDiagnostics)).GetMessage();
-        Assert.Contains("nested objects are not mapped automatically yet. Configure it with ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))", message);
+        Assert.Empty(IM0002(generatorDiagnostics));
     }
 
     // ------------------------------------------------------------------

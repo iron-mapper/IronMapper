@@ -146,6 +146,23 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         }
     }
 
+    /// <summary>
+    /// The in-place <c>…Core</c> of this mapping writes every property that a new object gets, so the in-place overload
+    /// of a mapping that has this pair as a nested object may update an existing nested object. <see langword="false"/>
+    /// with <c>ConvertUsing</c> (the converter makes the object) or a mapped <c>init</c>-only property (the in-place
+    /// overload skips it, item 2.15 of the plan): such a nested object is assigned a new instance, as before.
+    /// </summary>
+    public bool CanUpdateInPlace
+    {
+        get
+        {
+            if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null) return false;
+            foreach (var property in PropertyMappings)
+                if (property.IsInitOnly && !property.IsIgnored) return false;
+            return true;
+        }
+    }
+
     /// <summary>Key of the type pair: <c>{SourceFullName}-&gt;{DestFullName}</c>.</summary>
     public string PairKey => $"{SourceFullName}->{DestFullName}";
 

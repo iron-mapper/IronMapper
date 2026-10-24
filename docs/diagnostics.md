@@ -12,7 +12,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. 
 | IM0001 | Warning | Unmapped destination property | Yes — `[MapTo]`/`[MapFrom]`; profiles with `IronMapperReportUnmappedInProfiles` |
 | IM0002 | Error | Property types are incompatible or have no mapping | Yes — attributes and profiles (from 2.1.0) |
 | IM0003 | Error | Type in `[MapTo]`/`[MapFrom]` cannot be mapped | Yes — open generic types and arrays; an unresolved type is reported by the compiler only |
-| IM0004 | Error | Cyclic mapping detected | **Not reported yet** |
+| IM0004 | Warning | Nested object mapping closes a cycle | Yes — cycles through an automatically mapped nested object (from 2.1.0) |
 | IM0005 | Warning | Empty MappingProfile | Yes |
 | IM0006 | Error | `[MapProperty]` destination property not found | Yes |
 | IM0007 | Warning | Duplicate mapping definition | Yes — attributes and profiles |
@@ -91,7 +91,8 @@ to add, for example:
 
 - `'Order.Count' is 'int?', which cannot be assigned to 'int'. Add [MapConverter(typeof(...))] (an ITypeConverter<int?, int>) to the source property, map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].`
 - `the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'. Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.`
-- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. …`
+- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto', and there is no mapping from 'App.Address' to 'App.AddressDto'. Add [MapTo(typeof(App.AddressDto))] to 'App.Address', [MapFrom(typeof(App.Address))] to 'App.AddressDto', or CreateMap<App.Address, App.AddressDto>() in a profile.`
+- `'Customer.Address' is 'App.Address?', which can be null, and the destination is 'App.AddressDto', which cannot. Declare the destination property nullable or the source property non-nullable, or mark the destination property [Ignore].`
 - `the MapFrom expression is 'int?', which cannot be assigned to 'int'. …`
 
 **Cause:** the generated assignment `destination.X = source.X` would not compile:
@@ -100,8 +101,12 @@ to add, for example:
   `List<string>` → `string[]`); checked like the compiler does (`Compilation.ClassifyConversion`), so everything that
   converts implicitly is accepted (`int` → `long`, `int` → `int?`, a derived type → its base type, user-defined
   implicit operators, `dynamic`);
-- a nested object of another type (`Address` → `AddressDto`): not mapped automatically yet (planned for 2.1.0, issue
-  [#23](https://github.com/iron-mapper/IronMapper/issues/23));
+- a nested object of another type (`Address` → `AddressDto`) whose type pair has no mapping: none in the project (also
+  through a base type or an interface of the source type), and no accessible `MapTo…` extension method of a referenced
+  assembly or a hand-written one. With a mapping the nested object is mapped by it (from 2.1.0,
+  [Nested objects](advanced.md#nested-objects));
+- a nested object declared nullable in the source (`Address?`) and non-nullable in the destination (`AddressDto`): the
+  generated code does not turn `null` into `null!`;
 - a collection whose element types differ and no mapping maps them: none in the project (also through a base type or
   an interface of the source element), and no accessible `MapTo…` extension method of a referenced assembly or a
   hand-written one that the generated call binds to;
@@ -115,6 +120,11 @@ assigns the properties.
 **Fix:** convert the value (`[MapConverter]`, `opt.UseConverter<T>()`, a `MapFrom` that converts), add the missing
 mapping, or ignore the property (`[Ignore]`, `opt.Ignore()`). For `ReverseMap()`, declare the reverse mapping with
 `CreateMap` and configure the property there.
+
+**Code fix** (a nested object or a collection element without a mapping): adds the mapping of the pair —
+`[MapTo(typeof(AddressDto))]` on the source type of an attribute mapping (`[MapFrom(typeof(Address))]` on the destination
+type when the source type is not in your code), `CreateMap<Address, AddressDto>();` after the statement of the
+`CreateMap`/`ReverseMap()` call in a profile. The other cases have no code fix.
 
 ---
 
@@ -141,13 +151,31 @@ inside the generated file.
 
 ---
 
-## IM0004 — Cyclic mapping detected
+## IM0004 — Nested object mapping closes a cycle
 
-**Severity:** Error · **Not reported yet**
+**Severity:** Warning (from 2.1.0; up to 2.0.0 declared as an error, never reported)
 
-**Message (declared):** `Cyclic mapping detected: '{0}' maps to '{1}' which directly or indirectly maps back to '{0}'`
+**Points to:** the destination property of the nested object (`[MapTo]`/`[MapFrom]`), or the `CreateMap`/`ReverseMap()`
+call (a profile). Reported at every automatically mapped nested object of the cycle.
 
-**Current behavior:** no cycle detection is implemented.
+**Message:** `Property '{0}' of '{1}' is mapped automatically and closes a cycle of mappings: {2}. The mapping recurses without end only if the objects form a cycle at run time; break the cycle with Ignore or MapFrom on a property of the chain, or suppress IM0004 for models that are always finite (#pragma warning disable IM0004, or dotnet_diagnostic.IM0004.severity = none in .editorconfig).`
+— `{2}` is the chain of mappings, for example
+`App.Order → App.OrderDto, Customer: App.Customer → App.CustomerDto, Orders (elements): App.Order → App.OrderDto`.
+
+**Cause:** a nested object mapped automatically ([Nested objects](advanced.md#nested-objects)) leads back to its own
+mapping, through other nested objects or collection elements: `Employee.Manager` of type `Employee`,
+`Order.Customer.Orders`. A cycle of types is not an endless recursion by itself: a manager of a manager ends with
+`null` and is mapped. The mapping recurses forever, and fails with `StackOverflowException`, only when the data has a
+cycle (an order whose customer lists that order). The generated code does not track mapped objects.
+
+**Not reported:** cycles only through collections (a tree such as `Category.Children`, which works since 2.0.0), and
+cycles broken by a property configured explicitly (`MapFrom`, `Ignore`, a converter) or by a mapping with
+`ConvertUsing` (it calls the converter, not the mappings of its properties). No build that compiles with 2.0.0 gets
+IM0004: a nested object of another type did not compile there.
+
+**Fix:** break the cycle with `Ignore` or `MapFrom` on a property of the chain (`ForMember(d => d.Customer, o => o.Ignore())`,
+`[Ignore]`), or suppress the warning where the data is always finite: `#pragma warning disable IM0004` around the
+property (or the `CreateMap` call), `dotnet_diagnostic.IM0004.severity = none` in `.editorconfig`, or `<NoWarn>`.
 
 ---
 

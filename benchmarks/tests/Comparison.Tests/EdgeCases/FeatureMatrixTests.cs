@@ -3,10 +3,17 @@ using Comparison.Mappers;
 
 namespace Comparison.Tests.EdgeCases;
 
-/// <summary>Writes results/feature-matrix.md: how each scenario is configured + the observed edge-case facts.</summary>
+/// <summary>
+/// Writes results/feature-matrix.md: how each scenario is configured + the observed edge-case facts. Only with
+/// <see cref="WriteVariable"/> set to <c>true</c> (run-all.ps1 sets it): a plain <c>dotnet test</c> leaves the committed
+/// file as it is.
+/// </summary>
 public class FeatureMatrixTests
 {
     private const string FileName = "feature-matrix.md";
+
+    /// <summary>Environment variable that turns on <see cref="Write_feature_matrix"/> (<c>true</c>, case-insensitive).</summary>
+    public const string WriteVariable = "IRONMAPPER_WRITE_FEATURE_MATRIX";
 
     /// <summary>How each benchmarked scenario is expressed per library (taken from the code in Comparison.Mappers).</summary>
     private static readonly (string Scenario, Dictionary<string, string> Cells)[] Scenarios =
@@ -23,7 +30,11 @@ public class FeatureMatrixTests
         ("Nested single objects", new()
         {
             [MapperNames.Manual] = "hand-written",
+#if IRONMAPPER_NESTED_OBJECTS
+            [MapperNames.IronMapper] = "automatic (a mapping for every nested type pair); up to 2.0 `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested property",
+#else
             [MapperNames.IronMapper] = "**manual setup**: `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested property",
+#endif
             [MapperNames.IronMapperIMapper] = "same profile as IronMapper",
             [MapperNames.Mapperly] = "automatic",
             [MapperNames.Mapster] = "automatic",
@@ -91,8 +102,15 @@ public class FeatureMatrixTests
         "Mapperly generates code from the nullable annotations: for a non-nullable member it emits no `null` check (a `null` there fails with `NullReferenceException`), " +
         "for a nullable member it does. The `null` rows are therefore shown for both declarations; the nullable variant uses `NullableOrderEntity`/`NullableOrderDto` " +
         "and `UserEntity?` → `UserDto?`. The other libraries do not read annotations; their results differ between the variants only where the configuration differs.",
+#if IRONMAPPER_NESTED_OBJECTS
+        "IronMapper, nested objects: from 2.1 mapped by the mappings of their type pairs, by the nullable annotations: " +
+        "a `null` in a non-nullable member throws `InvalidOperationException` that names both properties (Mapperly: `NullReferenceException`), " +
+        "`null` → `null` for a nullable one; the in-place overload updates the existing nested objects (as AutoMapper). " +
+        "Up to 2.0 the documented workaround was `MapFrom(s => s.Customer!.MapToCustomerDto())`, without a `null` check.",
+#else
         "IronMapper, nullable nested object: the documented workaround `MapFrom(s => s.Customer!.MapToCustomerDto())` has no `null` check; " +
         "a user who needs `null` → `null` has to write the check in the lambda (`s.Customer == null ? null : ...`).",
+#endif
         "IronMapper_IMapper: up to 1.1.x a `null` nested object surfaces as `TargetInvocationException` (the generated method's `ArgumentNullException` wrapped by `MethodInfo.Invoke`); " +
         "from 2.0.0 the `ArgumentNullException` arrives as it is.",
         "`List<string>` → `List<string>`: IronMapper and Mapperly (by default, without `UseDeepCloning`) assign the same list; Mapster and AutoMapper create a new list. " +
@@ -108,6 +126,10 @@ public class FeatureMatrixTests
     [Fact]
     public void Write_feature_matrix()
     {
+        Assert.SkipUnless(
+            string.Equals(Environment.GetEnvironmentVariable(WriteVariable), "true", StringComparison.OrdinalIgnoreCase),
+            $"Writes results/{FileName} only with {WriteVariable}=true (set by scripts/run-all.ps1).");
+
         var sb = new StringBuilder();
         sb.AppendLine("# Feature matrix");
         sb.AppendLine();

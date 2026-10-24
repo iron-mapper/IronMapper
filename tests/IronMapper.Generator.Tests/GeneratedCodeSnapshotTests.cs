@@ -266,8 +266,8 @@ public class GeneratedCodeSnapshotTests
 
         namespace App;
 
-        // IM0002: Count (int? -> int), Address (a nested object) and Lines (no mapping for the elements) are not
-        // generated; Id and Name are.
+        // IM0002: Count (int? -> int), Address (no mapping for the nested object) and Lines (no mapping for the elements)
+        // are not generated; Id and Name are.
         [MapTo(typeof(OrderDto))]
         public class Order
         {
@@ -291,6 +291,53 @@ public class GeneratedCodeSnapshotTests
         public class AddressDto { public string City { get; set; } = ""; }
         public class Line { public string Sku { get; set; } = ""; }
         public class LineDto { public string Sku { get; set; } = ""; }
+        """);
+
+    [Fact]
+    public Task Nested() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        // Nested objects mapped by the mappings of their type pairs, as in the Nested benchmark: MapToXCore without a null
+        // check for non-nullable properties and elements, a check for the nullable Referrer.
+        public class Address { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
+        public class AddressDto { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
+        public class Customer { public int Id { get; set; } public string Name { get; set; } = ""; public Address Address { get; set; } = new(); }
+        public class CustomerDto { public int Id { get; set; } public string Name { get; set; } = ""; public AddressDto Address { get; set; } = new(); }
+        public class Product { public int Id { get; set; } public string Sku { get; set; } = ""; }
+        public class ProductDto { public int Id { get; set; } public string Sku { get; set; } = ""; }
+        public class OrderLine { public Product Product { get; set; } = new(); public int Quantity { get; set; } }
+        public class OrderLineDto { public ProductDto Product { get; set; } = new(); public int Quantity { get; set; } }
+
+        public class Order
+        {
+            public int Id { get; set; }
+            public Customer Customer { get; set; } = new();
+            public Customer? Referrer { get; set; }
+            public List<OrderLine> Lines { get; set; } = new();
+        }
+
+        public class OrderDto
+        {
+            public int Id { get; set; }
+            public CustomerDto Customer { get; set; } = new();
+            public CustomerDto? Referrer { get; set; }
+            public List<OrderLineDto> Lines { get; set; } = new();
+        }
+
+        public class ShopProfile : MappingProfile
+        {
+            public ShopProfile()
+            {
+                CreateMap<Address, AddressDto>();
+                CreateMap<Customer, CustomerDto>();
+                CreateMap<Product, ProductDto>();
+                CreateMap<OrderLine, OrderLineDto>();
+                CreateMap<Order, OrderDto>();
+            }
+        }
         """);
 
     private static Task Verify(string source)

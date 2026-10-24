@@ -4,14 +4,10 @@
 
 ## Nested objects
 
-Nested **single** objects are **not mapped automatically yet**. When a source and a destination property have
-the same name but different types (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`), the build fails
-with error [IM0002](diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping) at the destination
-property (or at `CreateMap` in a profile), and the property is not generated. Up to 2.0.0 the generator emitted
-`Address = source.Address` and the build failed with `CS0029` inside the generated file.
-
-**Workaround (profile):** map the nested property explicitly with `MapFrom`. The lambda is emitted into the
-generated class, where the other generated `MapTo*` methods are in scope:
+From 2.1.0 a nested object is mapped by the mapping of its type pair. When a source and a destination property have
+the same name and different types (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`) and the project has
+a mapping `Address` → `AddressDto` (an attribute or a profile, in this project or in a referenced one), the generated
+code calls it. No `ForMember` is needed:
 
 ```csharp
 public class CustomerProfile : MappingProfile
@@ -19,14 +15,157 @@ public class CustomerProfile : MappingProfile
     public CustomerProfile()
     {
         CreateMap<Address, AddressDto>();
-        CreateMap<Customer, CustomerDto>()
-            .ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()));
+        CreateMap<Customer, CustomerDto>();   // Address and Billing use the mapping above
     }
+}
+
+// Generated (abridged):
+private static CustomerDto MapToCustomerDtoCore(Customer source)
+{
+    return new CustomerDto
+    {
+        Address = MapToAddressDtoCore(source.Address ?? NestedObjectIsNull<Address>("…")), // Address  → AddressDto
+        Billing = source.Billing is null ? null : MapToAddressDtoCore(source.Billing),     // Address? → AddressDto?
+    };
 }
 ```
 
-For attribute-based mappings, put `[Ignore]` on the destination property and assign it after mapping.
-The demo (`samples/IronMapper.Demo/Demos/Demo4_NestedObjects.cs`) does exactly that.
+Every mapping has a public `MapToX(source)`, which checks `source` for `null` as before, and a private `MapToXCore`
+with the same body without the check. A nested object calls `MapToXCore` directly, after its own check: one comparison,
+no second check and no throw inside the nested mapping, so the JIT can inline it.
+
+The `null` handling follows the nullable annotations (no `null!` for a non-nullable destination):
+
+| Source property | Destination property | Generated code |
+| --- | --- | --- |
+| `Address`, `Address?` or without annotations | `AddressDto?` or without annotations | `null` → `null` |
+| `Address` or without annotations (`#nullable disable`) | `AddressDto` | `null` throws `InvalidOperationException` that names both properties ([below](#null-in-a-non-nullable-nested-object)) |
+| `Address?` | `AddressDto` | error `IM0002`: declare the destination nullable or the source non-nullable, or configure the property (`MapFrom`, `Ignore`) |
+| a struct | any | `MapToAddressDtoCore(source.Address)`, no check |
+
+Which mapping is called: the one of the exact pair, otherwise the one of a base type or an interface of the source
+type (as for collection elements); a qualified method name (`IM0013`) is followed. A mapping of a referenced assembly
+is called as `source.Address.MapToAddressDto()`.
+
+**No mapping for the pair:** error [IM0002](diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping)
+at the destination property (or at `CreateMap` in a profile) names the pair and what to add; the property is not
+generated, the rest of the mapping is. A code fix adds the mapping: `[MapTo(typeof(AddressDto))]` on `Address` for an
+attribute mapping, `CreateMap<Address, AddressDto>();` after the `CreateMap` call in a profile. The same fix is offered
+for a collection whose elements have no mapping.
+
+**Explicit configuration wins:** `ForMember` with `MapFrom`, `UseConverter` or `Ignore`, `[MapConverter]` and `[Ignore]`
+(attribute mappings) — such a property is not mapped automatically. `IncludeMembers` does not map nested objects of the
+included members (`IM0002`).
+
+**Collections:** the elements of a nested collection are mapped by the public `MapToX` (a `null` element throws
+`ArgumentNullException`, as since 2.0.0); the nested objects of each element are mapped as above.
+
+### Null in a non-nullable nested object
+
+A property declared non-nullable can still hold `null` at run time. The usual case is an EF Core navigation:
+
+```csharp
+public class OrderEntity
+{
+    public int Id { get; set; }
+    public CustomerEntity Customer { get; set; } = null!;   // filled by EF, only when loaded
+}
+
+var order = await db.Orders.SingleAsync(o => o.Id == id);   // no .Include(o => o.Customer)
+var dto = order.MapToOrderDto();                             // order.Customer is null
+```
+
+The generated code checks the value before the nested mapping and throws `InvalidOperationException` with a message
+that names both properties and the usual cause:
+
+```text
+OrderEntity.Customer is null, but OrderDto.Customer is not nullable. If it is an EF navigation, check Include;
+otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.
+```
+
+The same check runs in the in-place overload and for a source without nullable annotations. The fixes:
+
+- load the navigation (`Include`, or a projection that reads it);
+- declare the destination property nullable (`CustomerDto? Customer`): `null` is then mapped to `null`;
+- configure the property: `ForMember(d => d.Customer, o => o.MapFrom(...))`, `Ignore()`, or `[Ignore]` on an
+  attribute mapping.
+
+The exception is `InvalidOperationException`, not `ArgumentNullException`: the argument of `MapToOrderDto` is not `null`,
+the object it refers to is in a state the mapping cannot handle. `IMapper` passes it on unchanged. The throw is in one
+helper of the generated class (`NestedObjectIsNull`, not inlined), so the mapping that checks stays small. AutoMapper
+maps such a `null` to `null` without an error; Mapperly emits no check, so the mapping fails with
+`NullReferenceException`.
+
+### In-place update of nested objects
+
+`source.MapToOrderEntity(entity)` (and `IMapper.Map(source, destination)`) updates the nested objects that the
+destination already holds instead of replacing them. This matters for EF Core: a tracked navigation replaced by a new
+instance is inserted as a new row or fails with a tracking conflict; an owned type is deleted and inserted again.
+
+```csharp
+var order = await db.Orders.Include(o => o.Customer).ThenInclude(c => c.Address).SingleAsync(o => o.Id == id);
+dto.MapToOrderEntity(order);     // order.Customer and order.Customer.Address are the same instances, with new values
+await db.SaveChangesAsync();     // UPDATE, no INSERT
+```
+
+For each nested object of the mapping (`Customer`, then `Address` inside it, any depth):
+
+| `source.Customer` | `destination.Customer` | Result |
+| --- | --- | --- |
+| an object | an object | the existing object is updated by the in-place mapping of the pair (of this project, or the public in-place `MapToX(source, destination)` of a referenced project); `ReferenceEquals` holds |
+| an object | `null` | a new object is created and assigned |
+| `null` | any | `null` for a nullable destination, otherwise the `InvalidOperationException` [above](#null-in-a-non-nullable-nested-object) |
+
+A new object is assigned (as before 2.1.0) when the existing one cannot be updated. Every case, and what to do when
+you need the update in place:
+
+| Case | Why | To update in place |
+| --- | --- | --- |
+| The destination property is a struct | the getter returns a copy; updating the copy changes nothing | declare the destination type a class (a struct is a value: assigning it is the update) |
+| The destination type of the pair has a mapped `init` property (a record with `init` properties) | the in-place overload skips `init` properties, so the updated object would keep their old values | make those properties settable (`set`), or `Ignore` them in the pair's mapping |
+| The mapping of the pair uses `ConvertUsing` | the converter makes the object | remove `ConvertUsing` and map the properties (`ForMember`), or update the object with your own code after the in-place call (the in-place overload does not call hooks) |
+| The mapping of the pair is in a referenced project with its in-place overload turned off (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`) | there is no public in-place `MapToX(source, destination)` to call | turn the in-place overload on for that pair in the referenced project |
+| The destination property has no getter the generated code can call (set-only, or a non-public getter) | the existing object cannot be read | add a public (or internal) getter |
+
+A referenced project's in-place overload is called as it is: if that mapping has `ConvertUsing` or `init` properties,
+its in-place overload ignores the converter and skips them (as for a top-level call). An `init`-only nested property
+itself is skipped by the in-place overload, as every `init` property (decided together with `init` in the in-place
+overload, item 2.15 of the plan). Properties of the
+nested object that the mapping does not set (an `Id` with `[Ignore]` or `Ignore()`) keep their values. Like the in-place
+overload itself, the update of a nested object ignores `When`, `ConvertUsing` and the hooks of the pair's mapping.
+
+The update uses the private in-place `MapToXCore(source, destination)` of the pair's mapping. It is generated for every
+mapping, also with the in-place overload turned off (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`,
+`GenerateMethods(inPlace: false)`): then there is no public in-place `MapToX`, and `IMapper.Map(source, destination)`
+still updates the nested objects. Collections are not merged: a nested collection is mapped to a new list or array, as
+before.
+
+### Cycles (IM0004)
+
+A cycle of mappings through an automatically mapped nested object gets warning
+[IM0004](diagnostics.md#im0004--nested-object-mapping-closes-a-cycle): `Employee.Manager` (an `Employee`),
+`Order.Customer.Orders`. A cycle of types recurses forever only when the data has a cycle (an order whose customer lists
+that order; then the mapping fails with `StackOverflowException`); a manager of a manager ends with `null` and is
+mapped. The generated code does not track mapped objects. Break the cycle with `Ignore` or `MapFrom` on a property of the
+chain, or suppress the warning for models that are always finite:
+
+```csharp
+public class EmployeeDto
+{
+#pragma warning disable IM0004 // a manager chain always ends
+    public EmployeeDto? Manager { get; set; }
+#pragma warning restore IM0004
+}
+```
+
+(or `dotnet_diagnostic.IM0004.severity = none` in `.editorconfig`). Cycles only through collections (a tree such as
+`Category.Children`) are not reported: they worked in 2.0.0 already.
+
+**Up to 2.0.0** a nested object was not mapped: the generator emitted `Address = source.Address` and the build failed
+with `CS0029` inside the generated file. The workaround of those versions,
+`ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`, still works. The demo
+(`samples/IronMapper.Demo/Demos/Demo4_NestedObjects.cs`) composes a book from two API responses, so it maps the author
+separately and attaches it.
 
 ---
 
@@ -215,13 +354,14 @@ report, method, the other libraries and the comparison with 1.1.3 measured in th
 - `IMapper` cold start: the DI container alone (the same hand-written mapping resolved from it, `Manual_DI`) is
   +15.3 ms; IronMapper adds 4.5 ms on top of it (registration of the mappings when the first `IMapper` is created, and
   the first call), more with more mappings. 1.1.3: 6.4 ms.
-- In the Nested scenario IronMapper maps the nested objects through `ForMember(... MapFrom(...))` (see
-  [Nested objects](#nested-objects)); Mapperly maps them automatically and is at ×0.98 there. The generated code has
-  no LINQ and no delegates (loops of a known size, see
+- In the Nested scenario of these 2.0.0 numbers IronMapper maps the nested objects through `ForMember(... MapFrom(...))`
+  (2.0.0 does not map them automatically); Mapperly maps them automatically and is at ×0.98 there. The generated code
+  has no LINQ and no delegates (loops of a known size, see
   [Nested collection properties](#nested-collection-properties)); 1.1.3 used `Enumerable.Select` + `ToList` and was at
-  ×1.25. The remaining Nested gap is the null checks of the generated methods: they keep the JIT from inlining
-  `MapToAddressDto` into `MapToCustomerDto` (checked with `DisassemblyDiagnoser`). They are the documented behavior;
-  2.1.0 is to call an inner method without the check for nested objects.
+  ×1.25. The remaining Nested gap of 2.0.0 is the null checks of the generated methods: they keep the JIT from inlining
+  `MapToAddressDto` into `MapToCustomerDto` (checked with `DisassemblyDiagnoser`). From 2.1.0 the suite maps the nested
+  objects automatically, and a nested object calls the inner `MapToXCore` without the check (see
+  [Nested objects](#nested-objects)); this is not measured yet.
 - Collection differences of a few percent are within the run-to-run spread: at 1 000 orders this run has `IMapper`
   faster than the extension methods it calls, and a separate run of IronMapper alone gave ×1.01.
 - Cold start is sensitive to noise; read it as an order of magnitude (AutoMapper +72.1 ms, Mapster +98.2 ms). The

@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.OrderDto MapToOrderDto(this global::App.Order source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToOrderDtoCore(source);
+        }
+
+        private static global::App.OrderDto MapToOrderDtoCore(global::App.Order source)
+        {
             return new global::App.OrderDto
             {
                 Id = source.Id,
@@ -26,6 +31,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToOrderDtoCore(source, destination);
+        }
+
+        private static void MapToOrderDtoCore(global::App.Order source, global::App.OrderDto destination)
+        {
             destination.Id = source.Id;
             destination.Address = global::App.OrderProfile.Join(source.Street, source.City);
         }

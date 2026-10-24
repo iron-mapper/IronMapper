@@ -4,14 +4,10 @@
 
 ## Вложенные объекты
 
-Вложенные **одиночные** объекты **пока не маппятся автоматически**. Если у source и destination есть
-свойство с одинаковым именем, но разными типами (`Customer.Address` → `CustomerDto.Address` типа `AddressDto`), сборка
-падает с ошибкой [IM0002](diagnostics.ru.md#im0002--несовместимые-типы-свойств-или-нет-маппинга) на свойстве
-destination (или на `CreateMap` в профиле), и свойство не генерируется. До 2.0.0 включительно генератор выдавал
-`Address = source.Address`, и сборка падала с `CS0029` внутри сгенерированного файла.
-
-**Обходной путь (профиль):** замапьте вложенное свойство явно через `MapFrom`. Лямбда выводится в
-сгенерированный класс, где доступны остальные сгенерированные методы `MapTo*`:
+Начиная с 2.1.0 вложенный объект маппится маппингом своей пары типов. Если у source и destination есть свойство с
+одинаковым именем и разными типами (`Customer.Address` → `CustomerDto.Address` типа `AddressDto`) и в проекте есть
+маппинг `Address` → `AddressDto` (атрибут или профиль, в этом проекте или в проекте, на который он ссылается),
+сгенерированный код вызывает его. `ForMember` не нужен:
 
 ```csharp
 public class CustomerProfile : MappingProfile
@@ -19,14 +15,158 @@ public class CustomerProfile : MappingProfile
     public CustomerProfile()
     {
         CreateMap<Address, AddressDto>();
-        CreateMap<Customer, CustomerDto>()
-            .ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()));
+        CreateMap<Customer, CustomerDto>();   // Address и Billing маппятся маппингом выше
     }
+}
+
+// Сгенерировано (сокращённо):
+private static CustomerDto MapToCustomerDtoCore(Customer source)
+{
+    return new CustomerDto
+    {
+        Address = MapToAddressDtoCore(source.Address ?? NestedObjectIsNull<Address>("…")), // Address  → AddressDto
+        Billing = source.Billing is null ? null : MapToAddressDtoCore(source.Billing),     // Address? → AddressDto?
+    };
 }
 ```
 
-Для маппингов через атрибуты поставьте `[Ignore]` на свойство destination и присвойте его после маппинга.
-Так сделано в демо (`samples/IronMapper.Demo/Demos/Demo4_NestedObjects.cs`).
+У каждого маппинга есть публичный `MapToX(source)`, который, как и раньше, проверяет `source` на `null`, и закрытый
+`MapToXCore` с тем же телом без проверки. Вложенный объект вызывает `MapToXCore` напрямую, после своей проверки: одно
+сравнение, во вложенном маппинге нет второй проверки и броска исключения, и JIT может его встроить.
+
+Обработка `null` следует nullable-аннотациям (без `null!` для destination, который не допускает `null`):
+
+| Свойство source | Свойство destination | Сгенерированный код |
+| --- | --- | --- |
+| `Address`, `Address?` или без аннотаций | `AddressDto?` или без аннотаций | `null` → `null` |
+| `Address` или без аннотаций (`#nullable disable`) | `AddressDto` | `null` даёт `InvalidOperationException`, в сообщении оба свойства ([ниже](#null-во-вложенном-объекте-который-не-допускает-null)) |
+| `Address?` | `AddressDto` | ошибка `IM0002`: объявите destination допускающим `null` или source — не допускающим, либо настройте свойство (`MapFrom`, `Ignore`) |
+| struct | любое | `MapToAddressDtoCore(source.Address)` без проверки |
+
+Какой маппинг вызывается: маппинг точной пары, иначе маппинг базового типа или интерфейса типа source (как для
+элементов коллекций); уточнённое имя метода (`IM0013`) учитывается. Маппинг из сборки-зависимости вызывается как
+`source.Address.MapToAddressDto()`.
+
+**Нет маппинга для пары:** ошибка [IM0002](diagnostics.ru.md#im0002--несовместимые-типы-свойств-или-нет-маппинга) на
+свойстве destination (или на `CreateMap` в профиле) называет пару и что добавить; свойство не генерируется, остальной
+маппинг — да. Code fix добавляет маппинг: `[MapTo(typeof(AddressDto))]` на `Address` для маппинга через атрибуты,
+`CreateMap<Address, AddressDto>();` после вызова `CreateMap` в профиле. Тот же fix предлагается для коллекции, у
+элементов которой нет маппинга.
+
+**Явная настройка важнее:** `ForMember` с `MapFrom`, `UseConverter` или `Ignore`, `[MapConverter]` и `[Ignore]`
+(маппинги через атрибуты) — такое свойство автоматически не маппится. `IncludeMembers` не маппит вложенные объекты
+включённых членов (`IM0002`).
+
+**Коллекции:** элементы вложенной коллекции маппятся публичным `MapToX` (`null`-элемент даёт `ArgumentNullException`,
+как с 2.0.0); вложенные объекты каждого элемента — как описано выше.
+
+### `null` во вложенном объекте, который не допускает `null`
+
+Свойство, объявленное не допускающим `null`, во время выполнения всё равно может содержать `null`. Типичный случай —
+навигация EF Core:
+
+```csharp
+public class OrderEntity
+{
+    public int Id { get; set; }
+    public CustomerEntity Customer { get; set; } = null!;   // заполняет EF, только если загружена
+}
+
+var order = await db.Orders.SingleAsync(o => o.Id == id);   // без .Include(o => o.Customer)
+var dto = order.MapToOrderDto();                             // order.Customer == null
+```
+
+Сгенерированный код проверяет значение перед вложенным маппингом и бросает `InvalidOperationException` с сообщением,
+в котором названы оба свойства и обычная причина:
+
+```text
+OrderEntity.Customer is null, but OrderDto.Customer is not nullable. If it is an EF navigation, check Include;
+otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.
+```
+
+Та же проверка — в in-place перегрузке и для source без nullable-аннотаций. Что сделать:
+
+- загрузить навигацию (`Include` или проекция, которая её читает);
+- объявить свойство destination допускающим `null` (`CustomerDto? Customer`): тогда `null` → `null`;
+- настроить свойство: `ForMember(d => d.Customer, o => o.MapFrom(...))`, `Ignore()` или `[Ignore]` в маппинге через
+  атрибуты.
+
+Исключение — `InvalidOperationException`, а не `ArgumentNullException`: аргумент `MapToOrderDto` не `null`, а объект,
+на который он ссылается, в состоянии, с которым маппинг не справится. `IMapper` передаёт его без изменений. Бросок
+вынесен в один вспомогательный метод сгенерированного класса (`NestedObjectIsNull`, не встраивается), поэтому маппинг с
+проверкой остаётся маленьким. AutoMapper маппит такой `null` в `null` без ошибки; Mapperly проверку не генерирует, и
+маппинг падает с `NullReferenceException`.
+
+### In-place обновление вложенных объектов
+
+`source.MapToOrderEntity(entity)` (и `IMapper.Map(source, destination)`) обновляет вложенные объекты, которые уже есть в
+destination, а не заменяет их. Это важно для EF Core: отслеживаемая навигация, заменённая новым экземпляром, вставляется
+новой строкой или падает с конфликтом отслеживания; owned-тип удаляется и вставляется заново.
+
+```csharp
+var order = await db.Orders.Include(o => o.Customer).ThenInclude(c => c.Address).SingleAsync(o => o.Id == id);
+dto.MapToOrderEntity(order);     // order.Customer и order.Customer.Address — те же экземпляры, с новыми значениями
+await db.SaveChangesAsync();     // UPDATE, без INSERT
+```
+
+Для каждого вложенного объекта маппинга (`Customer`, затем `Address` внутри него, любая глубина):
+
+| `source.Customer` | `destination.Customer` | Результат |
+| --- | --- | --- |
+| объект | объект | существующий объект обновляется in-place маппингом пары (этого проекта или публичным in-place `MapToX(source, destination)` проекта-зависимости); `ReferenceEquals` сохраняется |
+| объект | `null` | создаётся и присваивается новый объект |
+| `null` | любое | `null` для destination, допускающего `null`, иначе `InvalidOperationException` ([выше](#null-во-вложенном-объекте-который-не-допускает-null)) |
+
+Новый объект присваивается (как до 2.1.0), если существующий обновить нельзя. Все случаи и что сделать, если нужно
+обновление на месте:
+
+| Случай | Почему | Чтобы обновлялось на месте |
+| --- | --- | --- |
+| Свойство destination — struct | getter возвращает копию, изменение копии ничего не меняет | объявить тип destination классом (struct — значение: присваивание и есть обновление) |
+| У типа destination пары есть сопоставленное `init`-свойство (record с `init`-свойствами) | in-place перегрузка пропускает `init`-свойства, и в обновлённом объекте остались бы старые значения | сделать эти свойства изменяемыми (`set`) или `Ignore` их в маппинге пары |
+| Маппинг пары использует `ConvertUsing` | объект создаёт конвертер | убрать `ConvertUsing` и маппить свойства (`ForMember`) или обновлять объект своим кодом после in-place вызова (in-place перегрузка хуки не вызывает) |
+| Маппинг пары — в проекте-зависимости, и in-place там выключен (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`) | нет публичного in-place `MapToX(source, destination)`, который можно вызвать | включить in-place перегрузку для этой пары в проекте-зависимости |
+| У свойства destination нет getter, который может вызвать сгенерированный код (только `set` или непубличный getter) | существующий объект нельзя прочитать | добавить публичный (или internal) getter |
+
+In-place перегрузка проекта-зависимости вызывается как есть: если у того маппинга `ConvertUsing` или `init`-свойства,
+его in-place перегрузка игнорирует конвертер и пропускает их (как при вызове верхнего уровня). Само вложенное
+`init`-свойство in-place перегрузка пропускает, как любое `init`-свойство (решается вместе со всеми `init` в in-place,
+п.2.15 плана). Свойства вложенного объекта,
+которые маппинг не задаёт (`Id` с `[Ignore]` или `Ignore()`), сохраняют значения. Как и сама in-place перегрузка,
+обновление вложенного объекта игнорирует `When`, `ConvertUsing` и хуки маппинга пары.
+
+Обновляет закрытый in-place `MapToXCore(source, destination)` маппинга пары. Он генерируется для каждого маппинга, в
+том числе с выключенной in-place перегрузкой (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`,
+`GenerateMethods(inPlace: false)`): тогда публичного in-place `MapToX` нет, а `IMapper.Map(source, destination)`
+по-прежнему обновляет вложенные объекты. Коллекции не сливаются: вложенная коллекция, как и раньше, маппится в новый
+список или массив.
+
+### Циклы (IM0004)
+
+Цикл маппингов через автоматически смапленный вложенный объект даёт предупреждение
+[IM0004](diagnostics.ru.md#im0004--цикл-маппингов-через-вложенный-объект): `Employee.Manager` (типа `Employee`),
+`Order.Customer.Orders`. Цикл типов приводит к бесконечной рекурсии, только если цикл есть в данных (заказ, у покупателя
+которого в списке этот же заказ; тогда маппинг падает с `StackOverflowException`); цепочка руководителей заканчивается
+на `null` и маппится. Сгенерированный код не отслеживает уже смапленные объекты. Разорвите цикл через `Ignore` или
+`MapFrom` на свойстве цепочки или подавите предупреждение для моделей, которые всегда конечны:
+
+```csharp
+public class EmployeeDto
+{
+#pragma warning disable IM0004 // цепочка руководителей всегда заканчивается
+    public EmployeeDto? Manager { get; set; }
+#pragma warning restore IM0004
+}
+```
+
+(или `dotnet_diagnostic.IM0004.severity = none` в `.editorconfig`). Циклы только через коллекции (дерево вроде
+`Category.Children`) не сообщаются: они работали уже в 2.0.0.
+
+**До 2.0.0 включительно** вложенный объект не маппился: генератор выдавал `Address = source.Address`, и сборка падала с
+`CS0029` внутри сгенерированного файла. Обходной путь этих версий,
+`ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`, по-прежнему работает. Демо
+(`samples/IronMapper.Demo/Demos/Demo4_NestedObjects.cs`) собирает книгу из двух ответов API, поэтому маппит автора
+отдельно и присоединяет его.
 
 ---
 
@@ -214,13 +354,14 @@ IronMapper 2.0.0, .NET 10.0.12 и .NET 8, Intel Core i7-12650H; среднее �
 - Холодный старт `IMapper`: сам DI-контейнер (тот же ручной маппинг, полученный из него, `Manual_DI`) — +15,3 мс;
   IronMapper добавляет к нему 4,5 мс (регистрация маппингов при создании первого `IMapper` и первый вызов), больше — при
   большем числе маппингов. В 1.1.3 — 6,4 мс.
-- В сценарии Nested IronMapper маппит вложенные объекты через `ForMember(... MapFrom(...))` (см.
-  [Вложенные объекты](#вложенные-объекты)); Mapperly маппит их автоматически, у него там ×0,98. В сгенерированном коде
-  нет LINQ и делегатов (циклы с известным размером, см.
+- В сценарии Nested этих цифр 2.0.0 IronMapper маппит вложенные объекты через `ForMember(... MapFrom(...))` (2.0.0 не
+  маппит их автоматически); Mapperly маппит их автоматически, у него там ×0,98. В сгенерированном коде нет LINQ и
+  делегатов (циклы с известным размером, см.
   [Вложенные collection-свойства](#вложенные-collection-свойства)); 1.1.3 использовала `Enumerable.Select` + `ToList` и
-  давала ×1,25. Оставшийся разрыв в Nested — проверки на null в сгенерированных методах: из-за них JIT не встраивает
-  `MapToAddressDto` в `MapToCustomerDto` (проверено `DisassemblyDiagnoser`). Это документированное поведение; в
-  2.1.0 для вложенных объектов планируется вызов внутреннего метода без проверки.
+  давала ×1,25. Оставшийся разрыв в Nested у 2.0.0 — проверки на null в сгенерированных методах: из-за них JIT не
+  встраивает `MapToAddressDto` в `MapToCustomerDto` (проверено `DisassemblyDiagnoser`). Начиная с 2.1.0 набор маппит
+  вложенные объекты автоматически, а вложенный объект вызывает внутренний `MapToXCore` без проверки (см.
+  [Вложенные объекты](#вложенные-объекты)); это пока не измерено.
 - Разница в коллекциях в несколько процентов — в пределах разброса между запусками: на 1 000 заказов в этом прогоне
   `IMapper` быстрее extension-методов, которые он вызывает, а отдельный прогон только IronMapper дал ×1,01.
 - Холодный старт чувствителен к шуму, смотрите на порядок величины (AutoMapper +72,1 мс, Mapster +98,2 мс). Пробы

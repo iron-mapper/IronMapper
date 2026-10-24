@@ -66,8 +66,8 @@ same source type) is used:
 | `Global` namespace: `Dto` and `App.Dto` | `MapToGlobalDto`, `MapToAppDto` |
 | `App.SummaryDto` (no collision) | `MapToSummaryDto`, unchanged |
 
-Generated code that maps nested collection elements and `IMapper` (`IronMapper.Extensions.DI`, which uses the
-generated registration) use the qualified names automatically. Code you write — including `MapFrom` lambdas — must call the
+Generated code that maps nested objects and nested collection elements and `IMapper` (`IronMapper.Extensions.DI`, which
+uses the generated registration) use the qualified names automatically. Code you write — including `MapFrom` lambdas — must call the
 qualified name. If no rule gives unique names (they are all taken by other mappings), the mappings of that group are not
 generated and error [`IM0014`](diagnostics.md#im0014--mapping-method-name-collision-cannot-be-resolved) is reported.
 
@@ -254,7 +254,9 @@ public class OrderProfile : MappingProfile
   Without `MapToXList`/`MapToXArray` the registry fills the list or array itself, calling `MapToX` once per element
   through a delegate (`IMapper` calls delegates anyway; the extension methods are not involved).
 - **In-place:** turning it off removes only the public method. Its body stays as a private method that `IMapper` calls for
-  `Map(source, destination)`, so it hardly changes the amount of generated code or the coverage. For coverage, use
+  `Map(source, destination)`, so it hardly changes the amount of generated code or the coverage. The private in-place
+  `MapToXCore(source, destination)` stays too: the in-place overloads of other mappings call it to update an existing
+  nested object of this pair ([In-place update of nested objects](advanced.md#in-place-update-of-nested-objects)). For coverage, use
   `IronMapperExcludeFromCodeCoverage` (below).
 
 ### Attributes of the generated class

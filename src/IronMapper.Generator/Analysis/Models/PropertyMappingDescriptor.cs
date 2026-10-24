@@ -89,11 +89,45 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     public string? CollectionDestElementFqn { get; }
 
     /// <summary>
-    /// IM0002 for a collection element: the element type pairs of which this compilation must generate one, otherwise the
-    /// property is not generated (<see cref="MappingPlan.GeneratesAny"/>); empty when the elements need no mapping of
-    /// this compilation (not a mapped collection, or a referenced assembly maps them).
+    /// The type pairs of the collection element or of the nested object (<see cref="NestedMapMethod"/>) of which this
+    /// compilation must generate one, otherwise the property is not generated and IM0002 is reported
+    /// (<see cref="MappingPlan.GeneratesAny"/>). A nested object calls the <c>…Core</c> of the first generated one. Empty when
+    /// the value needs no mapping of this compilation (not a mapped collection or nested object, or a referenced
+    /// assembly maps it).
     /// </summary>
-    public EquatableArray<string> MissingElementPairs { get; }
+    public EquatableArray<string> MappingPairs { get; }
+
+    /// <summary>
+    /// When non-null, the property is a nested object mapped by a mapping of its type pair (<see cref="MappingPairs"/>,
+    /// or a referenced assembly's mapping): <c>MapTo{DestType}</c>, called as an extension method when the mapping is not
+    /// generated in this compilation.
+    /// </summary>
+    public string? NestedMapMethod { get; }
+
+    /// <summary>
+    /// How a nested object (<see cref="NestedMapMethod"/>) is passed to its mapping, by the nullable annotations of the
+    /// source and the destination (<see cref="Analysis.NullHandling"/>); <see langword="null"/> for other properties.
+    /// Collection elements always call the public method (<c>ArgumentNullException</c> for a <see langword="null"/>
+    /// element, as in 2.0.0).
+    /// </summary>
+    public string? NullHandling { get; }
+
+    /// <summary>
+    /// The in-place overload may update the existing nested object (<see cref="NestedMapMethod"/>): when
+    /// <c>destination.{Property}</c> is not <see langword="null"/>, its properties are mapped into it by the in-place
+    /// <c>…Core</c> of the pair (also needs <see cref="MappingPlanEntry.CanUpdateInPlace"/> of the pair's mapping) or by
+    /// the public in-place overload of a referenced assembly's mapping, so a tracked EF navigation keeps its instance;
+    /// otherwise a new object is assigned. <see langword="false"/> for a struct (the getter returns a copy), a property
+    /// without an accessible getter, and a referenced assembly's mapping without the in-place overload.
+    /// </summary>
+    public bool NestedUpdatesInPlace { get; }
+
+    /// <summary>
+    /// Fully qualified source type of a nested object (<see cref="NestedMapMethod"/>, without <c>?</c>): the type argument
+    /// of <c>NestedObjectIsNull&lt;T&gt;</c> for <see cref="Analysis.NullHandling.Throw"/>; <see langword="null"/> for
+    /// other properties.
+    /// </summary>
+    public string? NestedSourceTypeFqn { get; }
 
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
@@ -107,7 +141,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="includedMemberTypeFqn">The FQN of the nested property type when this property was resolved via IncludeMembers, or <see langword="null"/> otherwise.</param>
     /// <param name="collection">The element mapping when source and destination are collections of different element types, or <see langword="null"/>.</param>
     /// <param name="converterIsCached">When <see langword="true"/> the generated code reuses one instance of <paramref name="converterType"/>.</param>
-    /// <param name="missingElementPairs">See <see cref="MissingElementPairs"/>.</param>
+    /// <param name="mappingPairs">See <see cref="MappingPairs"/>.</param>
+    /// <param name="nested">The nested object mapping, or <see langword="null"/>.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -120,9 +155,14 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         string? includedMemberTypeFqn = null,
         CollectionMapping? collection = null,
         bool converterIsCached = false,
-        EquatableArray<string> missingElementPairs = default)
+        EquatableArray<string> mappingPairs = default,
+        NestedObjectMapping? nested = null)
     {
-        MissingElementPairs = missingElementPairs;
+        MappingPairs = mappingPairs;
+        NestedMapMethod = nested?.Method;
+        NullHandling = nested?.NullHandling;
+        NestedUpdatesInPlace = nested?.UpdatesInPlace ?? false;
+        NestedSourceTypeFqn = nested?.SourceTypeFqn;
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
         IsIgnored = isIgnored;
@@ -162,7 +202,11 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && CollectionSourceKind == other.CollectionSourceKind
             && CollectionSourceTypeFqn == other.CollectionSourceTypeFqn
             && CollectionDestElementFqn == other.CollectionDestElementFqn
-            && MissingElementPairs.Equals(other.MissingElementPairs);
+            && MappingPairs.Equals(other.MappingPairs)
+            && NestedMapMethod == other.NestedMapMethod
+            && NullHandling == other.NullHandling
+            && NestedUpdatesInPlace == other.NestedUpdatesInPlace
+            && NestedSourceTypeFqn == other.NestedSourceTypeFqn;
     }
 
     /// <inheritdoc/>
@@ -188,7 +232,11 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + (CollectionSourceKind?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionSourceTypeFqn?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionDestElementFqn?.GetHashCode() ?? 0);
-        hash = hash * 31 + MissingElementPairs.GetHashCode();
+        hash = hash * 31 + MappingPairs.GetHashCode();
+        hash = hash * 31 + (NestedMapMethod?.GetHashCode() ?? 0);
+        hash = hash * 31 + (NullHandling?.GetHashCode() ?? 0);
+        hash = hash * 31 + NestedUpdatesInPlace.GetHashCode();
+        hash = hash * 31 + (NestedSourceTypeFqn?.GetHashCode() ?? 0);
         return hash;
     }
 }

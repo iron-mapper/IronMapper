@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.TagDto MapToTagDto(this global::App.Tag source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToTagDtoCore(source);
+        }
+
+        private static global::App.TagDto MapToTagDtoCore(global::App.Tag source)
+        {
             return new global::App.TagDto
             {
                 Label = ConverterCache<global::App.Upper>.Instance.Convert(source.Label),
@@ -26,6 +31,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToTagDtoCore(source, destination);
+        }
+
+        private static void MapToTagDtoCore(global::App.Tag source, global::App.TagDto destination)
+        {
             destination.Label = ConverterCache<global::App.Upper>.Instance.Convert(source.Label);
             destination.Order = new global::App.Sequence().Convert(source.Order);
         }

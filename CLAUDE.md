@@ -31,7 +31,7 @@ IronMapper/
 │   │   ├── Analysis/                   # Attribute/profile analysis, MappingPlanner (duplicates, method names)
 │   │   ├── CodeGeneration/             # MapperCodeEmitter
 │   │   └── Diagnostics/                # IMxxxx descriptors
-│   ├── IronMapper.CodeFixes/          # Code fixes for IM0001 and IM0006 (shipped inside the IronMapper package)
+│   ├── IronMapper.CodeFixes/          # Code fixes for IM0001, IM0002 and IM0006 (shipped inside the IronMapper package)
 │   └── IronMapper.Extensions.DI/      # Separate package: AddIronMapper(), IMapper implementation (RuntimeMapper)
 ├── tests/
 │   ├── IronMapper.Tests/              # Runtime tests with the generator attached (xUnit)
@@ -88,6 +88,10 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   - `MapToX(this Source source)` — new destination object;
   - `MapToX(this Source source, X destination)` — in-place update (skips `init` properties);
   - `MapToXList(this IEnumerable<Source>? source)` and `MapToXArray(...)` — collections.
+  `MapToX(source)` checks `source` for `null` and calls the private `MapToXCore(source)` with the body
+  (`MappingPlanEntry.CoreMethodName`: `{MethodName}Core`, or `{MethodName}Core{HelperScope}` when a mapping of the same
+  source is named so); nested objects call `MapToXCore` directly. The in-place overload (or its private `MapInto{scope}`)
+  checks both arguments and calls the private in-place `MapToXCore(source, destination)`, generated for every mapping.
   The last three are optional (`GeneratedMethods`: MSBuild `IronMapperGenerateInPlace/List/Array`, per mapping
   `GenerateInPlace/List/Array` on the attributes or `GenerateMethods(...)` in a profile, `MappingDescriptor.MethodOverrides`).
   A turned-off in-place overload stays as `private static void MapInto{scope}(source, destination)` for the registration;
@@ -116,6 +120,28 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `CreateMap` wins over `ReverseMap`, `[MapTo]`, `[MapFrom]`). Two mappings from one source to destinations with the
   same simple name get qualified names — destination namespace/containing-type segments, then type arguments
   (`MapToAdminUserDto`, `MapToBoxOfInt32`), IM0013; if nothing is unique — IM0014, not generated.
+- **Nested objects** (`PropertyTypeCheck.CheckNestedObject`, issue #23): a name-matched property whose types differ and
+  are objects (`IsObject`) is mapped by the mapping of its pair — `PropertyMappingDescriptor.NestedMapMethod`,
+  `MappingPairs` (the source type, its base types and interfaces → the destination type; empty when a referenced
+  assembly maps it, then `source.X.MapToY()`), `NullHandling` (`Analysis/NullHandling.cs`: `is null ? null :` for a
+  destination that accepts `null`; `Throw` — `source.X ?? NestedObjectIsNull<X>("…")` — for a non-nullable destination
+  (`InvalidOperationException` naming both properties; the generic helper with `NoInlining` is declared once in
+  `GeneratedMappers.g.cs` when `MappingPlanEntry.UsesNestedObjectCheck`); no check for a struct source; IM0002 for a
+  nullable source and a non-nullable destination). In-place (`MapperCodeEmitter.EmitNestedUpdate`): an existing
+  `destination.X` is updated by the in-place `MapToYCore(source.X, destination.X)`, `null` gets a new object;
+  `PropertyMappingDescriptor.NestedUpdatesInPlace` (a class with an accessible getter; a pair of this compilation, or a
+  referenced assembly's mapping with the public in-place overload — `PropertyTypeCheck.IsUpdatedByExistingMethod`, then
+  `source.X.MapToY(destination.X)`) and, for a pair of this compilation, `MappingPlanEntry.CanUpdateInPlace` (no
+  `ConvertUsing`, no mapped `init` property); otherwise a new object is assigned. Like a collection element, the IM0002 "no
+  mapping for the pair" carries `IfNoMappingFor` and is reported only when the plan generates none of the pairs
+  (`MapperCodeEmitter.IsMappingMissing`). Elements of nested collections keep calling the public `MapToX`
+  (`ArgumentNullException` for a `null` element, documented in 2.0.0). IM0004 (warning): each automatically mapped nested
+  object has a candidate diagnostic (`CycleProperty`); `CollectDiagnostics` reports it only when the property closes a
+  cycle of generated mappings (`Analysis/MappingCycles.cs`: edges are nested objects and collection elements mapped
+  automatically; none from a `ConvertUsing` mapping), with the chain as the last message argument. Tests:
+  `NestedObjectTests`, `CyclicMappingTests`, `tests/IronMapper.Tests/NestedObjectTests.cs` (in-place `ReferenceEquals`
+  over two levels, the exception message; also `#pragma` with `TreatWarningsAsErrors`),
+  `tests/IronMapper.Integration.Tests/NestedObjectMapperTests.cs` (`IMapper`, in-place overloads turned off).
 - **Converters** (`Analysis/ConverterAnalyzer.cs`): `[MapConverter]`, `UseConverter<T>()`, `ConvertUsing<T>()`. A
   converter without state (class with a public parameterless constructor, no instance fields/field-like events/finalizer
   in its hierarchy except `object`, constructors without code, every type of the hierarchy in source) is reused through
@@ -146,9 +172,11 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `RegistryCollection` (`RegistrationGeneratorTests` turns the feature switch off process-wide).
 
 ### `src/IronMapper.CodeFixes` (netstandard2.0)
-Code fixes for IM0001 (`[Ignore]` on the destination property; `ForMember(..., opt => opt.Ignore())` in a profile) and
-IM0006 (closest destination property). They find their node by the diagnostic's location and read diagnostic properties
-(`PropertyName`, `DestinationProperties`), never the message text. Tests: `tests/IronMapper.CodeFixes.Tests`
+Code fixes for IM0001 (`[Ignore]` on the destination property; `ForMember(..., opt => opt.Ignore())` in a profile),
+IM0002 "no mapping for the pair" of a nested object or a collection element (`[MapTo(typeof(D))]` on the source type,
+or `[MapFrom(typeof(S))]` on the destination type; `CreateMap<S, D>();` after the statement in a profile) and IM0006
+(closest destination property). They find their node by the diagnostic's location and read diagnostic properties
+(`PropertyName`, `DestinationProperties`, `PairSourceId`/`PairSourceType`/…, `MappingOrigin`), never the message text. Tests: `tests/IronMapper.CodeFixes.Tests`
 (`CSharpCodeFixTest` with the generator attached through `GetSourceGenerators`).
 
 ### `src/IronMapper.Extensions.DI` (netstandard2.1 + net10.0)
@@ -242,12 +270,17 @@ a PR (only the CI smoke check); the full run is a separate task before a release
   `-f`. The probes (cold start, NativeAOT, size, build time) and `tools/` are `net10.0` only. The runtime benchmarks are
   published for .NET 10 and .NET 8 (BenchmarkDotNet output in `raw/bdn/` and `raw/bdn-net8.0/`).
 - **IronMapper source:** by default the **published** package (`IronMapperPackageVersion` in
-  `benchmarks/Directory.Packages.props`, default 1.1.3); add `-p:UseLocalIronMapper=true` (or the environment variable
-  `UseLocalIronMapper=true` for the scripts) to measure the local sources through project references.
+  `benchmarks/Directory.Packages.props`, default 1.1.3). To measure the local sources through project references set the
+  **environment variable** `UseLocalIronMapper=true`: BenchmarkDotNet builds the benchmark project again in a child
+  process that inherits the environment but gets no `-p:` property of the parent `dotnet run`
+  (`dotnet run -p:UseLocalIronMapper=true -- --filter ...` measures the package, 1.1.3). `-p:` is enough for
+  `dotnet build`/`dotnet test`. Another published version: environment variable `IronMapperPackageVersion`.
   `run-all.ps1 -UseLocalIronMapper` uses project references only for build, tests and the runtime benchmarks; cold start,
   NativeAOT, size and build time use the local sources packed as `<Version>-local.<timestamp>` (`New-LocalIronMapperPackage`,
   `IronMapperPackageVersion` + `IronMapperPackageSource`), because a project reference copies `.pdb`/XML docs into the
   publish folder and rebuilds `../src` inside every timed build.
+- **Feature matrix:** `FeatureMatrixTests.Write_feature_matrix` writes `results/feature-matrix.md` only with
+  `IRONMAPPER_WRITE_FEATURE_MATRIX=true` (set by the test step of `run-all.ps1`); a plain `dotnet test` skips it.
 - **Results:** `benchmarks/results/<run>/RESULTS.md` (generated by `scripts/generate-report.ps1`, do not edit by hand):
   the 2.0.0 release run in `results/2.0.0/` (measured as 1.2.0 at `909da54`, the folder renamed and the reports
   regenerated with the label 2.0.0; with the comparison to `results/1.1.3-rerun/`, same session,
@@ -269,7 +302,8 @@ a PR (only the CI smoke check); the full run is a separate task before a release
 ```bash
 cd benchmarks
 dotnet test IronMapper.Comparison.slnx -c Release -p:UseLocalIronMapper=true      # equivalence gate (both TFMs)
-dotnet run -c Release -f net10.0 --project src/Comparison.Benchmarks -p:UseLocalIronMapper=true -- --filter '*.NestedBenchmark.*'
+UseLocalIronMapper=true dotnet run -c Release -f net10.0 --project src/Comparison.Benchmarks -- --filter '*.NestedBenchmark.*'
+pwsh ./scripts/run-quick.ps1          # A/B: published 2.0.0 vs ../src (Nested, InPlace; net10.0, net8.0) -> artifacts/quick/
 pwsh ./scripts/run-all.ps1            # full run -> results/RESULTS.md; -Quick for a shorter local run
 ```
 
@@ -308,7 +342,7 @@ pwsh ./eng/verify-package.ps1
 pwsh ./eng/verify-aot.ps1
 
 # Comparison benchmarks (local sources); full run: pwsh benchmarks/scripts/run-all.ps1
-dotnet run -c Release -f net10.0 --project benchmarks/src/Comparison.Benchmarks -p:UseLocalIronMapper=true -- --filter '*.FlatBenchmark.*'
+UseLocalIronMapper=true dotnet run -c Release -f net10.0 --project benchmarks/src/Comparison.Benchmarks -- --filter '*.FlatBenchmark.*'
 ```
 
 ### Rule: verify packaging and CI changes on a clean tree

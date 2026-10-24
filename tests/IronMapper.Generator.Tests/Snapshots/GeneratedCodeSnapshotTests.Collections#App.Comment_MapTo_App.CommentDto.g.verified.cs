@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.CommentDto MapToCommentDto(this global::App.Comment source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToCommentDtoCore(source);
+        }
+
+        private static global::App.CommentDto MapToCommentDtoCore(global::App.Comment source)
+        {
             return new global::App.CommentDto
             {
                 Text = source.Text,
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToCommentDtoCore(source, destination);
+        }
+
+        private static void MapToCommentDtoCore(global::App.Comment source, global::App.CommentDto destination)
+        {
             destination.Text = source.Text;
         }
 

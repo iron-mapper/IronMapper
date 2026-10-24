@@ -12,7 +12,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0001 | Warning | Несопоставленное свойство destination | Да — `[MapTo]`/`[MapFrom]`; профили с `IronMapperReportUnmappedInProfiles` |
 | IM0002 | Error | Несовместимые типы свойств или нет маппинга | Да — атрибуты и профили (начиная с 2.1.0) |
 | IM0003 | Error | Тип в `[MapTo]`/`[MapFrom]` нельзя смапить | Да — открытые generic-типы и массивы; неразрешённый тип сообщает только компилятор |
-| IM0004 | Error | Обнаружен циклический маппинг | **Пока не выдаётся** |
+| IM0004 | Warning | Цикл маппингов через вложенный объект | Да — циклы через автоматически смапленный вложенный объект (начиная с 2.1.0) |
 | IM0005 | Warning | Пустой MappingProfile | Да |
 | IM0006 | Error | Свойство из `[MapProperty]` не найдено в destination | Да |
 | IM0007 | Warning | Повторное определение маппинга | Да — атрибуты и профили |
@@ -90,7 +90,8 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 - `'Order.Count' is 'int?', which cannot be assigned to 'int'. Add [MapConverter(typeof(...))] (an ITypeConverter<int?, int>) to the source property, map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].`
 - `the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'. Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.`
-- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. …`
+- `'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto', and there is no mapping from 'App.Address' to 'App.AddressDto'. Add [MapTo(typeof(App.AddressDto))] to 'App.Address', [MapFrom(typeof(App.Address))] to 'App.AddressDto', or CreateMap<App.Address, App.AddressDto>() in a profile.`
+- `'Customer.Address' is 'App.Address?', which can be null, and the destination is 'App.AddressDto', which cannot. Declare the destination property nullable or the source property non-nullable, or mark the destination property [Ignore].`
 - `the MapFrom expression is 'int?', which cannot be assigned to 'int'. …`
 
 **Причина:** сгенерированное присваивание `destination.X = source.X` не скомпилировалось бы:
@@ -99,8 +100,12 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
   `List<string>` → `string[]`); проверка такая же, как у компилятора (`Compilation.ClassifyConversion`), поэтому всё,
   что преобразуется неявно, принимается (`int` → `long`, `int` → `int?`, производный тип → базовый, пользовательские
   неявные операторы, `dynamic`);
-- вложенный объект другого типа (`Address` → `AddressDto`): пока не маппится автоматически (запланировано в 2.1.0,
-  issue [#23](https://github.com/iron-mapper/IronMapper/issues/23));
+- вложенный объект другого типа (`Address` → `AddressDto`), для пары типов которого нет маппинга: ни в проекте (в том
+  числе через базовый тип или интерфейс типа source), ни доступного метода расширения `MapTo…` проекта-зависимости или
+  написанного вручную. Если маппинг есть, вложенный объект маппится им (начиная с 2.1.0,
+  [Вложенные объекты](advanced.ru.md#вложенные-объекты));
+- вложенный объект, объявленный в source допускающим `null` (`Address?`), а в destination — нет (`AddressDto`):
+  сгенерированный код не превращает `null` в `null!`;
 - коллекция, у которой типы элементов разные и их не маппит ни один маппинг: ни в проекте (в том числе через базовый
   тип или интерфейс элемента источника), ни доступный метод расширения `MapTo…` проекта-зависимости или написанный
   вручную, к которому привязывается сгенерированный вызов;
@@ -114,6 +119,11 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 **Как исправить:** преобразуйте значение (`[MapConverter]`, `opt.UseConverter<T>()`, `MapFrom` с преобразованием),
 добавьте недостающий маппинг или проигнорируйте свойство (`[Ignore]`, `opt.Ignore()`). Для `ReverseMap()` объявите
 обратный маппинг через `CreateMap` и настройте свойство там.
+
+**Code fix** (вложенный объект или элемент коллекции без маппинга): добавляет маппинг пары —
+`[MapTo(typeof(AddressDto))]` на тип source маппинга через атрибуты (`[MapFrom(typeof(Address))]` на тип destination,
+если типа source нет в вашем коде), `CreateMap<Address, AddressDto>();` после оператора с вызовом
+`CreateMap`/`ReverseMap()` в профиле. Для остальных случаев code fix нет.
 
 ---
 
@@ -141,13 +151,32 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 ---
 
-## IM0004 — Обнаружен циклический маппинг
+## IM0004 — Цикл маппингов через вложенный объект
 
-**Уровень:** Error · **Пока не выдаётся**
+**Уровень:** Warning (начиная с 2.1.0; до 2.0.0 включительно была объявлена как ошибка, но не выдавалась)
 
-**Сообщение (объявлено):** `Cyclic mapping detected: '{0}' maps to '{1}' which directly or indirectly maps back to '{0}'`
+**Куда указывает:** на свойство destination вложенного объекта (`[MapTo]`/`[MapFrom]`) или на вызов
+`CreateMap`/`ReverseMap()` (профиль). Выдаётся на каждом автоматически смапленном вложенном объекте цикла.
 
-**Текущее поведение:** обнаружение циклов не реализовано.
+**Сообщение:** `Property '{0}' of '{1}' is mapped automatically and closes a cycle of mappings: {2}. The mapping recurses without end only if the objects form a cycle at run time; break the cycle with Ignore or MapFrom on a property of the chain, or suppress IM0004 for models that are always finite (#pragma warning disable IM0004, or dotnet_diagnostic.IM0004.severity = none in .editorconfig).`
+— `{2}` — цепочка маппингов, например
+`App.Order → App.OrderDto, Customer: App.Customer → App.CustomerDto, Orders (elements): App.Order → App.OrderDto`.
+
+**Причина:** автоматически смапленный вложенный объект ([Вложенные объекты](advanced.ru.md#вложенные-объекты))
+приводит обратно к своему маппингу — через другие вложенные объекты или элементы коллекций: `Employee.Manager` типа
+`Employee`, `Order.Customer.Orders`. Цикл типов сам по себе не бесконечная рекурсия: цепочка руководителей заканчивается
+на `null` и маппится. Рекурсия бесконечна (и падает с `StackOverflowException`), только если цикл есть в данных (заказ, у
+покупателя которого в списке этот же заказ). Сгенерированный код не отслеживает уже смапленные объекты.
+
+**Не выдаётся:** для циклов только через коллекции (дерево вроде `Category.Children`, которое работает с 2.0.0) и для
+циклов, разорванных явно настроенным свойством (`MapFrom`, `Ignore`, converter) или маппингом с `ConvertUsing` (он
+вызывает converter, а не маппинги своих свойств). Ни одна сборка, проходящая на 2.0.0, IM0004 не получает: вложенный
+объект другого типа там не компилировался.
+
+**Как исправить:** разорвите цикл через `Ignore` или `MapFrom` на свойстве цепочки
+(`ForMember(d => d.Customer, o => o.Ignore())`, `[Ignore]`) или подавите предупреждение там, где данные всегда конечны:
+`#pragma warning disable IM0004` вокруг свойства (или вызова `CreateMap`), `dotnet_diagnostic.IM0004.severity = none` в
+`.editorconfig` или `<NoWarn>`.
 
 ---
 
