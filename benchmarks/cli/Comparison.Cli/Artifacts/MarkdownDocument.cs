@@ -31,9 +31,15 @@ internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
         void FlushText()
         {
             while (text.Count > 0 && string.IsNullOrWhiteSpace(text[^1]))
+            {
                 text.RemoveAt(text.Count - 1);
+            }
+
             if (text.Count > 0)
+            {
                 blocks.Add(new MarkdownText(text.ToList()));
+            }
+
             text.Clear();
         }
 
@@ -41,7 +47,10 @@ internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
         {
             string line = lines[i];
             if (line.StartsWith("```", StringComparison.Ordinal))
+            {
                 inFence = !inFence;
+            }
+
             if (!inFence && line.StartsWith('#'))
             {
                 int level = line.TakeWhile(c => c == '#').Count();
@@ -60,13 +69,19 @@ internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
                 var rows = new List<IReadOnlyList<string>>();
                 i += 2;
                 for (; i < lines.Length && IsRow(lines[i]); i++)
+                {
                     rows.Add(Cells(lines[i]));
+                }
+
                 i--;
                 blocks.Add(new MarkdownTable(headers, alignments, rows));
                 continue;
             }
             if (text.Count == 0 && string.IsNullOrWhiteSpace(line))
+            {
                 continue;
+            }
+
             text.Add(line);
         }
         FlushText();
@@ -82,7 +97,10 @@ internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
             if (block is MarkdownHeading h)
             {
                 if (found)
+                {
                     return null;
+                }
+
                 found = h.Text.StartsWith(heading, StringComparison.OrdinalIgnoreCase);
             }
             else if (found && block is MarkdownTable table)
@@ -106,9 +124,15 @@ internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
     {
         string trimmed = line.Trim();
         if (trimmed.StartsWith('|'))
+        {
             trimmed = trimmed[1..];
+        }
+
         if (trimmed.EndsWith('|') && !trimmed.EndsWith("\\|", StringComparison.Ordinal))
+        {
             trimmed = trimmed[..^1];
+        }
+
         var cells = new List<string>();
         var cell = new System.Text.StringBuilder();
         for (int i = 0; i < trimmed.Length; i++)

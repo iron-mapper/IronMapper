@@ -42,7 +42,13 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
 
     public IReadOnlyList<PreflightCheck> Checks
     {
-        get { lock (_gate) return _checks.ToList(); }
+        get
+        {
+            lock (_gate)
+            {
+                return _checks.ToList();
+            }
+        }
     }
 
     public string? ResultsDirFullPath =>
@@ -56,9 +62,15 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
             {
                 var paths = new List<string>();
                 if (ResultsDirFullPath is { } results && Directory.Exists(Path.Combine(results, "raw")))
+                {
                     paths.Add(Path.Combine(results, "raw"));
+                }
+
                 if (_current?.Tail is { Exists: true } tail)
+                {
                     paths.Add(tail.Path);
+                }
+
                 return paths;
             }
         }
@@ -84,7 +96,9 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
                     {
                         _estimates[step] = minutes;
                         if (_phases.All(p => p.Name != step))
+                        {
                             _phases.Add(new Phase(step) { Note = $"~{minutes} min" });
+                        }
                     }
                     break;
                 case RunAllPreflight check:
@@ -113,7 +127,9 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
                     break;
             }
             if (!string.IsNullOrWhiteSpace(line))
+            {
                 _lastStdout = line.Trim();
+            }
         }
     }
 
@@ -130,14 +146,18 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
         lock (_gate)
         {
             if (!string.IsNullOrWhiteSpace(line))
+            {
                 _lastStderr = line.Trim();
+            }
         }
     }
 
     public void Poll(DateTime nowUtc)
     {
         lock (_gate)
+        {
             _current?.Poll();
+        }
     }
 
     /// <summary>After the script exited: a step still running failed (the script threw), unless the run was stopped.</summary>
@@ -146,9 +166,15 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
         lock (_gate)
         {
             if (_current is not null && !interrupted)
+            {
                 _current.Finish(DateTime.UtcNow, ok: false, exitCode == 0 ? null : $"failed (exit code {exitCode})");
+            }
+
             if (interrupted && _current is not null)
+            {
                 _current.Finish(DateTime.UtcNow, ok: false, "stopped");
+            }
+
             _current = null;
         }
     }
@@ -171,7 +197,10 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
                     .AddColumn(new GridColumn().NoWrap())
                     .AddColumn(new GridColumn().NoWrap().RightAligned());
                 foreach (Phase phase in _phases)
+                {
                     grid.AddRow(new Markup(phase.Icon(nowUtc)), new Markup(Markup.Escape(phase.Name)), Detail(phase, detailWidth), new Markup($"[grey]{Phase.Duration(phase.Elapsed(nowUtc))}[/]"));
+                }
+
                 rows.Add(grid);
             }
             if (_phases.All(p => p.State == PhaseState.Pending))
@@ -181,11 +210,20 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
                     string.Concat(_checks.Where(c => c.Mark != CheckMark.Ok).Select(c => $"\n  {CheckView.Mark(c.Mark)} {Markup.Escape(c.Name)}: {Markup.Escape(c.Detail)}"))));
             }
             if (_current?.Tail is { } tail)
+            {
                 rows.Add(new Markup($"[grey]log: {Markup.Escape(tail.Path)}[/]"));
+            }
+
             if (HangWarning(nowUtc) is { } warning)
+            {
                 rows.Add(new Markup($"[yellow]{Markup.Escape(warning)}[/]"));
+            }
+
             if (_lastStderr is not null)
+            {
                 rows.Add(new Markup($"[red]{Markup.Escape(Shorten(_lastStderr, 160))}[/]"));
+            }
+
             return new Rows(rows);
         }
     }
@@ -240,10 +278,16 @@ internal sealed class RunAllMonitor(string benchmarksDir) : IRunMonitor
         // The step's log or the scripts' output, whichever moved last.
         DateTime last = _lastStdoutUtc;
         if (_current?.LastActivityUtc(_lastStdoutUtc) is { } activity && activity > last)
+        {
             last = activity;
+        }
+
         TimeSpan silent = nowUtc - last;
         if (_current is null || silent < Phase.HangThreshold)
+        {
             return null;
+        }
+
         string where = _current.Tail?.Path is { } path ? $"log: {path}" : $"last output: {_lastStdout}";
         return $"no output for {(int)silent.TotalMinutes} min in step {_current.Name} ({where}); the run is not stopped";
     }

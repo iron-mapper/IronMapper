@@ -10,7 +10,9 @@ public class RunAllMonitorTests
     {
         var monitor = new RunAllMonitor(Fixture.BenchmarksDir);
         foreach (string line in Fixture.Lines("run-all.checkonly.stdout.txt"))
+        {
             monitor.OnStdout(line);
+        }
 
         Assert.Equal("Full", monitor.Mode);
         Assert.Equal("results", monitor.ResultsDir);
@@ -31,7 +33,9 @@ public class RunAllMonitorTests
         {
             monitor.OnStdout(line);
             if (RunAllOutput.Parse(line) is RunAllLog log)
+            {
                 logs.Add(Fixture.FileName(log.Path));
+            }
         }
         monitor.Complete(0, interrupted: false);
 

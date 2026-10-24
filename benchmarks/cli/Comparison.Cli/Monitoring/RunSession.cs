@@ -17,7 +17,9 @@ internal static class RunSession
     {
         using SleepGuard? guard = keepAwake ? SleepGuard.Acquire() : null;
         if (guard is not null)
+        {
             AnsiConsole.MarkupLine($"[grey]Sleep: {Markup.Escape(guard.Status)}[/]");
+        }
 
         bool plain = Terminal.Plain;
         using var interrupts = new InterruptHandler(confirm: Terminal.Interactive);
@@ -27,15 +29,22 @@ internal static class RunSession
             {
                 monitor.OnStdout(line);
                 if (plain)
+                {
                     Console.WriteLine(line);
+                }
             },
             line =>
             {
                 lock (stderr)
+                {
                     stderr.Add(line);
+                }
+
                 monitor.OnStderr(line);
                 if (plain)
+                {
                     Console.Error.WriteLine(line);
+                }
             });
 
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -46,12 +55,19 @@ internal static class RunSession
         {
             Task trigger = Task.WhenAny(process.Exited, stopped.Task, interrupts.ConfirmRequested);
             if (plain)
+            {
                 await PlainLoopAsync(monitor, trigger).ConfigureAwait(false);
+            }
             else
+            {
                 await LiveLoopAsync(monitor, trigger).ConfigureAwait(false);
+            }
 
             if (process.Exited.IsCompleted)
+            {
                 break;
+            }
+
             if (stopped.Task.IsCompleted)
             {
                 await process.KillTreeAsync().ConfigureAwait(false);
@@ -75,12 +91,19 @@ internal static class RunSession
         monitor.Complete(exitCode, interrupted);
         // The final view; plain output needs none (the script prints the end of every stage itself).
         if (!plain)
+        {
             AnsiConsole.Write(monitor.Render(DateTime.UtcNow));
+        }
 
         if (interrupted)
+        {
             WriteStopped(monitor);
+        }
+
         lock (stderr)
+        {
             return new ScriptResult(exitCode, interrupted, stderr.ToList());
+        }
     }
 
     private static async Task LiveLoopAsync(IRunMonitor monitor, Task trigger)
@@ -104,7 +127,10 @@ internal static class RunSession
         {
             monitor.Poll(DateTime.UtcNow);
             foreach (string line in monitor.PlainUpdates(DateTime.UtcNow))
+            {
                 Console.WriteLine(line);
+            }
+
             await Task.WhenAny(trigger, Task.Delay(PlainRefresh)).ConfigureAwait(false);
         }
     }
@@ -113,7 +139,10 @@ internal static class RunSession
     {
         AnsiConsole.MarkupLine("[yellow]Stopped: the script and every process it started (dotnet, BenchmarkDotNet) were killed.[/]");
         foreach (string path in monitor.PartialArtifacts)
+        {
             AnsiConsole.MarkupLine($"  Partial results: {Markup.Escape(path)}");
+        }
+
         AnsiConsole.MarkupLine("[grey]MSBuild build-server nodes started by dotnet build may stay in memory for a few minutes; " +
             "they end by themselves (or: dotnet build-server shutdown).[/]");
     }

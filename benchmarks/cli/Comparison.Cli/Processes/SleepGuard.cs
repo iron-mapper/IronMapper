@@ -36,10 +36,16 @@ internal sealed class SleepGuard : IDisposable
         try
         {
             if (OperatingSystem.IsWindows())
+            {
                 return AcquireWindows();
+            }
+
             int pid = Environment.ProcessId;
             if (OperatingSystem.IsMacOS())
+            {
                 return StartHelper("caffeinate", ["-i", "-w", pid.ToString()], "caffeinate -i");
+            }
+
             if (OperatingSystem.IsLinux())
             {
                 // tail --pid ends with the CLI, so the inhibitor cannot outlive a crashed CLI.
@@ -83,7 +89,10 @@ internal sealed class SleepGuard : IDisposable
     {
         string? path = Tools.FindOnPath(tool);
         if (path is null)
+        {
             return new SleepGuard($"{tool} not found: the machine may sleep during the run");
+        }
+
         var info = new ProcessStartInfo(path)
         {
             UseShellExecute = false,
@@ -92,7 +101,10 @@ internal sealed class SleepGuard : IDisposable
             CreateNoWindow = true,
         };
         foreach (string arg in arguments)
+        {
             info.ArgumentList.Add(arg);
+        }
+
         Process helper = Process.Start(info)!;
         return new SleepGuard($"system sleep blocked ({description})", helper: helper);
     }
@@ -110,7 +122,9 @@ internal sealed class SleepGuard : IDisposable
             try
             {
                 if (!_helper.HasExited)
+                {
                     _helper.Kill(entireProcessTree: true);
+                }
             }
             catch (InvalidOperationException)
             {

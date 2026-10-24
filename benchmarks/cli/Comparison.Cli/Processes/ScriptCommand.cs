@@ -22,7 +22,10 @@ internal sealed partial record ScriptCommand(string ScriptPath, IReadOnlyList<st
             string script = "./" + Path.GetRelativePath(WorkingDirectory, ScriptPath).Replace('\\', '/');
             var text = new StringBuilder("pwsh");
             foreach (string arg in PwshOptions.Append(script).Concat(Arguments))
+            {
                 text.Append(' ').Append(Quote(arg));
+            }
+
             return text.ToString();
         }
     }

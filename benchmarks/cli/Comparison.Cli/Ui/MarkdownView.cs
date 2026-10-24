@@ -47,7 +47,10 @@ internal static class MarkdownView
                 table.AddColumn(column);
             }
             foreach (IReadOnlyList<string> row in source.Rows)
+            {
                 table.AddRow(group.Select(i => (IRenderable)new Markup(Markup.Escape(Cell(row, i)))).ToArray());
+            }
+
             tables.Add(table);
         }
         return new Rows(tables);
@@ -60,7 +63,10 @@ internal static class MarkdownView
     internal static IReadOnlyList<IReadOnlyList<int>> SplitColumns(IReadOnlyList<int> widths, int width)
     {
         if (widths.Count == 0)
+        {
             return [];
+        }
+
         var groups = new List<IReadOnlyList<int>>();
         var current = new List<int> { 0 };
         int used = widths[0] + 1;
@@ -97,7 +103,10 @@ internal static class MarkdownView
                     break;
                 case MarkdownText text:
                     foreach (string line in text.Lines)
+                    {
                         AnsiConsole.MarkupLine(Markup.Escape(Inline(line)));
+                    }
+
                     break;
             }
         }

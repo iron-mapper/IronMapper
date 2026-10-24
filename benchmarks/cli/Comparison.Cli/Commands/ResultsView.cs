@@ -67,7 +67,10 @@ internal static class ResultsView
         Console.WriteLine($"Quick A/B runs ({BenchPaths.Display(paths.QuickArtifactsDir)}):");
         IReadOnlyList<QuickRun> quick = QuickRun.List(paths.QuickArtifactsDir);
         if (quick.Count == 0)
+        {
             Console.WriteLine("  none yet");
+        }
+
         foreach (QuickRun run in quick)
         {
             string info = run.InfoProblem is not null
@@ -81,9 +84,14 @@ internal static class ResultsView
         Console.WriteLine($"Full runs ({BenchPaths.Display(paths.ResultsDir)}/*/RESULTS.md):");
         IReadOnlyList<ResultsRun> full = ResultsRun.List(paths.ResultsDir);
         if (full.Count == 0)
+        {
             Console.WriteLine("  none");
+        }
+
         foreach (ResultsRun run in full)
+        {
             Console.WriteLine($"  {run.Name}  {ShortRun(run.Run) ?? "?"} · {run.Commit}{(run.Marker is null ? "" : $" · {run.Marker}")}");
+        }
     }
 
     public static void WriteQuickRun(QuickRun run)
@@ -99,7 +107,10 @@ internal static class ResultsView
 
         AnsiConsole.Write(new Rule($"[bold]Quick A/B {Markup.Escape(run.Stamp)}[/]").LeftJustified());
         if (run.InfoProblem is not null)
+        {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(run.InfoProblem)}[/]");
+        }
+
         var grid = new Grid().AddColumn(new GridColumn().NoWrap()).AddColumn();
         grid.AddRow("[grey]Branch, commit[/]", Markup.Escape($"{run.Branch ?? "?"} {run.ShortCommit}{(run.Uncommitted ? " + uncommitted changes" : "")}"));
         grid.AddRow("[grey]Published[/]", Markup.Escape(run.PublishedVersion ?? "?"));
@@ -114,7 +125,10 @@ internal static class ResultsView
             MarkdownDocument document = MarkdownDocument.Parse(File.ReadAllText(run.SummaryPath));
             // The header bullets repeat the grid above; show the framework sections.
             foreach (MarkdownBlock block in document.Blocks.SkipWhile(b => b is not MarkdownHeading { Level: 2 }))
+            {
                 WriteBlock(block);
+            }
+
             AnsiConsole.MarkupLine($"[grey]Summary: {Markup.Escape(run.SummaryPath)}[/]");
         }
         else
@@ -137,7 +151,9 @@ internal static class ResultsView
             {
                 Console.WriteLine("| " + string.Join(" | ", plainSummary.Headers) + " |");
                 foreach (IReadOnlyList<string> row in plainSummary.Rows)
+                {
                     Console.WriteLine("| " + string.Join(" | ", row) + " |");
+                }
             }
             Console.WriteLine($"Report: {run.Path}");
             return;
@@ -145,7 +161,10 @@ internal static class ResultsView
 
         AnsiConsole.Write(new Rule($"[bold]{Markup.Escape(run.Name)}[/]").LeftJustified());
         if (run.Marker is not null)
+        {
             AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(run.Marker)}: the numbers are not for publication.[/]");
+        }
+
         var grid = new Grid().AddColumn(new GridColumn().NoWrap()).AddColumn();
         grid.AddRow("[grey]Run[/]", Markup.Escape(run.Run ?? "?"));
         grid.AddRow("[grey]Commit[/]", Markup.Escape(run.Commit ?? "?"));
@@ -172,7 +191,10 @@ internal static class ResultsView
                 break;
             case MarkdownText text:
                 foreach (string line in text.Lines)
+                {
                     AnsiConsole.MarkupLine(Markup.Escape(MarkdownView.Inline(line)));
+                }
+
                 break;
         }
     }
@@ -200,7 +222,10 @@ internal static class ResultsView
     private static string? ShortRun(string? run)
     {
         if (run is null)
+        {
             return null;
+        }
+
         int paren = run.IndexOf(" (", StringComparison.Ordinal);
         return paren > 0 ? run[..paren] : run;
     }
