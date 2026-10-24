@@ -137,6 +137,8 @@ How to read it:
   the garbage collector dominates (full report).
 - .NET 8 (same run): Flat ×1.01, Nested ×1.09, Collection 1 000 ×1.02, in-place ×0.93; `IMapper` Flat ×1.37.
 - One machine. Mapster.Tool (Mapster's code generator) was not measured.
+- To reproduce it on your machine: [Run it yourself](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md#run-it-yourself)
+  (`./bench.ps1` in `benchmarks/`).
 
 ---
 

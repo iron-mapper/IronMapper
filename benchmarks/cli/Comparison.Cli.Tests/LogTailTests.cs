@@ -83,12 +83,16 @@ public class LogTailTests
         Assert.Equal(["new"], tail.Poll());
     }
 
-    [Fact]
-    public void RealLog_ReadInChunks_GivesTheSameLines()
+    // Both line endings on every platform: a log written on Windows has CRLF, the checked-out fixture has the
+    // platform's endings. Chunks of 3001 bytes can also split a CRLF pair or a multi-byte character.
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    public void RealLog_ReadInChunks_GivesTheSameLines(string newline)
     {
         using Fixture.TempDir dir = Fixture.NewTempDir();
         string path = Path.Combine(dir.Path, "run.log");
-        byte[] source = File.ReadAllBytes(Fixture.PathOf("bdn-two-classes-dry.run.log"));
+        byte[] source = new UTF8Encoding(false).GetBytes(Fixture.Text("bdn-two-classes-dry.run.log", newline));
         var tail = new LogTail(path, Long);
         var lines = new List<string>();
         using (var writer = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read))

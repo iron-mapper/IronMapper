@@ -6,6 +6,20 @@ size, and build time. Everything here can be reproduced with one script; the num
 
 The specification of this suite is [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md).
 
+## Run it yourself
+
+Needs the .NET SDK 10, the .NET 8 runtime and PowerShell 7 (`pwsh`); the full run also needs the NativeAOT toolchain
+(see [Requirements](#requirements)).
+
+```powershell
+cd benchmarks
+./bench.ps1          # menu: Quick A/B, Full run, Results (Linux/macOS: ./bench.sh)
+./bench.ps1 full     # without the menu: the full run as published -> results/RESULTS.md (hours; it prints an estimate first)
+```
+
+`./bench.ps1` is a front end for the scripts; [How to run](#how-to-run) below is the reference for them, and
+[Benchmark CLI](#benchmark-cli-benchps1) lists its commands and flags.
+
 ## Participants
 
 | Id | Library | Mode |
@@ -170,7 +184,7 @@ Another published version: `IronMapperPackageVersion=<version>` (environment var
 ## How to run
 
 The commands below are the reference; [Benchmark CLI](#benchmark-cli-benchps1) is an interactive front end for
-`run-quick.ps1` and `run-all.ps1` with progress (`./bench.ps1`).
+`run-quick.ps1` and `run-all.ps1` with progress (`./bench.ps1`, see [Run it yourself](#run-it-yourself)).
 
 Everything, in order, then `results/RESULTS.md` (about 1.5 h on the reference machine; the script prints an
 estimate and checks the environment first):
@@ -269,9 +283,10 @@ dotnet run -c Release -f net8.0 --project src/Comparison.Benchmarks --no-build -
 
 The benchmark program exits with code 1 when a benchmark fails or a `--filter` matches nothing.
 
-Note: the BenchmarkDotNet step of this smoke check passes `-p:UseLocalIronMapper=true`, which does not reach the child
-build of BenchmarkDotNet (see above): that step runs the scenarios of the published package, not of `../src`. The build
-and the equivalence tests do use the local sources.
+`-p:UseLocalIronMapper=true` does not reach the child build of BenchmarkDotNet, which builds the benchmark project
+again in its own process: the BenchmarkDotNet step of the CI job therefore also sets the environment variable
+`UseLocalIronMapper=true`, and so must a local run (`UseLocalIronMapper=true dotnet run ...`, or
+`$env:UseLocalIronMapper = 'true'` in PowerShell); without it that step measures the published package.
 
 ### Quick A/B (`run-quick.ps1`)
 
@@ -366,7 +381,11 @@ when a Quick or Dry run would write there).
   their logs are the same as from a UTF-8 terminal.
 - **Build.** `cli/` has its own `Directory.Build.props` and `Directory.Packages.props` and is not part of
   `IronMapper.Comparison.slnx`: its packages (Spectre.Console) do not appear in `RESULTS.md`, `UseLocalIronMapper` does
-  not affect it, and `run-all.ps1` and CI do not build it. Tests: `dotnet test cli/Comparison.Cli.Tests`.
+  not affect it, and `run-all.ps1` and the `benchmarks` job of `ci.yml` do not build it. Tests:
+  `dotnet test cli/Comparison.Cli.Tests`; in CI only in pull requests that change `benchmarks/**`
+  (`.github/workflows/bench-cli.yml`, ubuntu and windows, not a required check).
+- **Developing the CLI**: [cli/README.md](cli/README.md) (layout, where progress comes from, fixtures, adding a flag or
+  a script).
 
 ## Layout
 
