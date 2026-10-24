@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using IronMapper.Generator.Analysis;
 using IronMapper.Generator.Analysis.Models;
 using IronMapper.Generator.CodeGeneration;
@@ -132,11 +134,12 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
 
         // Accessibility of the generated class over all generated mappings of the assembly: public if any generated
         // method is public, internal otherwise (an internal class is invisible to referencing assemblies). Mappings
-        // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache and the
-        // generic loops of MapToXList/MapToXArray when a generated mapping uses them. The final Select yields a value
+        // the plan does not generate (IM0007/IM0014) do not count. The same declaration holds the converter cache, the
+        // throw helper of nested objects and the generic loops of MapToXList/MapToXArray when a generated mapping uses them. The final Select yields a value
         // tuple, so the declaration is re-emitted only when one of these actually changes.
         var classAccessibility = sourcePlan.Combine(methods).Select(static (item, _) =>
                 (Accessibility: GetClassAccessibility(item.Left), UsesConverterCache: UsesConverterCache(item.Left),
+                    UsesNestedObjectCheck: UsesNestedObjectCheck(item.Left),
                     UsesList: UsesOverload(item.Left, item.Right, static m => m.List),
                     UsesArray: UsesOverload(item.Left, item.Right, static m => m.Array)))
             .WithTrackingName(TrackingNames.ClassAccessibility);
@@ -144,11 +147,11 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(classAccessibility.Combine(codeOptions.Combine(classAttributes)), static (spc, item) =>
         {
             // No generated mappings: there is no class to declare, only the namespace (for the global using).
-            var ((accessibility, usesConverterCache, usesList, usesArray), (options, (exclude, generatedCode))) = item;
+            var ((accessibility, usesConverterCache, usesNestedObjectCheck, usesList, usesArray), (options, (exclude, generatedCode))) = item;
             var (hintName, source) = accessibility is null
                 ? MapperCodeEmitter.EmitEmptyNamespace()
                 : MapperCodeEmitter.EmitClassDeclaration(accessibility, usesConverterCache, exclude, usesList, usesArray, options,
-                    generatedCode);
+                    generatedCode, usesNestedObjectCheck);
             spc.AddSource(hintName, source);
         });
 
@@ -177,13 +180,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// mapping skipped by IM0014 reports only the plan's diagnostic), of diagnostic-only descriptors (IM0005, IM0010,
     /// IM0015, …) and of the plan. IM0001 of profile mappings only when <see cref="GeneratorSettings.ReportUnmappedInProfiles"/>
     /// is set (off by default). IM0013 gets the name of the generated class (<paramref name="className"/>) as its
-    /// last message argument: the plan does not depend on the assembly name.
+    /// last message argument: the plan does not depend on the assembly name. The IM0004 candidates of automatically
+    /// mapped nested objects are reported only when the property closes a cycle of generated mappings
+    /// (<see cref="MappingCycles"/>), with the chain as the last message argument.
     /// </summary>
     private static EquatableArray<DiagnosticInfo> CollectDiagnostics(ImmutableArray<MappingDescriptor> fromMapTo,
         ImmutableArray<MappingDescriptor> fromMapFrom, ImmutableArray<MappingDescriptor> fromProfiles, MappingPlan plan,
         GeneratorSettings settings, string className)
     {
         var builder = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        MappingCycles? cycles = null;
         Add(fromMapTo, isProfile: false);
         Add(fromMapFrom, isProfile: false);
         Add(fromProfiles, isProfile: true);
@@ -203,15 +209,26 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                     if (isProfile && !settings.ReportUnmappedInProfiles
                                   && diagnostic.Descriptor == DiagnosticDescriptors.UnmappedDestinationProperty)
                         continue;
-                    // IM0002 of a collection element: only when no mapping of the element types is generated (the same
-                    // condition skips the property in the generated code, MapperCodeEmitter.IsElementMappingMissing).
+                    // IM0002 of a collection element or a nested object: only when no mapping of the pair is generated (the
+                    // same condition skips the property in the generated code, MapperCodeEmitter.IsMappingMissing).
                     if (diagnostic.GetProperty(PropertyTypeCheck.MissingElementPairsKey) is { } pairs
                         && plan.GeneratesAny(pairs.Split('|')))
                         continue;
+                    if (diagnostic.GetProperty(PropertyTypeCheck.CyclePropertyKey) is { } property)
+                    {
+                        cycles ??= new MappingCycles(Generated(), plan);
+                        if (cycles.FindCycle(descriptor, property) is { } chain)
+                            builder.Add(diagnostic.WithMessageArg(chain));
+                        continue;
+                    }
                     builder.Add(diagnostic);
                 }
             }
         }
+
+        IEnumerable<MappingDescriptor> Generated()
+            => fromMapTo.Concat(fromMapFrom).Concat(fromProfiles)
+                .Where(d => d.SourceTypeName.Length != 0 && plan.Find(d.Origin) is { Emit: true });
     }
 
     private static EquatableArray<MappingRegistration> GetRegistrations(MappingPlan plan, GeneratedMethods methods)
@@ -252,6 +269,13 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     {
         foreach (var entry in plan.Entries)
             if (entry.Emit && entry.UsesConverterCache) return true;
+        return false;
+    }
+
+    private static bool UsesNestedObjectCheck(MappingPlan plan)
+    {
+        foreach (var entry in plan.Entries)
+            if (entry.Emit && entry.UsesNestedObjectCheck) return true;
         return false;
     }
 

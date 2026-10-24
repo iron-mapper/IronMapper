@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.LineDto MapToLineDto(this global::App.Line source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToLineDtoCore(source);
+        }
+
+        private static global::App.LineDto MapToLineDtoCore(global::App.Line source)
+        {
             return new global::App.LineDto
             {
                 Id = source.Id,
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToLineDtoCore(source, destination);
+        }
+
+        private static void MapToLineDtoCore(global::App.Line source, global::App.LineDto destination)
+        {
             destination.Id = source.Id;
         }
 

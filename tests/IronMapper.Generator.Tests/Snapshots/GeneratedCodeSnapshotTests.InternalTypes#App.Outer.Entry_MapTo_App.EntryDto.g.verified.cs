@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         internal static global::App.EntryDto MapToEntryDto(this global::App.Outer.Entry source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToEntryDtoCore(source);
+        }
+
+        private static global::App.EntryDto MapToEntryDtoCore(global::App.Outer.Entry source)
+        {
             return new global::App.EntryDto
             {
                 Amount = source.Amount,
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToEntryDtoCore(source, destination);
+        }
+
+        private static void MapToEntryDtoCore(global::App.Outer.Entry source, global::App.EntryDto destination)
+        {
             destination.Amount = source.Amount;
         }
 

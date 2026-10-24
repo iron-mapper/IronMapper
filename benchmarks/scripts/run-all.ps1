@@ -6,7 +6,8 @@
 .DESCRIPTION
     Steps:
       1. Build      dotnet build IronMapper.Comparison.slnx -c Release
-      2. Tests      dotnet test (gate: nothing is measured unless the equivalence tests pass; writes feature-matrix.md)
+      2. Tests      dotnet test (gate: nothing is measured unless the equivalence tests pass; writes feature-matrix.md,
+                    IRONMAPPER_WRITE_FEATURE_MATRIX=true for this step only)
       3. Runtime    BenchmarkDotNet: Flat, Nested, Collection, CustomConfig, InPlace, DiOverhead
                     full: --launchCount 3 (every benchmark in 3 processes, see README "Dynamic PGO"); quick: --job short
          RuntimeNet8 the same on net8.0 (raw/bdn-net8.0; RESULTS.md shows it in its own section); off with -SkipNet8
@@ -194,7 +195,11 @@ Invoke-Step 'Build' { Invoke-Dotnet 'build.log' @('build', $solution, '-c', 'Rel
 
 Invoke-Step 'Tests' {
     # The gate of BENCHMARK_SPEC.md, 6: no measurements unless the mappers produce equivalent results.
-    Invoke-Dotnet 'tests.log' @('test', $solution, '-c', 'Release', '--no-build', '-nologo')
+    # A plain `dotnet test` does not write the matrix (FeatureMatrixTests.Write_feature_matrix is skipped without it).
+    $previousWriteMatrix = $env:IRONMAPPER_WRITE_FEATURE_MATRIX
+    $env:IRONMAPPER_WRITE_FEATURE_MATRIX = 'true'
+    try { Invoke-Dotnet 'tests.log' @('test', $solution, '-c', 'Release', '--no-build', '-nologo') }
+    finally { $env:IRONMAPPER_WRITE_FEATURE_MATRIX = $previousWriteMatrix }
 }
 
 # The runtime benchmarks on one target framework; BenchmarkDotNet writes raw/bdn (net10.0) or raw/bdn-net8.0 (Program.cs).

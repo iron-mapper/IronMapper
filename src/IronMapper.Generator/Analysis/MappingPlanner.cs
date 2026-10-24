@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using IronMapper.Generator.Analysis.Models;
+using IronMapper.Generator.CodeGeneration;
 using IronMapper.Generator.Diagnostics;
 
 namespace IronMapper.Generator.Analysis;
@@ -24,6 +25,9 @@ namespace IronMapper.Generator.Analysis;
 ///   <item>Helper scope (hooks, transformers): <c>_{Source}_{Dest}</c> by simple names, unless another generated
 ///   mapping has the same pair of simple names; then the full names are used.</item>
 ///   <item>Hint name: full names of both types, unique.</item>
+///   <item><c>…Core</c> (the body of <c>MapToX(source)</c> without the null check, called by nested objects and
+///   collection elements): <c>{MethodName}Core</c>, or <c>{MethodName}Core{HelperScope}</c> when a mapping of the same
+///   source type is named so (a destination type <c>XCore</c>; the same parameter would be CS0111).</item>
 /// </list>
 /// </remarks>
 internal static class MappingPlanner
@@ -128,6 +132,12 @@ internal static class MappingPlanner
             .GroupBy(d => d.SourceTypeName + "\0" + d.DestTypeName, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         var hintNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var namesBySource = generated
+            .GroupBy(d => d.SourceFullName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key!, g => new HashSet<string>(g.Select(d => methodNames[d.Origin]), StringComparer.Ordinal),
+                StringComparer.Ordinal);
+
+        var generatedPairs = new HashSet<string>(generated.Select(d => d.PairKey), StringComparer.Ordinal);
 
         var entries = new List<MappingPlanEntry>();
         foreach (var mapping in mappings)
@@ -149,9 +159,13 @@ internal static class MappingPlanner
             for (var n = 2; !hintNames.Add(hintName); n++)
                 hintName = $"{hintBase}_{n}.g.cs";
 
-            entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodNames[mapping.Origin], hintName, helperScope,
+            var methodName = methodNames[mapping.Origin];
+            var coreName = namesBySource[mapping.SourceFullName!].Contains(methodName + "Core")
+                ? methodName + "Core" + helperScope
+                : methodName + "Core";
+            entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodName, hintName, helperScope,
                 mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!, mapping.UsesConverterCache,
-                mapping.MethodOverrides));
+                mapping.MethodOverrides, coreName, UsesNestedObjectCheck(mapping, generatedPairs), mapping.CanUpdateInPlace));
         }
 
         return new MappingPlan(
@@ -160,6 +174,21 @@ internal static class MappingPlanner
     }
 
     private static string PlainName(MappingDescriptor descriptor) => $"MapTo{descriptor.DestTypeName}";
+
+    /// <summary>
+    /// The generated code of <paramref name="mapping"/> checks a nested object that the destination does not accept as
+    /// <see langword="null"/> (<see cref="NullHandling.Throw"/>) and so calls <c>NestedObjectIsNull&lt;T&gt;</c>, declared
+    /// once in <c>GeneratedMappers.g.cs</c>; a property without a generated mapping for its pair (IM0002) is not generated.
+    /// </summary>
+    private static bool UsesNestedObjectCheck(MappingDescriptor mapping, HashSet<string> generatedPairs)
+    {
+        foreach (var property in mapping.PropertyMappings)
+        {
+            if (property.NullHandling != NullHandling.Throw || !MapperCodeEmitter.IsMappedNestedObject(property)) continue;
+            if (property.MappingPairs.Length == 0 || property.MappingPairs.Any(generatedPairs.Contains)) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Returns unique names for <paramref name="members"/> (same source, same plain name) that are not in

@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.ItemDto MapToItemDto(this global::App.Item source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToItemDtoCore(source);
+        }
+
+        private static global::App.ItemDto MapToItemDtoCore(global::App.Item source)
+        {
             return new global::App.ItemDto
             {
                 Code = ConverterCache<global::App.Upper>.Instance.Convert(source.Code),
@@ -25,6 +30,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToItemDtoCore(source, destination);
+        }
+
+        private static void MapToItemDtoCore(global::App.Item source, global::App.ItemDto destination)
+        {
             destination.Code = ConverterCache<global::App.Upper>.Instance.Convert(source.Code);
         }
 

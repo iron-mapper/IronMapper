@@ -4,10 +4,42 @@
 
 ### Added
 
+- **Nested objects are mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)): a
+  name-matched property whose types differ (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`) is mapped by
+  the mapping of its type pair — of this project (also of a base type or an interface of the source type) or of a
+  referenced assembly — in attribute mappings, profiles and `ReverseMap()`, without `ForMember`. `null` follows the
+  nullable annotations: `null` → `null` for a nullable destination property; for a non-nullable one a `null` at run time
+  (an EF navigation declared `= null!` and not loaded) throws `InvalidOperationException` whose message names both
+  properties and suggests `Include` (not a `NullReferenceException` inside the mapping); a nullable source for a
+  non-nullable destination is `IM0002` (no `null!`). `MapFrom`, `UseConverter`, `Ignore`, `[MapConverter]` and `[Ignore]`
+  still take precedence. Up to 2.0.0 such a property failed with `CS0029` inside the generated file, so no build that
+  compiles with 2.0.0 changes. See [Nested objects](docs/advanced.md#nested-objects) and
+  [Null in a non-nullable nested object](docs/advanced.md#null-in-a-non-nullable-nested-object).
+- **The in-place overload updates existing nested objects** (`source.MapToX(destination)`, `IMapper.Map(source,
+  destination)`): when `destination.Customer` is not `null`, its properties are mapped into it (any depth), so a tracked
+  EF navigation keeps its instance instead of being replaced (a duplicate insert, a tracking conflict, a delete and insert
+  of an owned type); a `null` destination value gets a new object, as AutoMapper does. A new object is still assigned
+  for a struct, a destination type with a mapped `init` property (a record with `init` properties), a `ConvertUsing`
+  mapping, and a mapping of a referenced project whose in-place overload is turned off; a referenced project's public
+  in-place `MapToX(source, destination)` is called for the existing object (maps in one project, the update in another).
+  Works also with the in-place overload turned off in this project: the private in-place
+  `MapToXCore(source, destination)` is generated for every mapping. See
+  [In-place update of nested objects](docs/advanced.md#in-place-update-of-nested-objects).
+- **Diagnostic `IM0004` (warning) is reported** for a cycle of mappings through at least one automatically mapped
+  nested object (`Employee.Manager`, `Order.Customer.Orders`), with the chain of mappings in the message. Cycles only
+  through collections (trees) are not reported, and a property of the chain configured with `MapFrom` or `Ignore`
+  breaks the cycle. A cycle of types recurses forever only when the data has a cycle; suppress the warning for finite
+  models with `#pragma warning disable IM0004` or `dotnet_diagnostic.IM0004.severity = none`. Up to 2.0.0 `IM0004` was
+  declared as an error and never reported. See [IM0004](docs/diagnostics.md#im0004--nested-object-mapping-closes-a-cycle).
+- **Code fix "add the mapping for the pair"** for `IM0002` of a nested object or a collection element without a
+  mapping: `[MapTo(typeof(D))]` on the source type of an attribute mapping (`[MapFrom(typeof(S))]` on the destination
+  type when the source type is not in source code), `CreateMap<S, D>();` after the statement of the `CreateMap`/
+  `ReverseMap()` call in a profile. It reads the pair from the diagnostic properties.
 - **Diagnostic `IM0002` (error) is reported** for a destination property that the generated assignment cannot fill:
   the types have no implicit conversion (`int?` → `int`, `long` → `int`, `string` → `Guid`, an enum → another enum,
-  `List<string>` → `string[]`), a nested object of another type (`Address` → `AddressDto`, not mapped automatically
-  yet), a collection whose elements have no mapping, or a `MapFrom` expression of another type. It points to the
+  `List<string>` → `string[]`), a nested object or a collection whose type pair has no mapping (the message names the
+  pair and what to add), a nullable nested object for a non-nullable destination, or a `MapFrom` expression of another
+  type. It points to the
   destination property (attribute mappings), the `CreateMap` or `ReverseMap()` call, or the `MapFrom` expression, and
   says what to add (a converter, `MapFrom`, the missing mapping, `[Ignore]`/`Ignore()`). The property is not generated;
   the rest of the mapping is. Up to 2.0.0 the build failed inside the generated file (`CS0029`, `CS0266`, `CS1061`), and
@@ -17,13 +49,53 @@
   generated call binds to. A mapping with `ConvertUsing` is checked too, because its in-place overload assigns the
   properties. See [IM0002](docs/diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping).
 
+### Changed
+
+- **Generated code:** every `MapToX(source)` is split into the public method, which checks `source` for `null` as
+  before, and a private `MapToXCore(source)` with the body (`{MethodName}Core{HelperScope}` when a mapping of the same
+  source type is already named `{MethodName}Core`). Nested objects call `MapToXCore` directly. Elements of nested
+  collections still call the public `MapToX`: a `null` element throws `ArgumentNullException`, as documented in 2.0.0.
+  The in-place overload is split the same way: the public method (or the private `MapInto…` of a turned-off overload)
+  checks both arguments and calls the private `MapToXCore(source, destination)`. A mapping that checks a nested object
+  uses one throw helper of the generated class, `NestedObjectIsNull<T>` (not inlined). The behavior of existing
+  mappings does not change; the snapshots of all scenarios change by the split.
+
+### Performance
+
+- Not measured (no benchmark run for 2.1.0): a nested object calls `MapToXCore` after one comparison with `null` (the
+  throw is in a helper that is not inlined), without a second check and without a throw inside, so the JIT can inline the
+  nested mapping (aimed at the Nested gap of 2.0.0, ×1.07 on .NET 10). The in-place overload is a check and a call of
+  its `…Core` (one more call per in-place mapping than in 2.0.0; InPlace scenario).
+  The Nested scenario of the benchmark suite maps the nested objects automatically (local sources or a package 2.1 or
+  later; `ForMember(... MapFrom(...))` before). The published numbers stay those of 2.0.0.
+
 ### Build
 
+- Tests: `NestedObjectTests` (generator: null handling by annotations, structs and records, base types and interfaces,
+  referenced assemblies, qualified names and a `…Core` name collision, hooks, `IncludeMembers`, collections of objects
+  with nested objects — arrays, `IEnumerable<T>`, `IReadOnlyList<T>` —, a mapping added or removed in another file in the
+  IDE; runtime: `tests/IronMapper.Tests/NestedObjectTests.cs`, which also checks `#pragma warning disable IM0004` in a
+  build with `TreatWarningsAsErrors`; `IMapper`: `NestedObjectMapperTests`), `CyclicMappingTests` (a tree through a
+  collection, `Employee.Manager`, `Ignore`/`MapFrom` on the path, `Order.Customer.Orders` with the full chain, two nested
+  objects on a cycle, `ConvertUsing`, severity options, models that compile with 2.0.0 get no new warnings),
+  `IM0002CodeFixTests`; snapshot scenario `Nested`. In-place: the existing nested objects are kept (`ReferenceEquals`) and
+  updated over two levels, a `null` destination value gets a new object, a `null` source sets `null`, a struct, a record
+  with `init` properties and a `ConvertUsing` pair get a new object, the in-place overload turned off (generated code and
+  `IMapper`), a pair of a referenced project with its in-place overload (the object is kept) and without it (a new one); `null` in a non-nullable nested object: `InvalidOperationException` with the message, for a new object and
+  in place.
+- Benchmark suite: `FeatureMatrixTests.Write_feature_matrix` writes `results/feature-matrix.md` only with
+  `IRONMAPPER_WRITE_FEATURE_MATRIX=true` (`run-all.ps1` sets it for its test step); a plain `dotnet test` no longer
+  changes the committed file.
+- Benchmark suite: `scripts/run-quick.ps1` — A/B of a published release (2.0.0 by default) and the local sources,
+  same job as the full run, results in `artifacts/quick/`, with checks that the published package comes from nuget.org
+  and that BenchmarkDotNet's child build uses the intended IronMapper. The documented
+  `dotnet run -p:UseLocalIronMapper=true -- --filter ...` measured the published package (BenchmarkDotNet rebuilds the
+  project without the parent's `-p:` properties); the docs now use the environment variable `UseLocalIronMapper=true`.
 - Tests: `IncompatiblePropertyTypesTests` (attributes, profiles, `IncludeMembers`, `ReverseMap()`, `MapFrom`, collection
   elements, implicit conversions and element mappings that must not be reported, an element mapping added or removed
   in another file in the IDE); snapshot scenario `IncompatibleProperties`. `eng/verify-package.ps1`: an incompatible
   property fails the build with `IM0002` at the destination property and with no error inside a generated file. The
-  generated code of mappings without `IM0002` does not change (the existing snapshots are the same).
+  check itself does not change the generated code of mappings without `IM0002`.
 
 ## [2.0.0] - 2026-10-23
 

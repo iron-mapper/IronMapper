@@ -283,22 +283,31 @@ internal static class MappingAnalyzer
                 var isIgnored = HasIgnoreAttribute(sourceProp);
                 // An ignored property does not use its converter, so the converter is not checked.
                 var converter = isIgnored ? null : GetConverter(sourceProp, converters, ct);
-                // IM0002: a value the generated assignment cannot take is not generated (as if ignored), instead of a
-                // CS0029/CS0266/CS1061 in the generated file.
-                var missingElementPairs = default(EquatableArray<string>);
+                // A nested object is mapped by the mapping of its type pair. IM0002: a value the generated assignment cannot
+                // take is not generated (as if ignored), instead of a CS0029/CS0266/CS1061 in the generated file.
+                var mappingPairs = default(EquatableArray<string>);
+                NestedObjectMapping? nested = null;
                 if (!isIgnored && converter is null)
                 {
                     var location = LocationInfo.From(destProp) ?? origin;
                     var sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
-                    var incompatible = collection is null
-                        ? PropertyTypeCheck.CheckAssignment(compilation, sourceProp.Type, destProp.Type, sourceDisplay, destProp,
-                            destSymbol, PropertyTypeCheck.Origin.Attribute, location)
-                        : CheckCollection(compilation, collection, sourceProp, destProp, sourceDisplay, destSymbol, location,
-                            out missingElementPairs);
-                    if (incompatible is { } found)
+                    if (collection is not null)
                     {
-                        diagnostics.Add(found);
-                        isIgnored = collection is null;
+                        if (CheckCollection(compilation, collection, sourceProp, destProp, sourceDisplay, destSymbol,
+                                PropertyTypeCheck.Origin.Attribute, location, out mappingPairs) is { } missing)
+                            diagnostics.Add(missing);
+                    }
+                    else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, destProp.Type,
+                                 sourceDisplay, destProp, destSymbol, PropertyTypeCheck.Origin.Attribute, location, diagnostics)) is not null)
+                    {
+                        isIgnored = nested.Skipped;
+                        mappingPairs = nested.Pairs;
+                    }
+                    else if (PropertyTypeCheck.CheckAssignment(compilation, sourceProp.Type, destProp.Type, sourceDisplay, destProp,
+                                 destSymbol, PropertyTypeCheck.Origin.Attribute, location) is { } incompatible)
+                    {
+                        diagnostics.Add(incompatible);
+                        isIgnored = true;
                     }
                 }
 
@@ -312,7 +321,8 @@ internal static class MappingAnalyzer
                     isInitOnly: isInitOnly,
                     collection: collection,
                     converterIsCached: converter?.IsCached ?? false,
-                    missingElementPairs: missingElementPairs));
+                    mappingPairs: mappingPairs,
+                    nested: nested is { Skipped: false } ? nested : null));
                 continue;
             }
 
@@ -438,20 +448,20 @@ internal static class MappingAnalyzer
     /// <summary>
     /// IM0002 of a collection property mapped element by element (<see cref="PropertyTypeCheck.CheckCollection"/>): the
     /// diagnostic, reported only when the plan generates no mapping of the element types, and those pairs
-    /// (<paramref name="missingElementPairs"/>, empty when a referenced assembly maps the elements).
+    /// (<paramref name="mappingPairs"/>, empty when a referenced assembly maps the elements).
     /// </summary>
     internal static DiagnosticInfo? CheckCollection(Compilation compilation, CollectionMapping collection,
         IPropertySymbol sourceProp, IPropertySymbol destProp, string sourceDisplay, INamedTypeSymbol destSymbol,
-        LocationInfo? location, out EquatableArray<string> missingElementPairs)
+        PropertyTypeCheck.Origin origin, LocationInfo? location, out EquatableArray<string> mappingPairs)
     {
-        missingElementPairs = default;
+        mappingPairs = default;
         if (!SymbolHelpers.TryGetCollectionElementType(sourceProp.Type, out var sourceElement) || sourceElement is null
             || !SymbolHelpers.TryGetCollectionElementType(destProp.Type, out var destElement) || destElement is null)
             return null;
 
         var diagnostic = PropertyTypeCheck.CheckCollection(compilation, collection, sourceElement, destElement, sourceDisplay,
-            destProp, destSymbol, location, out var mappedElsewhere);
-        if (!mappedElsewhere) missingElementPairs = PropertyTypeCheck.ElementPairKeys(sourceElement, destElement);
+            destProp, destSymbol, origin, location, out var mappedElsewhere);
+        if (!mappedElsewhere) mappingPairs = PropertyTypeCheck.ElementPairKeys(sourceElement, destElement);
         return diagnostic;
     }
 

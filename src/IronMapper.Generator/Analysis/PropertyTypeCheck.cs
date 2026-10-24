@@ -9,18 +9,45 @@ namespace IronMapper.Generator.Analysis;
 
 /// <summary>
 /// IM0002: a destination property that the generated assignment cannot fill. Without the check the generated file failed
-/// to compile (<c>CS0029</c>/<c>CS0266</c> for incompatible types, <c>CS1061</c> for a collection element without a
-/// mapping). A property with IM0002 is not generated; the rest of the mapping is.
+/// to compile (<c>CS0029</c>/<c>CS0266</c> for incompatible types and nested objects, <c>CS1061</c> for a collection
+/// element without a mapping). A property with IM0002 is not generated; the rest of the mapping is. A nested object
+/// whose type pair has a mapping is mapped by it (<see cref="CheckNestedObject"/>).
 /// </summary>
 internal static class PropertyTypeCheck
 {
     /// <summary>
-    /// Diagnostic property of an IM0002 for a collection element without a mapping: the element type pairs (the source
-    /// element type and its base types and interfaces → the destination element type, <c>|</c>-separated). The diagnostic
+    /// Diagnostic property of an IM0002 for a collection element or a nested object without a mapping: the type pairs
+    /// (the source type and its base types and interfaces → the destination type, <c>|</c>-separated). The diagnostic
     /// is reported, and the property skipped, only when the plan generates none of them
     /// (<see cref="MappingPlan.GeneratesAny"/>).
     /// </summary>
     internal const string MissingElementPairsKey = "IfNoMappingFor";
+
+    /// <summary>
+    /// Diagnostic properties of an IM0002 "no mapping for the pair", read by the code fix that adds the mapping: the
+    /// documentation comment IDs of the source and destination types (<c>T:App.Address</c>; empty for a constructed
+    /// generic type, which the fix does not handle), their fully qualified names for the inserted code, and how the
+    /// mapping with the diagnostic is declared (<see cref="Origin"/>).
+    /// </summary>
+    internal const string PairSourceIdKey = "PairSourceId";
+
+    /// <inheritdoc cref="PairSourceIdKey"/>
+    internal const string PairDestinationIdKey = "PairDestinationId";
+
+    /// <inheritdoc cref="PairSourceIdKey"/>
+    internal const string PairSourceTypeKey = "PairSourceType";
+
+    /// <inheritdoc cref="PairSourceIdKey"/>
+    internal const string PairDestinationTypeKey = "PairDestinationType";
+
+    /// <inheritdoc cref="PairSourceIdKey"/>
+    internal const string MappingOriginKey = "MappingOrigin";
+
+    /// <summary>
+    /// Diagnostic property of the IM0004 candidate of an automatically mapped nested object: the destination property.
+    /// <c>CollectDiagnostics</c> reports it only when the property closes a cycle of generated mappings.
+    /// </summary>
+    internal const string CyclePropertyKey = "CycleProperty";
 
     /// <summary>How a mapping is declared; decides the hint of the message.</summary>
     internal enum Origin
@@ -43,18 +70,12 @@ internal static class PropertyTypeCheck
         var st = Display(sourceType);
         var dt = Display(destType);
         string reason;
-        if (IsObject(sourceType) && IsObject(destType))
+        if (IsObject(sourceType, allowInterface: true) && IsObject(destType))
         {
-            reason = $"'{sourceDisplay}' is '{st}' and the destination is '{dt}': nested objects are not mapped automatically yet. "
-                     + origin switch
-                     {
-                         Origin.Attribute => $"Map it with [MapConverter(typeof(...))] (an ITypeConverter<{st}, {dt}>) on the source property, "
-                                             + $"or in a profile with CreateMap<{st}, {dt}>() and ForMember(d => d.{destProp.Name}, o => o.MapFrom(s => s.{SourceMember(sourceDisplay)}.MapTo{destType.Name}())); "
-                                             + "or mark the destination property [Ignore].",
-                         Origin.Profile => $"Configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(s => s.{SourceMember(sourceDisplay)}.MapTo{destType.Name}())) "
-                                           + $"and a mapping '{st}' → '{dt}', with o.UseConverter<T>() (an ITypeConverter<{st}, {dt}>), or with o.Ignore().",
-                         _ => ReverseHint(destProp),
-                     };
+            // Only IncludeMembers gets here: name-matched nested objects are mapped by CheckNestedObject.
+            reason = $"'{sourceDisplay}' is '{st}' and the destination is '{dt}': IncludeMembers does not map nested objects. "
+                     + $"Configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(...)), with o.UseConverter<T>() "
+                     + $"(an ITypeConverter<{st}, {dt}>), or with o.Ignore().";
         }
         else
         {
@@ -96,7 +117,7 @@ internal static class PropertyTypeCheck
     /// element type pairs (<see cref="MissingElementPairsKey"/>), and the plan decides.
     /// </summary>
     public static DiagnosticInfo? CheckCollection(Compilation compilation, CollectionMapping collection, ITypeSymbol sourceElement,
-        ITypeSymbol destElement, string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol,
+        ITypeSymbol destElement, string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin,
         LocationInfo? location, out bool mappedElsewhere)
     {
         mappedElsewhere = IsMappedByExistingMethod(compilation, collection.ElementMethod, sourceElement, destElement);
@@ -104,12 +125,101 @@ internal static class PropertyTypeCheck
 
         var se = Display(sourceElement);
         var de = Display(destElement);
-        return Create(destProp, destSymbol,
-                $"the elements of '{sourceDisplay}' are '{se}' and the elements of the destination are '{de}', and there is no "
-                + $"mapping from '{se}' to '{de}'. Add [MapTo(typeof({de}))] to '{se}', [MapFrom(typeof({se}))] to '{de}', "
-                + $"or CreateMap<{se}, {de}>() in a profile.", location)
-            .WithProperty(MissingElementPairsKey, string.Join("|", ElementPairKeys(sourceElement, destElement)));
+        return MissingPair(destProp, destSymbol,
+            $"the elements of '{sourceDisplay}' are '{se}' and the elements of the destination are '{de}', and there is no "
+            + $"mapping from '{se}' to '{de}'. {AddMappingHint(se, de)}", location, sourceElement, destElement, origin);
     }
+
+    /// <summary>
+    /// A nested object: <paramref name="sourceType"/> and <paramref name="destType"/> are objects that could have a mapping
+    /// of their own (see <see cref="IsObject"/>) and the value cannot be assigned as is. Returns <see langword="null"/>
+    /// for any other property (checked by <see cref="CheckAssignment"/>). Otherwise the property is mapped by the mapping
+    /// of the type pair, adding to <paramref name="diagnostics"/>:
+    /// <list type="bullet">
+    ///   <item>IM0002 when the source is annotated nullable and the destination is not (no <c>null!</c>); the result is
+    ///   then <see cref="NestedObjectMapping.Skipped"/>;</item>
+    ///   <item>IM0002 "no mapping for the pair", reported only when the plan generates none of
+    ///   <see cref="NestedObjectMapping.Pairs"/> (as for a collection element);</item>
+    ///   <item>the IM0004 candidate (<see cref="CyclePropertyKey"/>), reported only on a cycle.</item>
+    /// </list>
+    /// A mapping in a referenced assembly (or a hand-written method the generated call binds to, see
+    /// <see cref="IsMappedByExistingMethod"/>) maps it without either: the pairs are empty.
+    /// <see cref="NestedObjectMapping.UpdatesInPlace"/>: the in-place overload may update an existing nested object (a class
+    /// whose getter the generated code can call, mapped by a mapping of this compilation; the plan decides whether that
+    /// mapping can update an object, <see cref="MappingPlanEntry.CanUpdateInPlace"/>). With a referenced assembly's mapping
+    /// (or a hand-written method) only when it has the public in-place overload <c>{method}(this source, dest)</c>
+    /// (<see cref="IsUpdatedByExistingMethod"/>); without it (turned off there) a new object is assigned.
+    /// </summary>
+    public static NestedObjectMapping? CheckNestedObject(Compilation compilation, ITypeSymbol sourceType, ITypeSymbol destType,
+        string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location,
+        ImmutableArray<DiagnosticInfo>.Builder diagnostics)
+    {
+        if (IsAssignable(compilation, sourceType, destType) || !IsObject(sourceType, allowInterface: true) || !IsObject(destType))
+            return null;
+
+        var st = Display(sourceType);
+        var dt = Display(destType);
+        var method = $"MapTo{destType.Name}";
+        var nullHandling = NullHandling.ForNestedObject(sourceType, destType);
+        if (nullHandling is null)
+        {
+            diagnostics.Add(Create(destProp, destSymbol,
+                $"'{sourceDisplay}' is '{st}', which can be null, and the destination is '{dt}', which cannot. "
+                + "Declare the destination property nullable or the source property non-nullable"
+                + origin switch
+                {
+                    Origin.Attribute => ", or mark the destination property [Ignore].",
+                    Origin.Profile => $", or configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(...)) or with o.Ignore().",
+                    _ => ". " + ReverseHint(destProp),
+                }, location));
+            return new NestedObjectMapping(method, NullHandling.NotNull, default, skipped: true, updatesInPlace: false,
+                sourceTypeFqn: string.Empty);
+        }
+
+        var source = sourceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var dest = destType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        // A struct is copied by the getter: updating the copy would change nothing, so it is assigned.
+        var readable = !destType.IsValueType && destProp.GetMethod is { } getter
+                       && compilation.IsSymbolAccessibleWithin(getter, compilation.Assembly);
+        if (IsMappedByExistingMethod(compilation, method, source, dest))
+            return new NestedObjectMapping(method, nullHandling, default, skipped: false,
+                updatesInPlace: readable && IsUpdatedByExistingMethod(compilation, method, source, dest),
+                sourceTypeFqn: SymbolHelpers.GetFullyQualifiedName(source));
+
+        var ss = Display(source);
+        var ds = Display(dest);
+        diagnostics.Add(MissingPair(destProp, destSymbol,
+            $"'{sourceDisplay}' is '{st}' and the destination is '{dt}', and there is no mapping from '{ss}' to '{ds}'. "
+            + AddMappingHint(ss, ds), location, source, dest, origin));
+        diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.CyclicMapping, destProp.Name, destSymbol.ToDisplayString())
+            .WithLocation(location)
+            .WithProperty(CyclePropertyKey, destProp.Name));
+        return new NestedObjectMapping(method, nullHandling, ElementPairKeys(source, dest), skipped: false, updatesInPlace: readable,
+            sourceTypeFqn: SymbolHelpers.GetFullyQualifiedName(source));
+    }
+
+    private static string AddMappingHint(string source, string dest)
+        => $"Add [MapTo(typeof({dest}))] to '{source}', [MapFrom(typeof({source}))] to '{dest}', or CreateMap<{source}, {dest}>() in a profile.";
+
+    /// <summary>
+    /// IM0002 "no mapping from <paramref name="source"/> to <paramref name="dest"/>", reported only when the plan
+    /// generates none of the pairs; with the properties of the code fix that adds the mapping.
+    /// </summary>
+    private static DiagnosticInfo MissingPair(IPropertySymbol destProp, INamedTypeSymbol destSymbol, string reason,
+        LocationInfo? location, ITypeSymbol source, ITypeSymbol dest, Origin origin)
+        => Create(destProp, destSymbol, reason, location)
+            .WithProperty(MissingElementPairsKey, string.Join("|", ElementPairKeys(source, dest)))
+            .WithProperty(PairSourceIdKey, DeclarationId(source))
+            .WithProperty(PairDestinationIdKey, DeclarationId(dest))
+            .WithProperty(PairSourceTypeKey, SymbolHelpers.GetFullyQualifiedName(source))
+            .WithProperty(PairDestinationTypeKey, SymbolHelpers.GetFullyQualifiedName(dest))
+            .WithProperty(MappingOriginKey, origin.ToString());
+
+    // T:App.Address for a type the code fix can find (DocumentationCommentId); empty for a constructed generic type.
+    private static string DeclarationId(ITypeSymbol type)
+        => type is INamedTypeSymbol { IsGenericType: true }
+            ? string.Empty
+            : DocumentationCommentId.CreateDeclarationId(type) ?? string.Empty;
 
     /// <summary>
     /// The pair keys (<c>{source}-&gt;{dest}</c>, as <see cref="MappingDescriptor.PairKey"/>) under which a mapping of this
@@ -136,13 +246,6 @@ internal static class PropertyTypeCheck
         => $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap and configure '{destProp.Name}' "
            + "there (ForMember with MapFrom, UseConverter or Ignore), or remove ReverseMap().";
 
-    // `source.Address` → `Address` for the hint.
-    private static string SourceMember(string sourceDisplay)
-    {
-        var dot = sourceDisplay.LastIndexOf('.');
-        return dot < 0 ? sourceDisplay : sourceDisplay.Substring(dot + 1);
-    }
-
     /// <summary>
     /// The generated <c>destination.X = value</c> compiles: an implicit conversion exists (identity, numeric widening,
     /// nullable wrapping, reference conversions, user-defined implicit operators). Nullable reference annotations do not
@@ -156,11 +259,13 @@ internal static class PropertyTypeCheck
     /// <summary>
     /// A class or struct that could have a mapping of its own (a "nested object"): not a primitive, string, enum, nullable
     /// value type, delegate, collection, or a type of the <c>System</c> namespaces (<c>Guid</c>, <c>DateTime</c>, …).
+    /// With <paramref name="allowInterface"/> also an interface (the source type of a mapping may be one).
     /// </summary>
-    private static bool IsObject(ITypeSymbol type)
+    private static bool IsObject(ITypeSymbol type, bool allowInterface = false)
     {
         if (type is not INamedTypeSymbol named) return false;
-        if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct)) return false;
+        if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct) && !(allowInterface && named.TypeKind == TypeKind.Interface))
+            return false;
         if (named.SpecialType != SpecialType.None) return false;
         if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return false;
         if (SymbolHelpers.TryGetCollectionElementType(named, out _)) return false;
@@ -201,6 +306,35 @@ internal static class PropertyTypeCheck
         return false;
     }
 
+    /// <summary>
+    /// The in-place overload <c>{method}(this source, dest)</c> of an existing mapping (see <see cref="IsMappedByExistingMethod"/>,
+    /// same namespaces): an accessible, non-generic extension method returning <c>void</c> that takes
+    /// <paramref name="source"/> (or a base type or interface of it) and <paramref name="dest"/> (or a base type of it).
+    /// </summary>
+    private static bool IsUpdatedByExistingMethod(Compilation compilation, string method, ITypeSymbol source, ITypeSymbol dest)
+    {
+        var ironMapper = compilation.GlobalNamespace.GetNamespaceMembers().FirstOrDefault(n => n.Name == "IronMapper");
+        var generated = ironMapper?.GetNamespaceMembers().FirstOrDefault(n => n.Name == "Generated");
+        foreach (var ns in new[] { generated, ironMapper, compilation.GlobalNamespace })
+        {
+            if (ns is null) continue;
+            foreach (var type in ns.GetTypeMembers())
+            {
+                if (!type.MightContainExtensionMethods) continue;
+                foreach (var member in type.GetMembers(method))
+                {
+                    if (member is IMethodSymbol { IsExtensionMethod: true, Parameters.Length: 2, IsGenericMethod: false, ReturnsVoid: true } candidate
+                        && compilation.IsSymbolAccessibleWithin(candidate, compilation.Assembly)
+                        && IsReceiverConversion(compilation, source, candidate.Parameters[0].Type)
+                        && IsReceiverConversion(compilation, dest, candidate.Parameters[1].Type))
+                        return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // The conversions C# allows for the receiver of an extension method call: identity, implicit reference, boxing.
     private static bool IsReceiverConversion(Compilation compilation, ITypeSymbol receiver, ITypeSymbol parameter)
     {
@@ -210,4 +344,40 @@ internal static class PropertyTypeCheck
     }
 
     private static string Display(ITypeSymbol type) => type.ToDisplayString();
+}
+
+/// <summary>Result of <see cref="PropertyTypeCheck.CheckNestedObject"/>; copied into <see cref="PropertyMappingDescriptor"/>.</summary>
+internal sealed class NestedObjectMapping
+{
+    public NestedObjectMapping(string method, string nullHandling, ImmutableArray<string> pairs, bool skipped, bool updatesInPlace,
+        string sourceTypeFqn)
+    {
+        SourceTypeFqn = sourceTypeFqn;
+        UpdatesInPlace = updatesInPlace;
+        Method = method;
+        NullHandling = nullHandling;
+        Pairs = pairs.IsDefault ? ImmutableArray<string>.Empty : pairs;
+        Skipped = skipped;
+    }
+
+    /// <summary><c>MapTo{DestType}</c>, called as an extension method when no mapping of this compilation maps the pair.</summary>
+    public string Method { get; }
+
+    /// <summary>See <see cref="Analysis.NullHandling.ForNestedObject"/>.</summary>
+    public string NullHandling { get; }
+
+    /// <summary>
+    /// The type pairs (the source type and its base types and interfaces → the destination type) of which this compilation
+    /// must generate one; empty when a referenced assembly maps the pair.
+    /// </summary>
+    public ImmutableArray<string> Pairs { get; }
+
+    /// <summary>IM0002 that no mapping can fix (nullable source, non-nullable destination): the property is not generated.</summary>
+    public bool Skipped { get; }
+
+    /// <summary>See <see cref="PropertyMappingDescriptor.NestedUpdatesInPlace"/>.</summary>
+    public bool UpdatesInPlace { get; }
+
+    /// <summary>See <see cref="PropertyMappingDescriptor.NestedSourceTypeFqn"/>.</summary>
+    public string SourceTypeFqn { get; }
 }

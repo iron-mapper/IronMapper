@@ -13,7 +13,7 @@
       Descriptor: {
         Id: IM0002,
         Title: Property types are incompatible or have no mapping,
-        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping (a code fix adds it for a nested object or a collection element), or ignore the property. The property is not generated; the rest of the mapping is.,
         MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
         Category: IronMapper,
         DefaultSeverity: Error,
@@ -28,12 +28,12 @@
     public List<LineDto> Lines { get; set; } = new();
 */
  : (22,22)-(22,29),
-      Message: Property 'Address' of 'App.OrderDto' is not mapped: 'Order.Address' is 'App.Address' and the destination is 'App.AddressDto': nested objects are not mapped automatically yet. Map it with [MapConverter(typeof(...))] (an ITypeConverter<App.Address, App.AddressDto>) on the source property, or in a profile with CreateMap<App.Address, App.AddressDto>() and ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto())); or mark the destination property [Ignore].,
+      Message: Property 'Address' of 'App.OrderDto' is not mapped: 'Order.Address' is 'App.Address' and the destination is 'App.AddressDto', and there is no mapping from 'App.Address' to 'App.AddressDto'. Add [MapTo(typeof(App.AddressDto))] to 'App.Address', [MapFrom(typeof(App.Address))] to 'App.AddressDto', or CreateMap<App.Address, App.AddressDto>() in a profile.,
       Severity: Error,
       Descriptor: {
         Id: IM0002,
         Title: Property types are incompatible or have no mapping,
-        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping (a code fix adds it for a nested object or a collection element), or ignore the property. The property is not generated; the rest of the mapping is.,
         MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
         Category: IronMapper,
         DefaultSeverity: Error,
@@ -53,7 +53,7 @@
       Descriptor: {
         Id: IM0002,
         Title: Property types are incompatible or have no mapping,
-        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.,
+        Description: The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping (a code fix adds it for a nested object or a collection element), or ignore the property. The property is not generated; the rest of the mapping is.,
         MessageFormat: Property '{0}' of '{1}' is not mapped: {2},
         Category: IronMapper,
         DefaultSeverity: Error,

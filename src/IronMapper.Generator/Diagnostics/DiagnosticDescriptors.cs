@@ -19,9 +19,10 @@ internal static class DiagnosticDescriptors
         description: "Add a matching property to the source type, use [MapProperty] to map from a differently-named property, or use [Ignore] on the destination property to suppress this warning. For profile (CreateMap) mappings it is reported only with <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>; there use ForMember(d => d.X, o => o.Ignore()) or MapFrom.");
 
     /// <summary>
-    /// IM0002 — A destination property cannot be assigned from its source: the types are incompatible, a nested object is
-    /// not mapped automatically, or the elements of a collection have no mapping. The property is not generated; the
-    /// third argument says why and what to add (<see cref="Analysis.PropertyTypeCheck"/>).
+    /// IM0002 — A destination property cannot be assigned from its source: the types are incompatible, a nested object or
+    /// the elements of a collection have no mapping for their type pair, or a nullable nested object goes to a
+    /// non-nullable destination. The property is not generated; the third argument says why and what to add
+    /// (<see cref="Analysis.PropertyTypeCheck"/>).
     /// </summary>
     public static readonly DiagnosticDescriptor IncompatiblePropertyTypes = new(
         id: "IM0002",
@@ -30,7 +31,7 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping, or ignore the property. The property is not generated; the rest of the mapping is.");
+        description: "The generated assignment would not compile (CS0029/CS0266, or CS1061 for a collection element without a mapping). Convert the value (a converter or MapFrom), add the missing mapping (a code fix adds it for a nested object or a collection element), or ignore the property. The property is not generated; the rest of the mapping is.");
 
     /// <summary>
     /// IM0003 — The type in <c>typeof(...)</c> of [MapTo] or [MapFrom] resolves but cannot be mapped (an open generic type,
@@ -47,16 +48,19 @@ internal static class DiagnosticDescriptors
         description: "[MapTo] and [MapFrom] take a class, struct or record. A generic type must be closed (typeof(Box<int>), not typeof(Box<>)). Other mappings in the project are still generated.");
 
     /// <summary>
-    /// IM0004 — A cyclic mapping was detected (A→B→…→A).
+    /// IM0004 — An automatically mapped nested object closes a cycle of generated mappings (A → B → … → A). Reported only
+    /// for cycles through at least one nested object mapped automatically (2.1.0): a cycle only through collections
+    /// (a tree such as <c>Category.Children</c>) is not reported, and a property configured with <c>MapFrom</c> or
+    /// <c>Ignore</c> breaks the cycle. The third argument is the chain (<see cref="Analysis.MappingCycles"/>).
     /// </summary>
     public static readonly DiagnosticDescriptor CyclicMapping = new(
         id: "IM0004",
-        title: "Cyclic mapping detected",
-        messageFormat: "Cyclic mapping detected: '{0}' maps to '{1}' which directly or indirectly maps back to '{0}'",
+        title: "Nested object mapping closes a cycle",
+        messageFormat: "Property '{0}' of '{1}' is mapped automatically and closes a cycle of mappings: {2}. The mapping recurses without end only if the objects form a cycle at run time; break the cycle with Ignore or MapFrom on a property of the chain, or suppress IM0004 for models that are always finite (#pragma warning disable IM0004, or dotnet_diagnostic.IM0004.severity = none in .editorconfig).",
         category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
+        defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "Remove or break the cycle between the two types. Use a custom ITypeConverter to handle self-referential or recursive object graphs.");
+        description: "A cycle of types is not an endless recursion by itself: a manager of a manager (Employee.Manager) ends with null. It recurses forever, and fails with a StackOverflowException, only when the data has a cycle, such as an order whose customer lists that order (Order.Customer.Orders). The generated code does not track mapped objects. Cycles only through collections are not reported.");
 
     /// <summary>
     /// IM0005 — A MappingProfile subclass defines no mappings in its constructor.

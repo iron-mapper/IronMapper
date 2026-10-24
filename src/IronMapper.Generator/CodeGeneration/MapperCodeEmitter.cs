@@ -12,8 +12,12 @@ namespace IronMapper.Generator.CodeGeneration;
 /// <remarks>
 /// For each mapping the emitter generates four methods:
 /// <list type="bullet">
-///   <item><c>MapToDestType(this SourceType source) → DestType</c> — creates a new instance.</item>
-///   <item><c>MapToDestType(this SourceType source, DestType destination) → void</c> — in-place update (skips init-only properties).</item>
+///   <item><c>MapToDestType(this SourceType source) → DestType</c> — creates a new instance: checks <c>source</c> for
+///   <see langword="null"/> and calls the private <c>MapToDestTypeCore(source)</c>, which nested objects call directly
+///   (after their own check when the source property is nullable).</item>
+///   <item><c>MapToDestType(this SourceType source, DestType destination) → void</c> — in-place update (skips init-only
+///   properties): checks both arguments and calls the private <c>MapToDestTypeCore(source, destination)</c>, which the
+///   in-place overloads of other mappings call to update an existing nested object.</item>
 ///   <item><c>MapToDestTypeList(this IEnumerable&lt;SourceType&gt;? source) → List&lt;DestType&gt;</c> — collection shorthand (no LINQ).</item>
 ///   <item><c>MapToDestTypeArray(this IEnumerable&lt;SourceType&gt;? source) → DestType[]</c> — collection shorthand.</item>
 /// </list>
@@ -31,6 +35,12 @@ internal static class MapperCodeEmitter
     /// <c>GeneratedMappers.g.cs</c>; generated rather than in the runtime package, so it adds no public API.
     /// </summary>
     public const string ElementMapperInterface = "IElementMapper";
+
+    /// <summary>
+    /// Throw helper of a nested object that is <see langword="null"/> where the destination does not accept it
+    /// (<see cref="Analysis.NullHandling.Throw"/>), declared once in <c>GeneratedMappers.g.cs</c>; no <c>MapTo</c> prefix.
+    /// </summary>
+    public const string NestedObjectIsNullName = "NestedObjectIsNull";
 
     /// <summary>Generic loop of every <c>MapToXList</c> (see <see cref="EmitElementLoops"/>); no <c>MapTo</c> prefix, so it never collides with a mapping method.</summary>
     public const string ListHelperName = "MapElementsToList";
@@ -82,6 +92,19 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
         sb.AppendLine("        {");
         sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
+        sb.AppendLine($"            return {entry.CoreMethodName}(source);");
+        sb.AppendLine("        }");
+
+        // ------------------------------------------------------------------
+        // Method 1 without the null check: MapToDestTypeCore(SourceType source) → DestType
+        // ------------------------------------------------------------------
+        // Called by Method 1 and, in every mapping file of the class, by nested objects, by the nullable annotations
+        // (NullHandling): after their own check for a nullable property, without one for a non-nullable property. No
+        // second check and no throw in the nested call, so the JIT can inline it. Private: the class is partial, every
+        // mapping file sees it.
+        sb.AppendLine();
+        sb.AppendLine($"        private static {destFullName} {entry.CoreMethodName}({sourceFullName} source)");
+        sb.AppendLine("        {");
 
         if (descriptor.WhenConditionBody is not null)
             sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;"); // safe: `default!` is part of the emitted C# text, not a local operator
@@ -108,8 +131,8 @@ internal static class MapperCodeEmitter
 
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || prop.IsInitOnly || IsElementMappingMissing(prop, plan)) continue;
-                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
+                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan)) continue;
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
             }
 
             if (descriptor.AfterMapLambdaBody is not null)
@@ -123,9 +146,9 @@ internal static class MapperCodeEmitter
             sb.AppendLine("            {");
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || IsElementMappingMissing(prop, plan)) continue;
+                if (prop.IsIgnored || IsMappingMissing(prop, plan)) continue;
                 sb.Append("                ");
-                sb.AppendLine(BuildPropertyInitializer(prop, scopedTransformers, scope) + ",");
+                sb.AppendLine(BuildPropertyInitializer(descriptor, prop, scopedTransformers, scope, plan) + ",");
             }
             sb.AppendLine("            };");
         }
@@ -135,8 +158,9 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         // Method 2: MapToDestType(this SourceType source, DestType destination) → void  [in-place]
         // ------------------------------------------------------------------
-        // Turned off (IronMapperGenerateInPlace / GenerateInPlace = false): the same body as a private method that only
-        // the IMapper registration calls, so IMapper.Map(source, destination) keeps working.
+        // Turned off (IronMapperGenerateInPlace / GenerateInPlace = false): a private method that only the IMapper
+        // registration calls, so IMapper.Map(source, destination) keeps working. Either checks both arguments and calls
+        // the in-place …Core (below).
         sb.AppendLine();
         if (methods.InPlace)
         {
@@ -152,10 +176,23 @@ internal static class MapperCodeEmitter
         sb.AppendLine("        {");
         sb.AppendLine($"            {options.NullCheck("source", "return;")}");
         sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
+        sb.AppendLine($"            {entry.CoreMethodName}(source, destination);");
+        sb.AppendLine("        }");
+
+        // ------------------------------------------------------------------
+        // Method 2 without the null checks: MapToDestTypeCore(SourceType source, DestType destination)
+        // ------------------------------------------------------------------
+        // Generated for every mapping, also with the in-place overload turned off: the in-place overloads of other
+        // mappings call it to update an existing nested object (EmitNestedUpdate), so a tracked EF navigation keeps its
+        // instance instead of being replaced.
+        sb.AppendLine();
+        sb.AppendLine($"        private static void {entry.CoreMethodName}({sourceFullName} source, {destFullName} destination)");
+        sb.AppendLine("        {");
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (prop.IsIgnored || prop.IsInitOnly || IsElementMappingMissing(prop, plan)) continue;
-            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(prop, scopedTransformers, scope)};");
+            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan)) continue;
+            if (EmitNestedUpdate(sb, descriptor, prop, plan)) continue;
+            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
         }
         sb.AppendLine("        }");
 
@@ -204,7 +241,7 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (!UsesCollectionHelper(prop) || IsElementMappingMissing(prop, plan)) continue;
+            if (!UsesCollectionHelper(prop) || IsMappingMissing(prop, plan)) continue;
             sb.AppendLine();
             EmitCollectionHelper(sb, prop, scope, plan);
         }
@@ -276,12 +313,15 @@ internal static class MapperCodeEmitter
     /// the throw helper used by the null checks of the generated methods.</param>
     /// <param name="generatedCodeAttribute"><c>IronMapperGeneratedCodeAttribute</c> (default <c>true</c>): mark the class
     /// with <c>[GeneratedCode]</c>.</param>
+    /// <param name="usesNestedObjectCheck">A generated mapping checks a nested object for <see langword="null"/>
+    /// (<see cref="Analysis.NullHandling.Throw"/>): declare <see cref="NestedObjectIsNullName"/>.</param>
     /// <remarks>
     /// The attributes are declared here once and apply to every part of the partial class: the mapping files, the
     /// registration for <c>IMapper</c> and <see cref="ConverterCacheName"/> (a second copy on another part would be CS0579).
     /// </remarks>
     public static (string hintName, string source) EmitClassDeclaration(string accessibility, bool usesConverterCache,
-        bool excludeFromCodeCoverage, bool usesList, bool usesArray, GeneratedCodeOptions options, bool generatedCodeAttribute = true)
+        bool excludeFromCodeCoverage, bool usesList, bool usesArray, GeneratedCodeOptions options, bool generatedCodeAttribute = true,
+        bool usesNestedObjectCheck = false)
     {
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -315,7 +355,20 @@ internal static class MapperCodeEmitter
             sb.AppendLine("            public static readonly TConverter Instance = new TConverter();");
             sb.AppendLine("        }");
         }
-        if (usesList || usesArray) EmitElementLoops(sb, usesList, usesArray, needsSeparator: !options.UseThrowIfNull || usesConverterCache);
+        if (usesNestedObjectCheck)
+        {
+            // Out of line (NoInlining) and with the message as a constant: the mapping that calls it stays small, and
+            // the check costs one comparison when the value is there.
+            if (!options.UseThrowIfNull || usesConverterCache) sb.AppendLine();
+            sb.AppendLine("        /// <summary>Throws for a nested object that is null although the destination property is not nullable.</summary>");
+            if (options.HasDoesNotReturn)
+                sb.AppendLine("        [global::System.Diagnostics.CodeAnalysis.DoesNotReturn]");
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            sb.AppendLine($"        private static T {NestedObjectIsNullName}<T>(string message)");
+            sb.AppendLine("            => throw new global::System.InvalidOperationException(message);");
+        }
+        if (usesList || usesArray)
+            EmitElementLoops(sb, usesList, usesArray, needsSeparator: !options.UseThrowIfNull || usesConverterCache || usesNestedObjectCheck);
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
@@ -515,15 +568,15 @@ internal static class MapperCodeEmitter
     /// <summary>
     /// Builds an object-initializer line: <c>PropName = &lt;rhs&gt;</c>.
     /// </summary>
-    private static string BuildPropertyInitializer(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
-        => $"{prop.DestPropertyName} = {BuildRhs(prop, transformers, scope)}";
+    private static string BuildPropertyInitializer(MappingDescriptor descriptor, PropertyMappingDescriptor prop,
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope, MappingPlan plan)
+        => $"{prop.DestPropertyName} = {BuildRhs(descriptor, prop, transformers, scope, plan)}";
 
     /// <summary>
     /// Builds the right-hand side expression for a property mapping.
     /// </summary>
-    private static string BuildRhs(PropertyMappingDescriptor prop,
-        ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
+    private static string BuildRhs(MappingDescriptor descriptor, PropertyMappingDescriptor prop,
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope, MappingPlan plan)
     {
         string raw;
         if (prop.LambdaBody is not null)
@@ -532,6 +585,9 @@ internal static class MapperCodeEmitter
             raw = $"{ConverterInstance(prop.ConverterType, prop.ConverterIsCached)}.Convert(source.{prop.SourcePropertyName})";
         else if (prop.CollectionElementMapMethod is not null)
             raw = $"{CollectionHelperName(prop, scope)}(source.{prop.SourcePropertyName})";
+        else if (prop.NestedMapMethod is not null)
+            // The mapped value, not the source value: a transformer of the source type does not apply to it.
+            return MapNestedObject(descriptor, prop, plan);
         else
             raw = $"source.{prop.SourcePropertyName}";
 
@@ -592,16 +648,99 @@ internal static class MapperCodeEmitter
     /// A nested collection property is mapped by a private helper of its mapping (see <see cref="EmitCollectionHelper"/>),
     /// unless a <c>MapFrom</c> lambda or a converter is set for it (those take precedence in <see cref="BuildRhs"/>).
     /// </summary>
-    private static bool UsesCollectionHelper(PropertyMappingDescriptor prop)
+    internal static bool UsesCollectionHelper(PropertyMappingDescriptor prop)
         => !prop.IsIgnored && prop.LambdaBody is null && prop.ConverterType is null && prop.CollectionElementMapMethod is not null;
 
     /// <summary>
-    /// IM0002: the elements of a collection property have no mapping (none of
-    /// <see cref="PropertyMappingDescriptor.MissingElementPairs"/> is generated); the property is not generated, so the
-    /// file compiles (it used to fail with CS1061). The diagnostic is reported by <c>CollectDiagnostics</c>.
+    /// IM0002: the elements of a collection property or a nested object have no mapping (none of
+    /// <see cref="PropertyMappingDescriptor.MappingPairs"/> is generated); the property is not generated, so the file
+    /// compiles (it used to fail with CS1061/CS0029). The diagnostic is reported by <c>CollectDiagnostics</c>.
     /// </summary>
-    internal static bool IsElementMappingMissing(PropertyMappingDescriptor prop, MappingPlan plan)
-        => UsesCollectionHelper(prop) && prop.MissingElementPairs.Length > 0 && !plan.GeneratesAny(prop.MissingElementPairs);
+    internal static bool IsMappingMissing(PropertyMappingDescriptor prop, MappingPlan plan)
+        => (UsesCollectionHelper(prop) || IsMappedNestedObject(prop))
+           && prop.MappingPairs.Length > 0 && !plan.GeneratesAny(prop.MappingPairs);
+
+    /// <summary>A nested object mapped by the mapping of its type pair (no <c>MapFrom</c> lambda or converter set for it).</summary>
+    internal static bool IsMappedNestedObject(PropertyMappingDescriptor prop)
+        => !prop.IsIgnored && prop.LambdaBody is null && prop.ConverterType is null && prop.NestedMapMethod is not null;
+
+    /// <summary>
+    /// The mapped nested object <c>source.{Property}</c> (<see cref="PropertyMappingDescriptor.NestedMapMethod"/>): with
+    /// the null check of <see cref="PropertyMappingDescriptor.NullHandling"/> (<c>null</c> → <c>null</c>, or
+    /// <see cref="NestedObjectIsNullName"/>), then the <c>…Core</c> method of the generated mapping of
+    /// <see cref="PropertyMappingDescriptor.MappingPairs"/>, or the extension method <c>MapTo{Dest}</c> when a referenced
+    /// assembly maps the pair.
+    /// </summary>
+    private static string MapNestedObject(MappingDescriptor descriptor, PropertyMappingDescriptor prop, MappingPlan plan)
+    {
+        var value = $"source.{prop.SourcePropertyName}";
+        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
+        switch (prop.NullHandling)
+        {
+            case Analysis.NullHandling.Check:
+                return $"{value} is null ? null : {MapNested(prop, entry, value)}";
+            case Analysis.NullHandling.Throw:
+                var checkedValue = $"{value} ?? {NestedObjectIsNull(descriptor, prop)}";
+                return MapNested(prop, entry, entry is null ? $"({checkedValue})" : checkedValue);
+            default:
+                return MapNested(prop, entry, value);
+        }
+    }
+
+    // The new nested object: the …Core of the generated mapping, or the public method of a referenced assembly's mapping.
+    private static string MapNested(PropertyMappingDescriptor prop, MappingPlanEntry? entry, string value)
+        => entry is null ? $"{value}.{prop.NestedMapMethod}()" : $"{entry.CoreMethodName}({value})";
+
+    /// <summary>
+    /// The call of <see cref="NestedObjectIsNullName"/> for <paramref name="prop"/>, typed as the source property, with a
+    /// message that names both properties and the usual cause (an EF navigation that was not loaded).
+    /// </summary>
+    private static string NestedObjectIsNull(MappingDescriptor descriptor, PropertyMappingDescriptor prop)
+    {
+        var message = $"{descriptor.SourceTypeName}.{prop.SourcePropertyName} is null, but {descriptor.DestTypeName}.{prop.DestPropertyName} "
+                      + "is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property "
+                      + "nullable (null is then mapped to null) or configure the property explicitly.";
+        // Type and property names: no quote or backslash to escape.
+        return $"{NestedObjectIsNullName}<{prop.NestedSourceTypeFqn}>(\"{message}\")";
+    }
+
+    /// <summary>
+    /// The in-place update of a nested object (<see cref="PropertyMappingDescriptor.NestedUpdatesInPlace"/>):
+    /// <c>null</c> in the source as for a new object (<c>null</c>, or <see cref="NestedObjectIsNullName"/>); a
+    /// <see langword="null"/> destination value gets a new object; an existing one is updated by the in-place
+    /// <c>…Core</c> of the pair, or by the public in-place overload of a referenced assembly's mapping (extension syntax),
+    /// and keeps its identity.
+    /// Returns <see langword="false"/> (the property is assigned a new object, as before) when the pair's mapping of this
+    /// compilation cannot update an object (<see cref="MappingPlanEntry.CanUpdateInPlace"/>: <c>ConvertUsing</c>, or a
+    /// mapped <c>init</c>-only property that the in-place overload would skip). A referenced assembly's in-place overload
+    /// is called as it is: what it does with <c>ConvertUsing</c> or <c>init</c> properties is decided there.
+    /// </summary>
+    private static bool EmitNestedUpdate(StringBuilder sb, MappingDescriptor descriptor, PropertyMappingDescriptor prop,
+        MappingPlan plan)
+    {
+        if (!IsMappedNestedObject(prop) || !prop.NestedUpdatesInPlace) return false;
+        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
+        if (entry is { CanUpdateInPlace: false }) return false;
+
+        var value = $"source.{prop.SourcePropertyName}";
+        var target = $"destination.{prop.DestPropertyName}";
+        var otherwise = string.Empty;
+        if (prop.NullHandling == Analysis.NullHandling.Check)
+        {
+            sb.AppendLine($"            if ({value} is null) {target} = null;");
+            otherwise = "else ";
+        }
+        else if (prop.NullHandling == Analysis.NullHandling.Throw)
+        {
+            sb.AppendLine($"            if ({value} is null) {NestedObjectIsNull(descriptor, prop)};");
+            otherwise = "else ";
+        }
+        sb.AppendLine($"            {otherwise}if ({target} is null) {target} = {MapNested(prop, entry, value)};");
+        sb.AppendLine(entry is null
+            ? $"            else {value}.{prop.NestedMapMethod}({target});"
+            : $"            else {entry.CoreMethodName}({value}, {target});");
+        return true;
+    }
 
     /// <summary>Name of the collection helper of <paramref name="prop"/>, unique within the class through the helper scope.</summary>
     private static string CollectionHelperName(PropertyMappingDescriptor prop, string scope)
@@ -614,13 +753,15 @@ internal static class MapperCodeEmitter
     /// type, anything else with <c>foreach</c>. A <c>List&lt;T&gt;</c> or array destination is materialized with the
     /// exact capacity when the size is known; an <c>IEnumerable&lt;T&gt;</c> destination stays a lazy sequence (an
     /// iterator; the elements are mapped on each enumeration), as in 1.1. Elements are mapped by a direct call of the
-    /// element mapping (extension syntax: it may be declared in a referenced assembly).
+    /// public element mapping (extension syntax: it may be declared in a referenced assembly), not of its <c>…Core</c>:
+    /// a <see langword="null"/> element throws <c>ArgumentNullException</c>, as documented since 2.0.0. The public method
+    /// is a null check and a call of <c>…Core</c>, small enough for the JIT to inline it into the loop.
     /// </summary>
     private static void EmitCollectionHelper(StringBuilder sb, PropertyMappingDescriptor prop, string scope, MappingPlan plan)
     {
         // The element mapping may have a qualified name (IM0013); mappings not in this compilation keep MapTo{Name}.
         var element = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
-                      ?? prop.CollectionElementMapMethod;
+                      ?? prop.CollectionElementMapMethod!;
         var name = CollectionHelperName(prop, scope);
         var sourceType = prop.CollectionSourceTypeFqn;
         var destElement = prop.CollectionDestElementFqn!;

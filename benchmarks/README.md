@@ -20,9 +20,20 @@ The specification of this suite is [BENCHMARK_SPEC.md](BENCHMARK_SPEC.md).
 Exact package versions are pinned in [Directory.Packages.props](Directory.Packages.props) and listed in
 `RESULTS.md` (written automatically, together with the machine, OS, .NET SDK and runtime, date and commit).
 
-IronMapper is the published NuGet package by default. To measure the local sources in `../src` instead:
-`-p:UseLocalIronMapper=true` on `dotnet build` / `dotnet run`, or the environment variable `UseLocalIronMapper=true`
-for the scripts (MSBuild reads environment variables as properties).
+IronMapper is the published NuGet package by default. To measure the local sources in `../src` instead, set the
+**environment variable** `UseLocalIronMapper=true` (MSBuild reads environment variables as properties; the scripts do
+this). `-p:UseLocalIronMapper=true` is enough for `dotnet build` and `dotnet test`, **but not for measurements**:
+BenchmarkDotNet builds the benchmark project again in a child process and passes no MSBuild property of the parent
+`dotnet run`, so `dotnet run -p:UseLocalIronMapper=true -- --filter ...` measures the package of
+`Directory.Packages.props` (1.1.3), while the child inherits an environment variable:
+
+```powershell
+$env:UseLocalIronMapper = 'true'      # bash: export UseLocalIronMapper=true
+dotnet run -c Release -f net10.0 --project src/Comparison.Benchmarks -- --filter '*.NestedBenchmark.*'
+```
+
+Another published version: `IronMapperPackageVersion=<version>` (environment variable, with `UseLocalIronMapper` not
+`true`).
 
 ## What is measured
 
@@ -94,9 +105,12 @@ for the scripts (MSBuild reads environment variables as properties).
   to show the cost of creating the converter: up to 1.1.x the code generated for `UseConverter<T>()` calls
   `new T().Convert(...)` on every mapping; from 2.0.0 a converter without state (`SalaryConverter` is one) is created
   once and reused. The `IronMapper` row uses `UseConverter<T>()`, as a user would.
-- **IronMapper configures nested single objects through `MapFrom`.** IronMapper does not map nested single objects
-  automatically; the documented workaround is `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` per nested
-  property (feature matrix: "manual setup"). The benchmarks and the build time projects use exactly that.
+- **IronMapper up to 2.0 configures nested single objects through `MapFrom`.** IronMapper 2.0 does not map nested
+  single objects automatically; the documented workaround is `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`
+  per nested property (feature matrix: "manual setup"). The runtime benchmarks use exactly that with a package before
+  2.1; with the local sources or a package 2.1 or later (`IRONMAPPER_NESTED_OBJECTS`, `Directory.Build.targets`) their
+  profile maps them automatically. The generated build time projects (`run-build-time.ps1`) keep `ForMember` for every
+  version.
   Collections of mapped types are automatic.
 - **IronMapper collections** up to 1.1.x are generated as `Enumerable.ToList(Enumerable.Select(...))`; `Manual` and
   Mapperly use `new List<T>(count)` + loop. Part of the 1.1.3 collection difference to `Manual` comes from this. Under
@@ -192,7 +206,8 @@ Step by step:
 
 ```bash
 dotnet build IronMapper.Comparison.slnx -c Release
-dotnet test IronMapper.Comparison.slnx -c Release                       # gate (net10.0 and net8.0) + feature-matrix.md
+dotnet test IronMapper.Comparison.slnx -c Release                       # gate (net10.0 and net8.0)
+IRONMAPPER_WRITE_FEATURE_MATRIX=true dotnet test IronMapper.Comparison.slnx -c Release   # + feature-matrix.md (run-all.ps1 sets it)
 dotnet run -c Release -f net10.0 --project src/Comparison.Benchmarks -- --filter '*.FlatBenchmark.*' --launchCount 3
 pwsh ./scripts/run-startup.ps1 -Mode Both                               # startup.md (JIT, NativeAOT, BDN cold start)
 pwsh ./scripts/run-aot.ps1 -ReportOnly                                  # aot.md from the NativeAOT run above
@@ -218,7 +233,7 @@ dotnet run -c Release -f net8.0 --project src/Comparison.Benchmarks -- --filter 
 ```
 
 Their BenchmarkDotNet output goes to `results/raw/bdn-net8.0/` (the .NET 10 output stays in `results/raw/bdn/`, which
-`generate-report.ps1` reads), and the feature matrix written by `dotnet test` on .NET 8 goes to
+`generate-report.ps1` reads), and the feature matrix written by `dotnet test` on .NET 8 (with `IRONMAPPER_WRITE_FEATURE_MATRIX=true`) goes to
 `results/raw/feature-matrix.net8.0.md`. `run-all.ps1` runs the runtime benchmarks on both (step `RuntimeNet8`, off
 with `-SkipNet8`; RESULTS.md shows .NET 8 in its own section); the probes (cold start, NativeAOT, size) and the build
 time projects are .NET 10 only.
@@ -250,6 +265,43 @@ dotnet run -c Release -f net8.0 --project src/Comparison.Benchmarks --no-build -
 ```
 
 The benchmark program exits with code 1 when a benchmark fails or a `--filter` matches nothing.
+
+Note: the BenchmarkDotNet step of this smoke check passes `-p:UseLocalIronMapper=true`, which does not reach the child
+build of BenchmarkDotNet (see above): that step runs the scenarios of the published package, not of `../src`. The build
+and the equivalence tests do use the local sources.
+
+### Quick A/B (`run-quick.ps1`)
+
+The published release against the local sources, same machine, same session, same job:
+
+```powershell
+pwsh -NoProfile -File ./scripts/run-quick.ps1                     # Nested and InPlace, net10.0 and net8.0, 2.0.0 vs ../src
+pwsh -NoProfile -File ./scripts/run-quick.ps1 -Filter '*.FlatBenchmark.*' -Frameworks net8.0 -PublishedVersion 2.0.0
+pwsh -NoProfile -File ./scripts/run-quick.ps1 -CheckOnly           # only the pre-flight checks
+pwsh -NoProfile -File ./scripts/run-quick.ps1 -Dry                 # --job Dry: checks the commands in a few minutes
+```
+
+- Order: for each framework the published package, then the local sources; build outputs are removed and the project is
+  built again before each variant. The variant is chosen with environment variables, so BenchmarkDotNet's child build
+  gets it too. After the build and after each run (child build, `--keepFiles`) the script checks IronMapper by the
+  restore of `Comparison.Mappers` (`project.assets.json`) and `IronMapper.dll`: published — the package `IronMapper
+  <version>`, no project reference into `../src`, the bytes of the package's `lib/*/IronMapper.dll`, `<version>+<commit
+  of tag v<version>>`; local — the project reference to `src/IronMapper`, no IronMapper package, `+<HEAD>`, and in the
+  build (not the child build, which compiles `../src` into its own folder with another embedded PDB path) the bytes of
+  `src/IronMapper/bin/Release/*/IronMapper.dll`. The generator is an analyzer and is not copied to the build output, so
+  it is not checked there; `Directory.Build.targets` switches it together with IronMapper. A wrong build stops the
+  script, a wrong child build marks the run INVALID.
+- Job: the one of the full run (default job, `--launchCount 3`), because one process varies by more than the effects
+  looked for (Dynamic PGO, see Caveats); the numbers are comparable with `results/<release>/`. About 75 s per benchmark
+  case and variant: the default (12 cases × 2 variants × 2 frameworks) takes about an hour.
+- Pre-flight: branch (`-Branch`), commit and uncommitted changes (recorded with a hash of the diff), tag
+  `v<PublishedVersion>`, SDK and runtimes, free memory, AutoMapper license, and that the restored package is the one on
+  nuget.org (source in `.nupkg.metadata`, SHA-512 of the cached `.nupkg` equals the one downloaded from nuget.org).
+- Output: `../artifacts/quick/<yyyyMMdd-HHmmss>/<published|local>-<framework>/` (BenchmarkDotNet artifacts, `build.log`,
+  `run.log`, `assemblies.json`), `run-info.json`, `summary.md` (Mean, Ratio to `Manual` and Allocated of both variants
+  and the difference). `benchmarks/results/` is not written. `-SummarizeOnly <run folder>` writes `summary.md` again.
+
+These numbers are for a decision in a PR, not for publication: the published numbers come only from the full run.
 
 ## Layout
 

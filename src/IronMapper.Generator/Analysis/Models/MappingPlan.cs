@@ -12,7 +12,7 @@ namespace IronMapper.Generator.Analysis.Models;
 internal sealed class MappingPlan : IEquatable<MappingPlan>
 {
     private Dictionary<string, MappingPlanEntry>? _byOrigin;
-    private Dictionary<string, string>? _methodByPair;
+    private Dictionary<string, MappingPlanEntry>? _entryByPair;
 
     /// <summary>One entry per mapping definition, sorted by <see cref="MappingPlanEntry.Origin"/>.</summary>
     public EquatableArray<MappingPlanEntry> Entries { get; }
@@ -58,17 +58,31 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     }
 
     /// <summary>Returns the generated method name for the type pair <paramref name="pairKey"/>, or <see langword="null"/> when it is not generated.</summary>
-    public string? GetMethodName(string pairKey)
+    public string? GetMethodName(string pairKey) => FindGenerated(pairKey)?.MethodName;
+
+    /// <summary>
+    /// The generated entry of the first of <paramref name="pairKeys"/> that is generated (a nested object or a collection
+    /// element: the pair of the source type first, then of its base types and interfaces), or <see langword="null"/>.
+    /// </summary>
+    public MappingPlanEntry? FindFirstGenerated(IEnumerable<string> pairKeys)
     {
-        if (_methodByPair is null)
+        foreach (var key in pairKeys)
+            if (FindGenerated(key) is { } entry) return entry;
+        return null;
+    }
+
+    /// <summary>The generated entry of the type pair <paramref name="pairKey"/>, or <see langword="null"/>.</summary>
+    public MappingPlanEntry? FindGenerated(string pairKey)
+    {
+        if (_entryByPair is null)
         {
-            var methodByPair = new Dictionary<string, string>(StringComparer.Ordinal);
+            var entryByPair = new Dictionary<string, MappingPlanEntry>(StringComparer.Ordinal);
             foreach (var entry in Entries)
-                if (entry.Emit) methodByPair[entry.PairKey] = entry.MethodName;
-            _methodByPair = methodByPair;
+                if (entry.Emit) entryByPair[entry.PairKey] = entry;
+            _entryByPair = entryByPair;
         }
 
-        return _methodByPair.TryGetValue(pairKey, out var name) ? name : null;
+        return _entryByPair.TryGetValue(pairKey, out var found) ? found : null;
     }
 
     /// <inheritdoc/>
@@ -125,11 +139,31 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <summary>Overloads set for the mapping, as in <see cref="MappingDescriptor.MethodOverrides"/>.</summary>
     public GeneratedMethodOverrides MethodOverrides { get; }
 
+    /// <summary>
+    /// Name of the private <c>…Core</c> methods: <c>MapToX(source)</c> and the in-place <c>MapToX(source, destination)</c>
+    /// without the null checks, called by nested objects after their own check (see <see cref="Analysis.MappingPlanner"/>).
+    /// Empty when not generated.
+    /// </summary>
+    public string CoreMethodName { get; }
+
+    /// <summary>The generated code of the mapping calls <c>NestedObjectIsNull&lt;T&gt;</c> (a nested object checked for <see langword="null"/>).</summary>
+    public bool UsesNestedObjectCheck { get; }
+
+    /// <summary>
+    /// A nested object of this pair may be updated by the in-place overload (<see cref="MappingDescriptor.CanUpdateInPlace"/>);
+    /// otherwise it is assigned a new object.
+    /// </summary>
+    public bool CanUpdateInPlace { get; }
+
     /// <summary>Initialises a new <see cref="MappingPlanEntry"/>.</summary>
     public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
         string methodAccessibility, string sourceFullName, string destFullName, bool usesConverterCache = false,
-        GeneratedMethodOverrides methodOverrides = default)
+        GeneratedMethodOverrides methodOverrides = default, string coreMethodName = "", bool usesNestedObjectCheck = false,
+        bool canUpdateInPlace = false)
     {
+        CoreMethodName = coreMethodName;
+        UsesNestedObjectCheck = usesNestedObjectCheck;
+        CanUpdateInPlace = canUpdateInPlace;
         Origin = origin;
         PairKey = pairKey;
         Emit = emit;
@@ -156,7 +190,10 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && SourceFullName == other.SourceFullName
            && DestFullName == other.DestFullName
            && UsesConverterCache == other.UsesConverterCache
-           && MethodOverrides.Equals(other.MethodOverrides);
+           && MethodOverrides.Equals(other.MethodOverrides)
+           && CoreMethodName == other.CoreMethodName
+           && UsesNestedObjectCheck == other.UsesNestedObjectCheck
+           && CanUpdateInPlace == other.CanUpdateInPlace;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -176,6 +213,9 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + DestFullName.GetHashCode();
         hash = hash * 31 + UsesConverterCache.GetHashCode();
         hash = hash * 31 + MethodOverrides.GetHashCode();
+        hash = hash * 31 + CoreMethodName.GetHashCode();
+        hash = hash * 31 + UsesNestedObjectCheck.GetHashCode();
+        hash = hash * 31 + CanUpdateInPlace.GetHashCode();
         return hash;
     }
 }

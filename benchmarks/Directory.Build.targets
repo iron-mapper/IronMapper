@@ -38,12 +38,20 @@
   -->
   <PropertyGroup Condition="'$(UseLocalIronMapper)' != 'true' And '$(IronMapperPackageVersion)' != ''">
     <_IronMapperPackageMajor>$([System.Version]::Parse($(IronMapperPackageVersion.Split('-')[0])).Major)</_IronMapperPackageMajor>
+    <_IronMapperPackageMinor>$([System.Version]::Parse($(IronMapperPackageVersion.Split('-')[0])).Minor)</_IronMapperPackageMinor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(UseLocalIronMapper)' == 'true'">
-    <DefineConstants>$(DefineConstants);IRONMAPPER_CLASS_PER_ASSEMBLY</DefineConstants>
+    <DefineConstants>$(DefineConstants);IRONMAPPER_CLASS_PER_ASSEMBLY;IRONMAPPER_NESTED_OBJECTS</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition="'$(_IronMapperPackageMajor)' != '' And $(_IronMapperPackageMajor) &gt;= 2">
     <DefineConstants>$(DefineConstants);IRONMAPPER_CLASS_PER_ASSEMBLY</DefineConstants>
+  </PropertyGroup>
+  <!--
+    IronMapper 2.1 maps nested objects by the mappings of their type pairs (1.1.x and 2.0.x: MapFrom that calls the
+    generated method). The profiles check IRONMAPPER_NESTED_OBJECTS: set for the local sources and for a package 2.1 or later.
+  -->
+  <PropertyGroup Condition="'$(_IronMapperPackageMajor)' != '' And ($(_IronMapperPackageMajor) &gt; 2 Or ($(_IronMapperPackageMajor) == 2 And $(_IronMapperPackageMinor) &gt;= 1))">
+    <DefineConstants>$(DefineConstants);IRONMAPPER_NESTED_OBJECTS</DefineConstants>
   </PropertyGroup>
 
   <!--

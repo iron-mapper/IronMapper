@@ -16,8 +16,16 @@ public sealed class ComparisonProfile : MappingProfile
     {
         CreateMap<UserEntity, UserDto>();
 
-        // Nested single objects are not mapped automatically (docs/advanced.md, "Nested objects"):
-        // the documented workaround is an explicit MapFrom that calls the generated method.
+#if IRONMAPPER_NESTED_OBJECTS
+        // From 2.1 nested objects are mapped by the mappings of their type pairs (docs/advanced.md, "Nested objects").
+        CreateMap<AddressEntity, AddressDto>();
+        CreateMap<CustomerEntity, CustomerDto>();
+        CreateMap<ProductEntity, ProductDto>();
+        CreateMap<OrderLineEntity, OrderLineDto>();
+        CreateMap<OrderEntity, OrderDto>();
+#else
+        // Up to 2.0 nested single objects are not mapped automatically: the documented workaround is an explicit
+        // MapFrom that calls the generated method.
         CreateMap<AddressEntity, AddressDto>();
         CreateMap<CustomerEntity, CustomerDto>()
             .ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()));
@@ -26,6 +34,7 @@ public sealed class ComparisonProfile : MappingProfile
             .ForMember(d => d.Product, o => o.MapFrom(s => s.Product.MapToProductDto()));
         CreateMap<OrderEntity, OrderDto>()
             .ForMember(d => d.Customer, o => o.MapFrom(s => s.Customer.MapToCustomerDto()));
+#endif
 
         CreateMap<EmployeeEntity, EmployeeDto>()
             .ForMember(d => d.EmailAddress, o => o.MapFrom(s => s.Email))

@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.AccountDto MapToAccountDto(this global::App.Account source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToAccountDtoCore(source);
+        }
+
+        private static global::App.AccountDto MapToAccountDtoCore(global::App.Account source)
+        {
             if (!(source.Active)) return default!;
             var destination = new global::App.AccountDto();
             BeforeMap_Account_AccountDto(source, destination);
@@ -27,6 +32,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToAccountDtoCore(source, destination);
+        }
+
+        private static void MapToAccountDtoCore(global::App.Account source, global::App.AccountDto destination)
+        {
             destination.Name = TransformValue_String_Account_AccountDto(source.Name);
         }
 

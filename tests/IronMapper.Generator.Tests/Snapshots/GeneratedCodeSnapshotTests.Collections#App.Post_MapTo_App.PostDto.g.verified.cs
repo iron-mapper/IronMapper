@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.PostDto MapToPostDto(this global::App.Post source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToPostDtoCore(source);
+        }
+
+        private static global::App.PostDto MapToPostDtoCore(global::App.Post source)
+        {
             return new global::App.PostDto
             {
                 Comments = MapCollection_Comments_Post_PostDto(source.Comments),
@@ -28,6 +33,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToPostDtoCore(source, destination);
+        }
+
+        private static void MapToPostDtoCore(global::App.Post source, global::App.PostDto destination)
+        {
             destination.Comments = MapCollection_Comments_Post_PostDto(source.Comments);
             destination.Pinned = MapCollection_Pinned_Post_PostDto(source.Pinned);
             destination.Archived = MapCollection_Archived_Post_PostDto(source.Archived);

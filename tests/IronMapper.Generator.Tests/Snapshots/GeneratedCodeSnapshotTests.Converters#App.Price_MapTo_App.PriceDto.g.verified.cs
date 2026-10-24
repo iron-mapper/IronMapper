@@ -12,6 +12,11 @@ namespace IronMapper.Generated
         public static global::App.PriceDto MapToPriceDto(this global::App.Price source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+            return MapToPriceDtoCore(source);
+        }
+
+        private static global::App.PriceDto MapToPriceDtoCore(global::App.Price source)
+        {
             return ConverterCache<global::App.MoneyConverter>.Instance.Convert(source);
         }
 
@@ -22,6 +27,11 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            MapToPriceDtoCore(source, destination);
+        }
+
+        private static void MapToPriceDtoCore(global::App.Price source, global::App.PriceDto destination)
+        {
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.PriceDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>

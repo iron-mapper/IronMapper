@@ -636,17 +636,26 @@ internal static class ProfileAnalyzer
                 var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
                 var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 var skipped = false;
-                var missingElementPairs = default(EquatableArray<string>);
+                var mappingPairs = default(EquatableArray<string>);
+                NestedObjectMapping? nested = null;
                 var sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
-                var incompatible = collection is null
-                    ? PropertyTypeCheck.CheckAssignment(compilation, namedProp.Type, destProp.Type, sourceDisplay, destProp,
-                        destSymbol, checkOrigin, origin)
-                    : MappingAnalyzer.CheckCollection(compilation, collection, namedProp, destProp, sourceDisplay, destSymbol,
-                        origin, out missingElementPairs);
-                if (incompatible is { } found)
+                if (collection is not null)
                 {
-                    diagnostics.Add(found);
-                    skipped = collection is null;
+                    if (MappingAnalyzer.CheckCollection(compilation, collection, namedProp, destProp, sourceDisplay, destSymbol,
+                            checkOrigin, origin, out mappingPairs) is { } missing)
+                        diagnostics.Add(missing);
+                }
+                else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, destProp.Type, sourceDisplay,
+                             destProp, destSymbol, checkOrigin, origin, diagnostics)) is not null)
+                {
+                    skipped = nested.Skipped;
+                    mappingPairs = nested.Pairs;
+                }
+                else if (PropertyTypeCheck.CheckAssignment(compilation, namedProp.Type, destProp.Type, sourceDisplay, destProp,
+                             destSymbol, checkOrigin, origin) is { } incompatible)
+                {
+                    diagnostics.Add(incompatible);
+                    skipped = true;
                 }
 
                 propertyMappings.Add(new PropertyMappingDescriptor(
@@ -659,7 +668,8 @@ internal static class ProfileAnalyzer
                     isInitOnly: isInitOnly,
                     sourcePropertyTypeFqn: typeFqn,
                     collection: collection,
-                    missingElementPairs: missingElementPairs));
+                    mappingPairs: mappingPairs,
+                    nested: nested is { Skipped: false } ? nested : null));
             }
             // Priority 3: IncludeMembers flattening.
             else if (includedResolution.TryGetValue(destProp.Name, out var included))

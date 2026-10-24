@@ -18,7 +18,7 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 
 Производительность и размер, IronMapper 2.0.0 против AutoMapper 16.2.0 (.NET 10, один компьютер; отношение к ручному
 коду): плоский объект 11,4 нс (×0,99) против 34,0 нс (×2,95); вложенный заказ 177,8 нс (×1,07) против 264,0 нс (×1,59;
-вложенные объекты в IronMapper настроены вручную через `ForMember(... MapFrom(...))`, см. ниже); холодный старт +1,3 мс
+2.0.0 не маппит вложенные объекты автоматически, поэтому в IronMapper они настроены вручную через `ForMember(... MapFrom(...))`); холодный старт +1,3 мс
 против +72,1 мс к консольному приложению без маппера; framework-dependent publish +47,7 КБ против +1,17 МБ (AutoMapper
 добавляет 9 сборок, IronMapper — одну). Через `IMapper` из одного и того же DI-контейнера (плоский объект): IronMapper
 15,4 нс против 34,5 нс у AutoMapper. Холодный старт `IMapper` IronMapper — +19,9 мс, из них +15,3 мс — сам DI-контейнер
@@ -30,7 +30,8 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 ## Таблица соответствия API
 
 Обозначения в колонке **Статус**: **Поддерживается** — есть тест, который выполняет сгенерированный маппинг;
-**Частично** — работает с ограничениями или тестируется только текст сгенерированного кода; **Не поддерживается**.
+**Частично** — работает с ограничениями или тестируется только текст сгенерированного кода; **Не поддерживается**;
+**Отличается** — поддерживается, но результат намеренно отличается от AutoMapper.
 
 | AutoMapper | IronMapper | Статус | Тесты / примечания |
 |---|---|---|---|
@@ -41,7 +42,7 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | `[AutoMap(typeof(Src))]` на destination | `[MapFrom(typeof(Src))]` на destination | Частично | Тестируется только сгенерированный код: `BasicGeneratorTests.MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod` |
 | `services.AddAutoMapper(...)` | `services.AddIronMapper(assembly)` | Поддерживается | `DiIntegrationTests.AddIronMapper_RegistersIMapper`, `MapperRegistryAssemblyTests`. Регистрирует `IMapper` и сгенерированные маппинги сборок; никакой конфигурации маппинга не строит и профили в контейнер не добавляет |
 | `mapper.Map<Dest>(source)` | `source.MapToDest()` **или** `mapper.Map<Dest>(source)` | Поддерживается | `DiIntegrationTests.Mapper_MapsCorrectly_ViaIMapper`, `MapperRegistryTests`. `IMapper` использует runtime-тип source, затем его базовые типы |
-| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **или** `mapper.Map<Src, Dest>(source, dest)` | Частично | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; пропускает свойства `init` |
+| `mapper.Map(source, destination)` | `source.MapToDest(destination)` **или** `mapper.Map<Src, Dest>(source, dest)` | Частично | `CollectionMappingTests.InPlace_UpdatesExistingObject`, `DiIntegrationTests.RuntimeMapper_MapInPlace_UpdatesExistingObject`. Игнорирует `When`, `ConvertUsing`, `BeforeMap`/`AfterMap`; пропускает свойства `init`. Существующие вложенные объекты обновляются, как в AutoMapper (начиная с 2.1.0; `NestedObjectTests.InPlace_TwoLevels_KeepsTheExistingNestedObjectsAndUpdatesThem`, [подробнее](advanced.ru.md#in-place-обновление-вложенных-объектов)) |
 | `mapper.Map<List<Dest>>(list)` | `list.MapToDestList()` / `list.MapToDestArray()` / `mapper.MapCollection<Src, Dest>(list)` | Частично | `CollectionMappingTests.MapToList_ReturnsAllMappedItems`, `CollectionMappingTests.MapToArray_ReturnsCorrectArray`, `DiIntegrationTests.RuntimeMapper_MapCollection_MapsAllItems`, `MapperRegistryTests.MapByRuntimeType_ListToList`. `mapper.Map<List<Dest>>(list)`, `Map<Dest[]>` и `Map<IEnumerable<Dest>>` работают начиная с 2.0.0 ([#8](https://github.com/iron-mapper/IronMapper/issues/8)); до 1.1.4 включительно бросали `MappingException` |
 | `ReverseMap()` | `.ReverseMap()` | Частично | `ProfileTests.ReverseMap_ReverseExtensionMethod_MapsDestToSource`. Обратное направление сопоставляет только по именам; `ForMember`, `When`, хуки и `IncludeMembers` не переносятся |
 | `BeforeMap((src, dest) => ...)` / `AfterMap(...)` | `.BeforeMap(...)` / `.AfterMap(...)` | Поддерживается | `HookTests.HookOrder_BeforeMapSeesEmptyDest_AfterMapSeesFullDest` и другие `HookTests`. Не вызываются in-place перегрузкой |
@@ -58,7 +59,8 @@ Fluent API IronMapper намеренно похож на AutoMapper, но это
 | `ResolutionContext.Items` / `opts.Items[...]` | **Не поддерживается** | — | [#7](https://github.com/iron-mapper/IronMapper/issues/7) |
 | `ProjectTo<Dest>(queryable)` | **Пока не поддерживается** | Запланировано | [#9](https://github.com/iron-mapper/IronMapper/issues/9) |
 | Flattening по соглашению (`CustomerAddressCity` из `Customer.Address.City`) | **Не поддерживается** | — | Используйте `MapFrom` или `IncludeMembers`; в маппингах из профилей свойство молча остаётся незаполненным ([#25](https://github.com/iron-mapper/IronMapper/issues/25)) |
-| Вложенные одиночные объекты по настроенному маппингу | **Не поддерживается** | Обходной путь | `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))`, см. [Вложенные объекты](advanced.ru.md#вложенные-объекты) ([#23](https://github.com/iron-mapper/IronMapper/issues/23)) |
+| Вложенные одиночные объекты по настроенному маппингу | так же (начиная с 2.1.0) | Поддерживается | Маппингом пары типов, без `ForMember`; `null` — по nullable-аннотациям: `null` → `null` для свойства destination, допускающего `null`, `InvalidOperationException` с именами обоих свойств для не допускающего ([подробнее](advanced.ru.md#null-во-вложенном-объекте-который-не-допускает-null); AutoMapper всегда маппит `null` в `null`). Без маппинга — `IM0002` с code fix, который его добавляет. Циклы через вложенные объекты — предупреждение `IM0004`. См. [Вложенные объекты](advanced.ru.md#вложенные-объекты); `NestedObjectTests`, `CyclicMappingTests` ([#23](https://github.com/iron-mapper/IronMapper/issues/23)). До 2.0.0 включительно: `ForMember(d => d.X, o => o.MapFrom(s => s.X.MapToXDto()))` |
+| `null` во вложенном свойстве, объявленном не допускающим `null` (навигация EF без `Include`) → `null` | `InvalidOperationException` с именами обоих свойств (начиная с 2.1.0) | **Отличается** | AutoMapper молча маппит его в `null` (и в новом объекте, и in-place). IronMapper маппит `null` в `null` только для свойства destination, допускающего `null`: объявите `CustomerDto? Customer`, загрузите навигацию или настройте свойство (`MapFrom`, `Ignore`). См. [`null` во вложенном объекте](advanced.ru.md#null-во-вложенном-объекте-который-не-допускает-null); `NestedObjectTests.NullInANonNullableNestedObject_ThrowsInvalidOperationException_NamingBothProperties` |
 | Маппинг через конструктор (позиционные record) | **Не поддерживается** | — | `CS7036` в сгенерированном файле; используйте свойства `init` ([#24](https://github.com/iron-mapper/IronMapper/issues/24)) |
 | `AssertConfigurationIsValid()` | Прямого аналога нет | — | Часть проверок выполняется при сборке, см. [диагностики](diagnostics.ru.md). Ближе всего к его проверке несопоставленных членов: `<IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles>` выдаёт IM0001 для маппингов профилей (обратные маппинги не проверяются, как в AutoMapper), `dotnet_diagnostic.IM0001.severity = error` роняет сборку ([конфигурация](configuration.ru.md#несопоставленные-свойства-в-профилях)); тесты: `ProfileUnmappedPropertyTests` |
 

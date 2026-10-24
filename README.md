@@ -25,8 +25,9 @@ exceptions and `AddIronMapper`, `MapCollection`): see
   warning `IM0001`, a wrong `[MapProperty]` name is error `IM0006`, an inaccessible type is `IM0010`
   ([diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)). Profile mappings get
   fewer checks (`IM0001` for them is opt-in from 2.0.0, [#22](https://github.com/iron-mapper/IronMapper/issues/22)).
-  Incompatible property types and collection elements without a mapping are error `IM0002` at your code (from 2.1.0;
-  up to 2.0.0 a C# error in the generated file).
+  Incompatible property types, and nested objects or collection elements without a mapping for their type pair, are
+  error `IM0002` at your code, with a code fix that adds the missing mapping (from 2.1.0; up to 2.0.0 a C# error in the
+  generated file). Nested objects with a mapping are mapped by it; a cycle through them is warning `IM0004`.
 - **Flat objects are as fast as hand-written code:** 11.4 ns vs 11.5 ns per object (.NET 10). Nested objects are a
   little slower (×1.07 on .NET 10, ×1.09 on .NET 8; 1.1.3: ×1.25), see
   [Performance](https://github.com/iron-mapper/IronMapper#performance).
@@ -119,9 +120,9 @@ How to read it:
 
 - Flat: one object with 15 properties. Nested: an order with a customer, an address and 5–20 lines. Collection:
   `List<Order>` → `List<OrderDto>` of 1 000 nested orders. Times are means; ×N is the ratio to `Manual`.
-- **Nested objects are configured by hand in IronMapper** (`ForMember(... MapFrom(s => s.Customer.MapToCustomerDto()))`),
-  because it does not map nested single objects automatically (see [Known limitations](https://github.com/iron-mapper/IronMapper#known-limitations)). The
-  other libraries map them automatically.
+- **Nested objects are configured by hand in IronMapper 2.0.0** (`ForMember(... MapFrom(s => s.Customer.MapToCustomerDto()))`),
+  because 2.0.0 does not map nested single objects automatically. The other libraries map them automatically. From
+  2.1.0 IronMapper maps them too, and the suite uses that; not measured yet.
 - Cold start: median wall-clock time of process start plus one mapping, minus the same console app without a mapper
   (30 runs). This metric is sensitive to noise; read it as an order of magnitude. Most of the `IMapper` cold start is
   the DI container itself: the same hand-written mapping resolved from the same container (`Manual_DI`) gives +15.3 ms,
@@ -249,10 +250,6 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 
 ## Known limitations
 
-- **Nested single objects are not mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)). For `Customer.Address` → `CustomerDto.Address`
-  the build fails with error `IM0002` at the destination property (from 2.1.0; up to 2.0.0 with `CS0029` in the
-  generated file). Workaround: `ForMember(d => d.Address, o => o.MapFrom(s => s.Address.MapToAddressDto()))`. Nested collections are
-  mapped.
 - **Positional records as destination types do not compile** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): the generator always uses an object
   initializer. Records and classes with `init` properties work.
 - **No flattening by convention** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` is not filled from `Customer.Address.City`. Use
@@ -266,12 +263,14 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
   `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` fail with error `IM0002` at your code (from
-  2.1.0; up to 2.0.0 with a C# error in the generated file); use `MapFrom` or a converter. Declared diagnostic `IM0004`
-  is not reported yet.
+  2.1.0; up to 2.0.0 with a C# error in the generated file); use `MapFrom` or a converter.
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Also: up to 1.1.4 diagnostics have no source location (from 2.0.0 they point to the line); `IMapper` has no per-call context
-([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks;
+([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks
+(from 2.1.0 it updates existing nested objects; a nested record with `init` properties gets a new instance); a nested
+property declared non-nullable that holds `null` (an EF navigation without `Include`) throws `InvalidOperationException`
+naming both properties (from 2.1.0);
 `ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public
 or internal parameterless constructor (`IM0015`); private/protected nested types
 cannot be mapped (`IM0010`); the same type pair mapped in two projects makes `source.MapToX()` ambiguous (`CS0121`); the first
