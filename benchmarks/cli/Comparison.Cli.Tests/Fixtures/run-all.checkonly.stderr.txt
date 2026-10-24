@@ -1,0 +1,5 @@
+Exception: C:\Users\algmironov\source\repos\IronMapper\benchmarks\scripts\run-all.ps1:149
+Line |
+ 149 |  … nvironment; throw "Environment check failed:`n  $($problems -join "`n …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Environment check failed:   Free memory: 3.0 GB free, 4 GB needed for the NativeAOT publish

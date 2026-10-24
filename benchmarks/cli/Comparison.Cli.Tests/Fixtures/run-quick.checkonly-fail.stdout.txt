@@ -1,0 +1,17 @@
+IronMapper quick A/B: 2.0.0 (nuget.org) vs local sources
+Filter: *.NestedBenchmark.* *.InPlaceBenchmark.*; frameworks: net10.0; job: default job, --launchCount 3 (as the full run)
+Output: C:\Users\algmironov\source\repos\IronMapper\artifacts\quick\20261024-120219
+
+Pre-flight:
+  [FAIL] Branch: main (expected no-such-branch)
+  [ok  ] Commit: 253e90c00df23218fe489224dcc57af716bb17a5, uncommitted changes (diff SHA-256 335AA7ACF91994EE)
+  [ok  ] Tag v2.0.0: 2510efa402f0125e77b6a16afe92e4d0465cf885
+  [ok  ] .NET SDK: dotnet --version = 10.0.402 (10.0.x expected)
+  [ok  ] Runtime net10.0: 10.0.13
+  [ok  ] Free memory: 3,1 GB
+  [ok  ] AutoMapper license: C:\Users\algmironov\.automapper\license.txt exists
+  [ok  ] Restore of 2.0.0: ok
+  [ok  ] IronMapper 2.0.0: nuget.org, SHA-512 matches the package there (GdLUGH3BSmq6...)
+  [ok  ] IronMapper.Extensions.DI 2.0.0: nuget.org, SHA-512 matches the package there (3NdkpgxAuDJX...)
+
+Runs: 1 framework(s) x 2 variants; ~75 s per benchmark case and variant. Close other applications; keep a laptop on mains power.

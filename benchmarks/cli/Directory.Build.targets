@@ -1,0 +1,3 @@
+<Project>
+  <!-- Empty on purpose: stops benchmarks/Directory.Build.targets (IronMapper references) from applying to the CLI. -->
+</Project>
