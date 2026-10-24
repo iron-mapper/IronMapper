@@ -1,0 +1,3 @@
+{
+    "dotnet.defaultSolution": "benchmarks/IronMapper.Comparison.slnx"
+}
