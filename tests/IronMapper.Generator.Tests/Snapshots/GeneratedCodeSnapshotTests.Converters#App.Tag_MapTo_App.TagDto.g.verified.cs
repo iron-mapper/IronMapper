@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Tag"/> to a new <see cref="global::App.TagDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Tag"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.TagDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.TagDto MapToTagDto(this global::App.Tag source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -27,6 +28,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Tag"/> into an existing <see cref="global::App.TagDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Tag"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.TagDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToTagDto(this global::App.Tag source, global::App.TagDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));

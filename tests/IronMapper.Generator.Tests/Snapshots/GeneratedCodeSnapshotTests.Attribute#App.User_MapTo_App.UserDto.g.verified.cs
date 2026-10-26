@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.User"/> to a new <see cref="global::App.UserDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.User"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.UserDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.UserDto MapToUserDto(this global::App.User source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -28,6 +29,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.User"/> into an existing <see cref="global::App.UserDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.User"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.UserDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToUserDto(this global::App.User source, global::App.UserDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
