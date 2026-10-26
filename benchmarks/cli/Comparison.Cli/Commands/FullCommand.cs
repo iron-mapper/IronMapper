@@ -37,21 +37,45 @@ internal sealed record FullOptions
     {
         var args = new List<string>();
         if (Mode == FullMode.Quick)
+        {
             args.Add("-Quick");
+        }
+
         if (Mode == FullMode.Dry)
+        {
             args.Add("-Dry");
+        }
+
         if (Local)
+        {
             args.Add("-UseLocalIronMapper");
+        }
+
         if (ResultsDir is not null)
+        {
             args.AddRange(["-ResultsDir", ResultsDir]);
+        }
+
         if (SkipNet8)
+        {
             args.Add("-SkipNet8");
+        }
+
         if (LowMemory)
+        {
             args.Add("-LowMemory");
+        }
+
         if (Force)
+        {
             args.Add("-Force");
+        }
+
         if (CheckOnly)
+        {
             args.Add("-CheckOnly");
+        }
+
         return args;
     }
 
@@ -59,19 +83,40 @@ internal sealed record FullOptions
     {
         var args = new List<string> { "full" };
         if (Mode != FullMode.Full)
+        {
             args.AddRange(["--mode", Mode.ToString().ToLowerInvariant()]);
+        }
+
         if (Local)
+        {
             args.Add("--local");
+        }
+
         if (ResultsDir is not null)
+        {
             args.AddRange(["--results-dir", ResultsDir]);
+        }
+
         if (SkipNet8)
+        {
             args.Add("--skip-net8");
+        }
+
         if (LowMemory)
+        {
             args.Add("--low-memory");
+        }
+
         if (Force)
+        {
             args.Add("--force");
+        }
+
         if (CheckOnly)
+        {
             args.Add("--check-only");
+        }
+
         return BenchCommand.Display(args);
     }
 
@@ -168,7 +213,7 @@ internal static class FullRunner
     {
         var lines = new List<string>();
         using var interrupts = new InterruptHandler(confirm: false);
-        Task<ScriptResult> run = ScriptRunner.RunAsync(command, line => { lock (lines) lines.Add(line); }, _ => { }, interrupts);
+        Task<ScriptResult> run = ScriptRunner.RunAsync(command, line => { lock (lines) { lines.Add(line); } }, _ => { }, interrupts);
         ScriptResult result = Terminal.Plain
             ? await run.ConfigureAwait(false)
             : await AnsiConsole.Status().StartAsync("Environment checks...", _ => run).ConfigureAwait(false);
@@ -185,11 +230,18 @@ internal static class FullRunner
         }
         CheckView.Write(checks);
         if (result.Interrupted)
+        {
             AnsiConsole.MarkupLine("[yellow]Stopped.[/]");
+        }
         else if (result.ExitCode != 0)
+        {
             AnsiConsole.MarkupLine($"[red]Environment check failed (exit code {result.ExitCode}):[/] {Markup.Escape(result.ErrorMessage)}");
+        }
         else
+        {
             AnsiConsole.MarkupLine("[green]Checks passed.[/]");
+        }
+
         return (result.ExitCode, checks, plan);
     }
 
@@ -198,15 +250,23 @@ internal static class FullRunner
         var monitor = new RunAllMonitor(paths.BenchmarksDir);
         ScriptResult result = await RunSession.RunAsync(command, monitor, keepAwake: true).ConfigureAwait(false);
         if (result.Interrupted)
+        {
             return result.ExitCode;
+        }
 
         if (result.ExitCode != 0)
         {
             if (!Terminal.Plain && monitor.Checks.Any(c => c.Mark == CheckMark.Fail))
+            {
                 CheckView.Write(monitor.Checks);
+            }
+
             AnsiConsole.MarkupLine($"[red]run-all.ps1 failed (exit code {result.ExitCode}):[/] {Markup.Escape(result.ErrorMessage)}");
             if (monitor.ResultsDirFullPath is { } dir)
+            {
                 AnsiConsole.MarkupLine($"[grey]Logs: {Markup.Escape(Path.Combine(dir, "raw", "run-all"))}[/]");
+            }
+
             return result.ExitCode;
         }
 

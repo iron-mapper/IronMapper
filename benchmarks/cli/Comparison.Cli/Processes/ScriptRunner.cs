@@ -41,7 +41,10 @@ internal static class ScriptRunner
         using ScriptProcess process = ScriptProcess.Start(command, onStdout, line =>
         {
             lock (stderr)
+            {
                 stderr.Add(line);
+            }
+
             onStderr(line);
         });
 
@@ -51,12 +54,17 @@ internal static class ScriptRunner
         {
             Task winner = await Task.WhenAny(process.Exited, stopped.Task, interrupts.ConfirmRequested).ConfigureAwait(false);
             if (winner == process.Exited)
+            {
                 break;
+            }
+
             if (winner == stopped.Task)
             {
                 await process.KillTreeAsync().ConfigureAwait(false);
                 lock (stderr)
+                {
                     return new ScriptResult(InterruptedExitCode, true, stderr.ToList());
+                }
             }
             if (onConfirm is null)
             {
@@ -70,7 +78,9 @@ internal static class ScriptRunner
 
         int exitCode = await process.Exited.ConfigureAwait(false);
         lock (stderr)
+        {
             return new ScriptResult(exitCode, false, stderr.ToList());
+        }
     }
 
     /// <summary>Asks on the console whether to stop the run (y/N); a second Ctrl+C meanwhile stops at once.</summary>
@@ -104,8 +114,12 @@ internal static class ScriptRunner
     public static void WriteStderr(string line)
     {
         if (Terminal.Plain)
+        {
             Console.Error.WriteLine(line);
+        }
         else
+        {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(line)}[/]");
+        }
     }
 }

@@ -17,7 +17,9 @@ internal static class Tools
             {
                 string candidate = Path.Combine(dir.Trim('"'), name + extension);
                 if (File.Exists(candidate))
+                {
                     return candidate;
+                }
             }
         }
         return null;
@@ -28,7 +30,9 @@ internal static class Tools
     {
         var problems = new List<string>();
         if (FindOnPath("dotnet") is null)
+        {
             problems.Add("dotnet was not found on PATH. Install the .NET 10 SDK: https://dotnet.microsoft.com/download");
+        }
 
         string? pwsh = FindOnPath("pwsh");
         if (pwsh is null)
@@ -40,9 +44,13 @@ internal static class Tools
         {
             int? major = GetPwshMajorVersion(pwsh);
             if (major is null)
+            {
                 problems.Add($"Cannot determine the version of {pwsh}.");
+            }
             else if (major < 7)
+            {
                 problems.Add($"{pwsh} is PowerShell {major}; the scripts need PowerShell 7 or later.");
+            }
         }
         return problems.Count == 0 ? null : string.Join(Environment.NewLine, problems);
     }
@@ -59,7 +67,10 @@ internal static class Tools
                 CreateNoWindow = true,
             };
             foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.Major" })
+            {
                 info.ArgumentList.Add(arg);
+            }
+
             using Process process = Process.Start(info)!;
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit(30_000);

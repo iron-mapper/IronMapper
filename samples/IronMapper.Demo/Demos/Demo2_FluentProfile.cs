@@ -16,21 +16,16 @@ public static class Demo2_FluentProfile
 
         Console.WriteLine("Searching books with query \"clean code\"...\n");
         var response = await api.SearchBooksAsync("clean code", 1);
-        var doc = response?.Docs?.Count > 0 ? response.Docs[0] : null;
-
-        if (doc is null)
+        var doc = (response?.Docs?.Count > 0 ? response.Docs[0] : null) ?? new BookDoc
         {
-            doc = new BookDoc
-            {
-                Key            = "/works/OL17802W",
-                Title          = "Clean Code",
-                AuthorName     = ["Robert C. Martin"],
-                FirstPublishYear = 2008,
-                EditionCount   = 55,
-                Subject        = ["Computer programming", "Software engineering", "Agile"],
-                CoverI         = 8091016
-            };
-        }
+            Key = "/works/OL17802W",
+            Title = "Clean Code",
+            AuthorName = ["Robert C. Martin"],
+            FirstPublishYear = 2008,
+            EditionCount = 55,
+            Subject = ["Computer programming", "Software engineering", "Agile"],
+            CoverI = 8091016
+        };
 
         // ── Before ──────────────────────────────────────────────────────────
         Console.ForegroundColor = ConsoleColor.Yellow;
@@ -68,7 +63,11 @@ public static class Demo2_FluentProfile
 
     private static string TakeSubjects(List<string>? subjects)
     {
-        if (subjects is null || subjects.Count == 0) return "(none)";
+        if (subjects is null || subjects.Count == 0)
+        {
+            return "(none)";
+        }
+
         return string.Join(", ", subjects.Count > 3 ? subjects.GetRange(0, 3) : subjects);
     }
 

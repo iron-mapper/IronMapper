@@ -384,8 +384,8 @@ when a Quick or Dry run would write there).
 - **Build.** `cli/` has its own `Directory.Build.props` and `Directory.Packages.props` and is not part of
   `IronMapper.Comparison.slnx`: its packages (Spectre.Console) do not appear in `RESULTS.md`, `UseLocalIronMapper` does
   not affect it, and `run-all.ps1` and the `benchmarks` job of `ci.yml` do not build it. Tests:
-  `dotnet test cli/Comparison.Cli.Tests`; in CI only in pull requests that change `benchmarks/**`
-  (`.github/workflows/bench-cli.yml`, ubuntu and windows, not a required check).
+  `dotnet test cli/Comparison.Cli.Tests`; in CI only in pull requests that change `benchmarks/**`, the root `.editorconfig`,
+  `global.json` or `Directory.*` files (`.github/workflows/bench-cli.yml`, ubuntu and windows, not a required check).
 - **Developing the CLI**: [cli/README.md](cli/README.md) (layout, where progress comes from, fixtures, adding a flag or
   a script).
 

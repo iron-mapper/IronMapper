@@ -17,12 +17,16 @@ public static partial class AutoMapperSetup
     /// </summary>
     public static string? ResolveLicenseKey()
     {
-        var key = Environment.GetEnvironmentVariable(LicenseKeyVariable);
+        string? key = Environment.GetEnvironmentVariable(LicenseKeyVariable);
         if (!string.IsNullOrWhiteSpace(key))
+        {
             return key.Trim();
+        }
 
         if (!File.Exists(LicenseKeyFile))
+        {
             return null;
+        }
 
         key = File.ReadAllText(LicenseKeyFile).Trim();
         return key.Length == 0 ? null : key;

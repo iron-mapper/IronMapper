@@ -31,7 +31,7 @@ public class NestedObjectTests
     [Fact]
     public void Attribute_NestedObjectWithMapping_MappedThroughCore_InPlaceUpdatesTheExistingObjects()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -75,7 +75,7 @@ public class NestedObjectTests
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
         Assert.Equal("1,Ann,Oslo,True,True,Ann,Oslo,Ann,Oslo", run);
-        var order = Generated(generated, "OrderDto");
+        string order = Generated(generated, "OrderDto");
         // Non-nullable destination: a null check with the throw helper, then the …Core without a second check.
         Assert.Contains("Customer = MapToCustomerDtoCore(source.Customer ?? NestedObjectIsNull<global::App.Customer>(\"Order.Customer is null, but OrderDto.Customer is not nullable.", order);
         Assert.Contains("""
@@ -83,7 +83,7 @@ public class NestedObjectTests
                         else if (destination.Customer is null) destination.Customer = MapToCustomerDtoCore(source.Customer);
                         else MapToCustomerDtoCore(source.Customer, destination.Customer);
             """.ReplaceLineEndings(), order.ReplaceLineEndings());
-        var customer = Generated(generated, "CustomerDto");
+        string customer = Generated(generated, "CustomerDto");
         Assert.Contains("Address = MapToAddressDtoCore(source.Address ?? NestedObjectIsNull<global::App.Address>(", customer);
         Assert.Contains("private static void MapToCustomerDtoCore(global::App.Customer source, global::App.CustomerDto destination)", customer);
         Assert.Contains("else MapToAddressDtoCore(source.Address, destination.Address);", customer);
@@ -92,7 +92,7 @@ public class NestedObjectTests
     [Fact]
     public void PublicMethod_ChecksNullAndCallsCore()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -105,7 +105,7 @@ public class NestedObjectTests
         var (generated, _, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
         AssertNoErrors(errors);
-        var code = Generated(generated, "AddressDto");
+        string code = Generated(generated, "AddressDto");
         Assert.Contains("""
                     public static global::App.AddressDto MapToAddressDto(this global::App.Address source)
                     {
@@ -134,7 +134,7 @@ public class NestedObjectTests
     [Fact]
     public void Profile_NestedObjects_MappedWithoutForMember_IncludingReverseMap()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -175,7 +175,7 @@ public class NestedObjectTests
     [Fact]
     public void NullableSourceAndDestination_NullStaysNull()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -210,7 +210,7 @@ public class NestedObjectTests
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
         Assert.Equal("True,Oslo,True,True,Bergen", run);
-        var code = Generated(generated, "CustomerDto");
+        string code = Generated(generated, "CustomerDto");
         Assert.Contains("Address = source.Address is null ? null : MapToAddressDtoCore(source.Address),", code);
         Assert.Contains("if (source.Address is null) destination.Address = null;", code);
         Assert.DoesNotContain(generated, s => s.Contains("NestedObjectIsNull"));
@@ -219,7 +219,7 @@ public class NestedObjectTests
     [Fact]
     public void NonNullableSourceAndNullableDestination_NullMapsToNull()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -251,7 +251,7 @@ public class NestedObjectTests
     [Fact]
     public void NullableSourceAndNonNullableDestination_IM0002_NoNullForgiving()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -294,7 +294,7 @@ public class NestedObjectTests
     {
         // #nullable disable on the source: a non-nullable destination gets the check with the throw helper
         // (InvalidOperationException naming both properties); a nullable destination gets null → null.
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -333,7 +333,7 @@ public class NestedObjectTests
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
         Assert.Equal("Oslo,True,Customer.Billing is null, but CustomerDto.Billing is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.", run);
-        var code = Generated(generated, "CustomerDto");
+        string code = Generated(generated, "CustomerDto");
         Assert.Contains("Billing = MapToAddressDtoCore(source.Billing ?? NestedObjectIsNull<global::App.Address>(", code);
         Assert.Contains("Shipping = source.Shipping is null ? null : MapToAddressDtoCore(source.Shipping),", code);
     }
@@ -341,7 +341,7 @@ public class NestedObjectTests
     [Fact]
     public void StructAndRecordNestedObjects()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -374,7 +374,7 @@ public class NestedObjectTests
     [Fact]
     public void MappingOfBaseTypeOrInterface_MapsDerivedNestedObject()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -411,7 +411,7 @@ public class NestedObjectTests
         AssertNoErrors(errors);
         Assert.Empty(Of("IM0002", diagnostics));
         Assert.Equal("Oslo,home", run);
-        var code = Generated(generated, "CustomerDto");
+        string code = Generated(generated, "CustomerDto");
         Assert.Contains("Home = MapToAddressDtoCore(source.Home ?? NestedObjectIsNull<global::App.HomeAddress>(", code);
         Assert.Contains("Label = MapToNameDtoCore(source.Label ?? NestedObjectIsNull<global::App.HomeAddress>(", code);
         // The in-place …Core of the base type's mapping updates the existing object.
@@ -421,7 +421,7 @@ public class NestedObjectTests
     [Fact]
     public void NestedObjectWithoutMapping_IM0002NamesThePair_WithCodeFixProperties()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -463,7 +463,7 @@ public class NestedObjectTests
     [Fact]
     public void ExplicitConfigurationWins_MapFromConverterIgnore()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Interfaces;
@@ -511,7 +511,7 @@ public class NestedObjectTests
     [Fact]
     public void QualifiedMethodNames_NestedObjectCallsTheQualifiedCore()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -554,7 +554,7 @@ public class NestedObjectTests
     public void DestinationTypeNamedLikeACoreMethod_NoCollision()
     {
         // MapToItem(source) has MapToItemCore(source), which is also the public name of the mapping to ItemCore.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -593,7 +593,7 @@ public class NestedObjectTests
     [Fact]
     public void HooksAndInitOnly_NestedObjectMapped()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -631,7 +631,7 @@ public class NestedObjectTests
     [Fact]
     public void IncludeMembers_NestedObjectOfIncludedMember_IM0002()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -658,7 +658,7 @@ public class NestedObjectTests
     [Fact]
     public void NestedObjectMappedInReferencedAssembly_CalledAsExtensionMethod_InPlaceThroughItsInPlaceOverload()
     {
-        var library = """
+        string library = """
             using IronMapper.Attributes;
 
             namespace Lib;
@@ -671,7 +671,7 @@ public class NestedObjectTests
             public class Phone { public string Number { get; set; } = ""; }
             public class PhoneDto { public string Number { get; set; } = ""; }
             """;
-        var app = """
+        string app = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -706,7 +706,7 @@ public class NestedObjectTests
         var (compilation, diagnostics) = GeneratorTestHelper.CompileProject("App", app, reference);
 
         Assert.Empty(diagnostics);
-        var generated = compilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCustomerDtoCore(global::"));
+        string generated = compilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCustomerDtoCore(global::"));
         Assert.Contains("Address = (source.Address ?? NestedObjectIsNull<global::Lib.Address>(\"Customer.Address is null, but CustomerDto.Address is not nullable.", generated);
         Assert.Contains(")).MapToAddressDto(),", generated);
         Assert.Contains("Other = source.Other is null ? null : source.Other.MapToAddressDto(),", generated);
@@ -725,7 +725,7 @@ public class NestedObjectTests
     public void NonNullableNestedObjectHoldingNull_InvalidOperationException_NamesBothProperties()
     {
         // An EF navigation declared `= null!` and not loaded (no Include): not a NullReferenceException inside the mapping.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -769,7 +769,7 @@ public class NestedObjectTests
                      + "navigation, check Include; otherwise declare the destination property nullable (null is then mapped to null) "
                      + "or configure the property explicitly.|True|True", run);
         // Declared once, out of line, so the mapping that checks stays small.
-        var declaration = Assert.Single(generated, s => s.Contains("private static T NestedObjectIsNull<T>(string message)"));
+        string declaration = Assert.Single(generated, s => s.Contains("private static T NestedObjectIsNull<T>(string message)"));
         Assert.Contains("""
                     [global::System.Diagnostics.CodeAnalysis.DoesNotReturn]
                     [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -784,7 +784,7 @@ public class NestedObjectTests
         // A struct destination (the getter returns a copy), a destination type with an init-only property (the in-place
         // overload skips it, item 2.15) and a ConvertUsing mapping (the converter makes the object) cannot be updated in
         // place: a new object is assigned, as before.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -828,7 +828,7 @@ public class NestedObjectTests
         AssertNoErrors(errors);
         Assert.Empty(Of("IM0002", diagnostics));
         Assert.Equal("3,5,200,False,False", run);
-        var code = Generated(generated, "ShapeDto");
+        string code = Generated(generated, "ShapeDto");
         Assert.Contains("destination.Size = MapToSizeDtoCore(source.Size ?? NestedObjectIsNull<global::App.Size>(", code);
         Assert.Contains("destination.Origin = MapToPointDtoCore(source.Origin ?? NestedObjectIsNull<global::App.Point>(", code);
         Assert.Contains("destination.Price = MapToMoneyDtoCore(source.Price ?? NestedObjectIsNull<global::App.Money>(", code);
@@ -840,7 +840,7 @@ public class NestedObjectTests
     {
         // GenerateInPlace = false: no public in-place overload; the private MapInto (for IMapper) and the in-place …Core,
         // which the in-place …Core of the outer mapping calls for the existing nested object, are generated.
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -858,8 +858,8 @@ public class NestedObjectTests
 
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
-        var order = Generated(generated, "OrderDto");
-        var customer = Generated(generated, "CustomerDto");
+        string order = Generated(generated, "OrderDto");
+        string customer = Generated(generated, "CustomerDto");
         Assert.DoesNotContain("public static void MapTo", order + customer);
         Assert.Contains("private static void MapInto_Order_OrderDto(global::App.Order source, global::App.OrderDto destination)", order);
         Assert.Contains("            MapToOrderDtoCore(source, destination);", order);
@@ -874,7 +874,7 @@ public class NestedObjectTests
     [Fact]
     public void Collections_ArraysEnumerablesReadOnlyLists_OfObjectsWithNestedObjects()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using System.Linq;
             using IronMapper.Configuration;
@@ -931,7 +931,7 @@ public class NestedObjectTests
         Assert.Equal("a,b,c,d", run);
         // Elements call the public method (ArgumentNullException for a null element, as in 2.0.0); its nested objects
         // are mapped through MapToXCore.
-        var order = Generated(generated, "OrderDto");
+        string order = Generated(generated, "OrderDto");
         Assert.Contains("result[i] = source[i].MapToLineDto();", order);
         Assert.Contains("yield return item.MapToLineDto();", order);
         Assert.Contains("Product = MapToProductDtoCore(source.Product ?? NestedObjectIsNull<global::App.Product>(", Generated(generated, "LineDto"));
@@ -942,7 +942,7 @@ public class NestedObjectTests
     {
         // As in 2.0.0: a null element throws ArgumentNullException (here without nullable annotations; with them see
         // CollectionShapeTests.NestedProperty_NullElement_ThrowsArgumentNullException in IronMapper.Tests).
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;

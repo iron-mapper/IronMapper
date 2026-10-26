@@ -37,7 +37,11 @@ public sealed class RuntimeMapper : IMapper
     /// </exception>
     public RuntimeMapper(IServiceProvider provider)
     {
-        if (provider is null) throw new ArgumentNullException(nameof(provider));
+        if (provider is null)
+        {
+            throw new ArgumentNullException(nameof(provider));
+        }
+
         MapperRegistry.EnsureSupported();
         MapperRegistry.EnsureInitialized();
     }
@@ -45,7 +49,10 @@ public sealed class RuntimeMapper : IMapper
     /// <inheritdoc/>
     public TDest Map<TDest>(object source)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
 
         // Looked up on every call (a dictionary lookup in the registry): a cache here would keep the mapping of a base
         // type after an exact mapping is registered by an assembly loaded later.
@@ -55,7 +62,10 @@ public sealed class RuntimeMapper : IMapper
     /// <inheritdoc/>
     public TDest Map<TSource, TDest>(TSource source)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
 
         var map = MapperCache<TSource, TDest>.Map;
         return map is not null ? map(source) : MapSlow<TSource, TDest>(source);
@@ -69,8 +79,15 @@ public sealed class RuntimeMapper : IMapper
     /// </remarks>
     public void Map<TSource, TDest>(TSource source, TDest destination)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
-        if (destination is null) throw new ArgumentNullException(nameof(destination));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        if (destination is null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
 
         var mapInto = MapperCache<TSource, TDest>.MapInto;
         if (mapInto is not null)
@@ -86,11 +103,17 @@ public sealed class RuntimeMapper : IMapper
     /// <remarks>Returns a <see cref="List{T}"/>; the elements are mapped during the call.</remarks>
     public IEnumerable<TDest> MapCollection<TSource, TDest>(IEnumerable<TSource> source)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
 
         var result = source is ICollection<TSource> collection ? new List<TDest>(collection.Count) : new List<TDest>();
         foreach (var item in source)
+        {
             result.Add(Map<TSource, TDest>(item));
+        }
+
         return result;
     }
 
@@ -116,34 +139,47 @@ public sealed class RuntimeMapper : IMapper
         // The registry may not have run the registrations of assemblies initialized after this mapper was created.
         MapperRegistry.EnsureInitialized();
         var map = MapperCache<TSource, TDest>.Map;
-        if (map is not null) return map(source);
+        if (map is not null)
+        {
+            return map(source);
+        }
 
         var declared = typeof(TSource);
         var runtime = source!.GetType();
         if (MapperRegistry.TryGetMap(declared, typeof(TDest), out var found)
             || (runtime != declared && MapperRegistry.TryGetMap(runtime, typeof(TDest), out found)))
+        {
             return (TDest)found(source)!;
+        }
 
         return (TDest)GetMap(runtime, typeof(TDest))(source)!;
     }
 
     private static Func<object, object?> GetMap(Type sourceType, Type destinationType)
     {
-        if (MapperRegistry.TryGetMap(sourceType, destinationType, out var map)) return map;
+        if (MapperRegistry.TryGetMap(sourceType, destinationType, out var map))
+        {
+            return map;
+        }
 
         MapperRegistry.EnsureLoadedAssembliesRegistered();
-        if (MapperRegistry.TryGetMap(sourceType, destinationType, out map)) return map;
+        if (MapperRegistry.TryGetMap(sourceType, destinationType, out map))
+        {
+            return map;
+        }
 
         throw MapperRegistry.NoMappingException(sourceType, destinationType);
     }
 
     private static Action<object, object> GetMapInto(Type declaredType, Type runtimeType, Type destinationType)
     {
-        for (var attempt = 0; attempt < 2; attempt++)
+        for (int attempt = 0; attempt < 2; attempt++)
         {
             if (MapperRegistry.TryGetMapInto(declaredType, destinationType, out var mapInto)
                 || (runtimeType != declaredType && MapperRegistry.TryGetMapInto(runtimeType, destinationType, out mapInto)))
+            {
                 return mapInto;
+            }
 
             MapperRegistry.EnsureLoadedAssembliesRegistered();
         }

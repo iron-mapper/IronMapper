@@ -97,7 +97,7 @@ internal sealed class SummarizeCommand : AsyncCommand<SummarizeSettings>
         using var interrupts = new InterruptHandler(confirm: false);
         ScriptResult result = await ScriptRunner.RunAsync(
             command,
-            line => { if (Terminal.Plain) Console.WriteLine(line); },
+            line => { if (Terminal.Plain) { Console.WriteLine(line); } },
             ScriptRunner.WriteStderr,
             interrupts).ConfigureAwait(false);
 
@@ -112,7 +112,10 @@ internal sealed class SummarizeCommand : AsyncCommand<SummarizeSettings>
             return result.ExitCode;
         }
         if (!Terminal.Plain)
+        {
             ResultsView.WriteQuickRun(QuickRun.Load(runDir));
+        }
+
         return 0;
     }
 }

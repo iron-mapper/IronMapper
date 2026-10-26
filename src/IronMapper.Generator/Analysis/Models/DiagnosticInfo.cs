@@ -63,9 +63,15 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <summary>The value of the property <paramref name="key"/>, or <see langword="null"/>.</summary>
     public string? GetProperty(string key)
     {
-        var prefix = key + "=";
-        foreach (var entry in Properties)
-            if (entry.StartsWith(prefix, StringComparison.Ordinal)) return entry.Substring(prefix.Length);
+        string prefix = key + "=";
+        foreach (string entry in Properties)
+        {
+            if (entry.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return entry.Substring(prefix.Length);
+            }
+        }
+
         return null;
     }
 
@@ -81,19 +87,25 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     {
         resolve ??= static location => location.ToLocation();
 
-        var args = new object[MessageArgs.Length];
-        for (var i = 0; i < args.Length; i++) args[i] = MessageArgs[i];
+        object[] args = new object[MessageArgs.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            args[i] = MessageArgs[i];
+        }
 
         var additional = new List<Location>(AdditionalLocations.Length);
-        foreach (var location in AdditionalLocations) additional.Add(resolve(location));
+        foreach (var location in AdditionalLocations)
+        {
+            additional.Add(resolve(location));
+        }
 
         ImmutableDictionary<string, string?>? properties = null;
         if (Properties.Length > 0)
         {
             var builder = ImmutableDictionary.CreateBuilder<string, string?>();
-            foreach (var entry in Properties)
+            foreach (string entry in Properties)
             {
-                var separator = entry.IndexOf('=');
+                int separator = entry.IndexOf('=');
                 builder[entry.Substring(0, separator)] = entry.Substring(separator + 1);
             }
             properties = builder.ToImmutable();
@@ -117,7 +129,7 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = Descriptor?.Id.GetHashCode() ?? 0;
+        int hash = Descriptor?.Id.GetHashCode() ?? 0;
         hash = hash * 31 + MessageArgs.GetHashCode();
         hash = hash * 31 + Location.GetHashCode();
         hash = hash * 31 + AdditionalLocations.GetHashCode();

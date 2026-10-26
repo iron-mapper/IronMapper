@@ -30,7 +30,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Attribute_IncompatibleTypes_IM0002AtDestinationProperty_RestOfMappingWorks()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -69,7 +69,7 @@ public class IncompatiblePropertyTypesTests
         var found = IM0002(generatorDiagnostics);
         Assert.Equal(new[] { "Count", "Id" }, found.Select(At).OrderBy(x => x, StringComparer.Ordinal));
         Assert.All(found, d => Assert.Equal(DiagnosticSeverity.Error, d.Severity));
-        var count = found.Single(d => At(d) == "Count").GetMessage();
+        string count = found.Single(d => At(d) == "Count").GetMessage();
         Assert.Contains("Property 'Count' of 'App.OrderDto' is not mapped: 'Order.Count' is 'int?', which cannot be assigned to 'int'.", count);
         Assert.Contains("[MapConverter(typeof(...))] (an ITypeConverter<int?, int>)", count);
         Assert.Contains("[Ignore]", count);
@@ -82,7 +82,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Attribute_NestedObjectWithoutMapping_IM0002SaysAddMappingForThePair()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -100,7 +100,7 @@ public class IncompatiblePropertyTypesTests
         AssertNoErrors(errors);
         var diagnostic = Assert.Single(IM0002(generatorDiagnostics));
         Assert.Equal("Address", At(diagnostic));
-        var message = diagnostic.GetMessage();
+        string message = diagnostic.GetMessage();
         Assert.Contains("'Customer.Address' is 'App.Address' and the destination is 'App.AddressDto', and there is no mapping from 'App.Address' to 'App.AddressDto'.", message);
         Assert.Contains("Add [MapTo(typeof(App.AddressDto))] to 'App.Address', [MapFrom(typeof(App.Address))] to 'App.AddressDto', or CreateMap<App.Address, App.AddressDto>() in a profile.", message);
         Assert.DoesNotContain(generated, s => s.Contains("Address = source.Address"));
@@ -109,7 +109,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Attribute_CollectionElementWithoutMapping_IM0002InsteadOfCS1061()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;
@@ -134,7 +134,7 @@ public class IncompatiblePropertyTypesTests
         AssertNoErrors(errors);
         var diagnostic = Assert.Single(IM0002(generatorDiagnostics));
         Assert.Equal("Lines", At(diagnostic));
-        var message = diagnostic.GetMessage();
+        string message = diagnostic.GetMessage();
         Assert.Contains("the elements of 'Order.Lines' are 'App.Line' and the elements of the destination are 'App.LineDto', and there is no mapping from 'App.Line' to 'App.LineDto'.", message);
         Assert.Contains("Add [MapTo(typeof(App.LineDto))] to 'App.Line', [MapFrom(typeof(App.Line))] to 'App.LineDto', or CreateMap<App.Line, App.LineDto>() in a profile.", message);
         Assert.DoesNotContain(generated, s => s.Contains("MapCollection_Lines"));
@@ -144,7 +144,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Attribute_SameElementTypeDifferentCollection_IM0002InsteadOfCS0029()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
 
@@ -165,7 +165,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Attribute_MapConverterOrIgnore_NoIM0002()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -202,7 +202,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void ImplicitConversions_NoIM0002()
     {
-        var source = """
+        string source = """
             using System;
             using System.Collections.Generic;
             using IronMapper.Attributes;
@@ -267,7 +267,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void CollectionElementMappedInThisProject_OrThroughBaseType_NoIM0002()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;
@@ -306,7 +306,7 @@ public class IncompatiblePropertyTypesTests
     {
         // The generated file has no usings; item.MapToLineDto() binds to an extension method of the global namespace,
         // as it did in 2.0.
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;
@@ -341,7 +341,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void CollectionElementMappedInReferencedAssembly_NoIM0002()
     {
-        var library = """
+        string library = """
             using IronMapper.Attributes;
 
             namespace Lib;
@@ -350,7 +350,7 @@ public class IncompatiblePropertyTypesTests
             public class Line { public string Sku { get; set; } = ""; }
             public class LineDto { public string Sku { get; set; } = ""; }
             """;
-        var app = """
+        string app = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
 
@@ -373,7 +373,7 @@ public class IncompatiblePropertyTypesTests
     public void CollectionElement_InternalMappingOfReferencedAssembly_IM0002()
     {
         // The library's mapping is internal: the generated call in App cannot bind to it (CS1061 in 2.0).
-        var library = """
+        string library = """
             using IronMapper.Attributes;
 
             namespace Lib;
@@ -383,7 +383,7 @@ public class IncompatiblePropertyTypesTests
             public class LineDto { public string Sku { get; set; } = ""; }
             public class Holder { internal static object Create() => new Line(); }
             """;
-        var app = """
+        string app = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
 
@@ -439,7 +439,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Profile_NameMatchAndIncludeMembersAndCollection_IM0002AtCreateMap()
     {
-        var source = ProfileTypes + """
+        string source = ProfileTypes + """
 
             public class OrderProfile : MappingProfile
             {
@@ -458,7 +458,7 @@ public class IncompatiblePropertyTypesTests
         var found = IM0002(generatorDiagnostics);
         Assert.Equal(3, found.Length);
         Assert.All(found, d => Assert.StartsWith("CreateMap<Order, OrderDto>()", At(d)));
-        var messages = found.Select(d => d.GetMessage()).ToArray();
+        string[] messages = found.Select(d => d.GetMessage()).ToArray();
         Assert.Contains(messages, m => m.Contains("Property 'Count' of 'App.OrderDto' is not mapped: 'Order.Count' is 'int?', which cannot be assigned to 'int'. Configure it with ForMember(d => d.Count, o => o.MapFrom(...)) that converts the value, with o.UseConverter<T>() (an ITypeConverter<int?, int>), or with o.Ignore()."));
         Assert.Contains(messages, m => m.Contains("'Order.Info.Code' is 'string', which cannot be assigned to 'int'"));
         Assert.Contains(messages, m => m.Contains("there is no mapping from 'App.Line' to 'App.LineDto'"));
@@ -468,7 +468,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Profile_ForMemberConfiguresTheProperties_NoIM0002()
     {
-        var source = ProfileTypes + """
+        string source = ProfileTypes + """
 
             public class OrderProfile : MappingProfile
             {
@@ -501,7 +501,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Profile_MapFromExpressionOfWrongType_IM0002AtTheExpression()
     {
-        var source = ProfileTypes + """
+        string source = ProfileTypes + """
 
             public class OrderProfile : MappingProfile
             {
@@ -528,7 +528,7 @@ public class IncompatiblePropertyTypesTests
     {
         // ConvertUsing replaces MapToOrderDto(source), but the in-place overload maps by properties (plan item 2.6), so
         // the incompatible properties failed to compile there in 2.0.
-        var source = ProfileTypes + """
+        string source = ProfileTypes + """
 
             public class OrderProfile : MappingProfile
             {
@@ -545,7 +545,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Profile_ReverseMap_IM0002AtReverseMapWithHint()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -570,7 +570,7 @@ public class IncompatiblePropertyTypesTests
     [Fact]
     public void Profile_NestedObjectWithMapping_MappedWithoutIM0002()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;

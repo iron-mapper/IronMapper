@@ -37,7 +37,9 @@ public static class IronMapperServiceCollectionExtensions
     {
         var options = new IronMapperOptions();
         foreach (var assembly in assemblies)
+        {
             options.AddProfilesFromAssembly(assembly);
+        }
 
         return RegisterServices(services, options);
     }
@@ -52,7 +54,10 @@ public static class IronMapperServiceCollectionExtensions
         this IServiceCollection services,
         Action<IronMapperOptions> configure)
     {
-        if (configure is null) throw new ArgumentNullException(nameof(configure));
+        if (configure is null)
+        {
+            throw new ArgumentNullException(nameof(configure));
+        }
 
         var options = new IronMapperOptions();
         configure(options);
@@ -70,12 +75,16 @@ public static class IronMapperServiceCollectionExtensions
     {
         // Converters declared with AddConverter<T>() (registered with their static type: no Type-based registration).
         foreach (var register in options.ServiceRegistrations)
+        {
             register(services);
+        }
 
         // Run each assembly's module initializer, even if nothing used the assembly yet: it adds the assembly's
         // registration, which RuntimeMapper runs when it is created.
         foreach (var assembly in options.MappingAssemblies)
+        {
             MapperRegistry.EnsureModuleInitialized(assembly);
+        }
 
         services.TryAddSingleton<IMapper, RuntimeMapper>();
 

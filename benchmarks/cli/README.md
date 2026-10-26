@@ -81,8 +81,9 @@ cd benchmarks/cli
 dotnet test Comparison.Cli.Tests
 ```
 
-CI runs them on ubuntu and windows in pull requests that change `benchmarks/**` (`.github/workflows/bench-cli.yml`,
-not a required check). The parsers and monitors are tested on recorded output in `Comparison.Cli.Tests/Fixtures/`;
+CI runs them on ubuntu and windows in pull requests that change `benchmarks/**` or the root `.editorconfig`,
+`global.json`, `Directory.*` files (`.github/workflows/bench-cli.yml`, not a required check; the CLI builds with
+`EnforceCodeStyleInBuild`, so a stricter rule in the root `.editorconfig` can break it). The parsers and monitors are tested on recorded output in `Comparison.Cli.Tests/Fixtures/`;
 `ProcessTests` start real `pwsh` processes (decoding, arguments, killing the tree), so `pwsh` must be on `PATH`.
 
 | Test class | Covers |

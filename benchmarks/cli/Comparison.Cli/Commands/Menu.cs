@@ -44,7 +44,9 @@ internal static class Menu
         var choices = quick.Select(r => $"quick {r.Stamp}").Concat(full.Select(r => r.Name)).Append(back).ToList();
         string selected = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Open a run").PageSize(15).AddChoices(choices));
         if (selected == back)
+        {
             return;
+        }
 
         ResultsRun? fullRun = full.FirstOrDefault(r => r.Name == selected);
         if (fullRun is not null)
@@ -56,6 +58,8 @@ internal static class Menu
         ResultsView.WriteQuickRun(run);
         const string rebuild = "Rebuild summary (run-quick.ps1 -SummarizeOnly)";
         if (AnsiConsole.Prompt(new SelectionPrompt<string>().AddChoices(back, rebuild)) == rebuild)
+        {
             await SummarizeCommand.RunAsync(paths, run.Dir).ConfigureAwait(false);
+        }
     }
 }

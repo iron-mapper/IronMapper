@@ -78,7 +78,7 @@ public class IM0006CodeFixTests
     [Fact]
     public async Task NoCloseName_NoFix()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;

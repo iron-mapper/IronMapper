@@ -44,18 +44,27 @@ internal sealed partial class BdnProgress
         if (!line.StartsWith("//", StringComparison.Ordinal))
         {
             if (line.StartsWith("Global total time:", StringComparison.Ordinal))
+            {
                 return Set(() => Finished = true);
+            }
+
             return false;
         }
 
         Match m;
         if ((m = FoundTotal().Match(line)).Success)
+        {
             return Set(() => Total = Int(m.Groups[1]));
+        }
+
         if ((m = Benchmark().Match(line)).Success)
         {
             string name = m.Groups["name"].Value.Trim();
             if (m.Groups["params"].Success)
+            {
                 name += $" [{m.Groups["params"].Value}]";
+            }
+
             return Set(() =>
             {
                 CurrentBenchmark = name;
@@ -77,7 +86,9 @@ internal sealed partial class BdnProgress
             {
                 Remaining = Int(m.Groups["left"]);
                 if (m.Groups["h"].Success)
+                {
                     Eta = new TimeSpan(Int(m.Groups["h"]), Int(m.Groups["m"]), 0);
+                }
             });
         }
         return false;
@@ -88,15 +99,30 @@ internal sealed partial class BdnProgress
     {
         var parts = new List<string>();
         if (Total is { } total)
+        {
             parts.Add($"{Completed}/{total}");
+        }
+
         if (CurrentBenchmark is not null && !Finished)
+        {
             parts.Add(CurrentBenchmark);
+        }
+
         if (Launch is { } launch && LaunchCount is { } count && count > 1 && !Finished)
+        {
             parts.Add($"launch {launch}/{count}");
+        }
+
         if (Eta is { } eta && !Finished)
+        {
             parts.Add($"ETA {(int)eta.TotalHours}h {eta.Minutes}m");
+        }
+
         if (Finished)
+        {
             parts.Add("finished");
+        }
+
         return string.Join(" · ", parts);
     }
 

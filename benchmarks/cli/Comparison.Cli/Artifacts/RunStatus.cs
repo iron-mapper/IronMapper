@@ -25,7 +25,10 @@ internal sealed record RunStatus(RunState State, string Text)
     {
         string file = Path.Combine(runDir, AssembliesFile);
         if (!File.Exists(file))
+        {
             return new RunStatus(RunState.NotRun, "not run");
+        }
+
         try
         {
             return FromJson(File.ReadAllText(file), runDir);
@@ -49,21 +52,32 @@ internal sealed record RunStatus(RunState State, string Text)
             return new RunStatus(RunState.Unknown, $"unknown ({AssembliesFile} is not valid JSON: {ex.Message})");
         }
         if (root.ValueKind != JsonValueKind.Object)
+        {
             return new RunStatus(RunState.Unknown, $"unknown ({AssembliesFile} is not an object)");
+        }
 
         if (!root.TryGetProperty("ExitCode", out JsonElement exitCode) || !exitCode.TryGetInt32(out int code))
+        {
             return new RunStatus(RunState.Unknown, $"unknown (no ExitCode in {AssembliesFile})");
+        }
+
         if (code != 0)
+        {
             return new RunStatus(RunState.Failed, $"FAILED (exit code {code}, log: {Path.Combine(runDir, "run.log")})");
+        }
 
         // ConvertTo-Json writes a one-element array as the element itself: accept an array, a string or nothing.
         var problems = new List<string>();
         if (root.TryGetProperty("Problems", out JsonElement value))
         {
             if (value.ValueKind == JsonValueKind.Array)
+            {
                 problems.AddRange(value.EnumerateArray().Select(ToText).Where(text => text.Length > 0));
+            }
             else if (value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            {
                 problems.Add(ToText(value));
+            }
         }
         problems.RemoveAll(string.IsNullOrEmpty);
         return problems.Count > 0

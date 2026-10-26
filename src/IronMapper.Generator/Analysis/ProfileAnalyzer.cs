@@ -32,11 +32,19 @@ internal static class ProfileAnalyzer
     /// </summary>
     public static bool IsCandidateClass(SyntaxNode node, CancellationToken _)
     {
-        if (node is not ClassDeclarationSyntax { BaseList: not null } classDecl) return false;
+        if (node is not ClassDeclarationSyntax { BaseList: not null } classDecl)
+        {
+            return false;
+        }
 
         // Skip file-scoped types — they are invisible outside their file.
         foreach (var modifier in classDecl.Modifiers)
-            if (modifier.IsKind(SyntaxKind.FileKeyword)) return false;
+        {
+            if (modifier.IsKind(SyntaxKind.FileKeyword))
+            {
+                return false;
+            }
+        }
 
         return true;
     }
@@ -52,22 +60,37 @@ internal static class ProfileAnalyzer
     {
         var classDecl = (ClassDeclarationSyntax)ctx.Node;
         var classSymbol = ctx.SemanticModel.GetDeclaredSymbol(classDecl, ct);
-        if (classSymbol is null) return ImmutableArray<MappingDescriptor>.Empty;
-        if (!InheritsFrom(classSymbol, MappingProfileFqn)) return ImmutableArray<MappingDescriptor>.Empty;
+        if (classSymbol is null)
+        {
+            return ImmutableArray<MappingDescriptor>.Empty;
+        }
+
+        if (!InheritsFrom(classSymbol, MappingProfileFqn))
+        {
+            return ImmutableArray<MappingDescriptor>.Empty;
+        }
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
-        var profileName = classSymbol.ToDisplayString();
+        string profileName = classSymbol.ToDisplayString();
 
         // Look for the primary (or any) constructor body.
-        var ctorIndex = -1;
+        int ctorIndex = -1;
         // A CreateMap whose types did not resolve is skipped, but the profile is not empty (no IM0005).
-        var hasSkippedMapping = false;
+        bool hasSkippedMapping = false;
         foreach (var ctor in classDecl.Members)
         {
             ct.ThrowIfCancellationRequested();
 
-            if (ctor is not ConstructorDeclarationSyntax ctorDecl) continue;
-            if (ctorDecl.Body is null) continue;
+            if (ctor is not ConstructorDeclarationSyntax ctorDecl)
+            {
+                continue;
+            }
+
+            if (ctorDecl.Body is null)
+            {
+                continue;
+            }
+
             ctorIndex++;
 
             // Pass 1: collect AddTransformer declarations.
@@ -76,29 +99,40 @@ internal static class ProfileAnalyzer
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
-                if (statement is not ExpressionStatementSyntax exprStmt) continue;
+                if (statement is not ExpressionStatementSyntax exprStmt)
+                {
+                    continue;
+                }
+
                 if (TryExtractTransformer(exprStmt.Expression, ctx.SemanticModel, profileName, transformerDiagnostics, ct, out var t)
                     && t is not null)
+                {
                     transformersByType[t.FullyQualifiedTypeName] = t; // last registration wins per type
+                }
             }
             var transformers = ImmutableArray.CreateRange(transformersByType.Values);
 
             // A transformer that cannot be emitted is an error (IM0011/IM0012); the mappings are still generated.
             if (transformerDiagnostics.Count > 0)
+            {
                 builder.Add(MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(transformerDiagnostics)));
+            }
 
             // Pass 2: process CreateMap chains.
-            var statementIndex = -1;
+            int statementIndex = -1;
             foreach (var statement in ctorDecl.Body.Statements)
             {
                 ct.ThrowIfCancellationRequested();
                 statementIndex++;
-                if (statement is not ExpressionStatementSyntax exprStmt) continue;
+                if (statement is not ExpressionStatementSyntax exprStmt)
+                {
+                    continue;
+                }
 
                 // Stable key of this CreateMap call: profile, constructor, statement (zero-padded for ordinal sorting).
-                var origin = $"profile:{profileName}#{ctorIndex:D4}.{statementIndex:D4}";
+                string origin = $"profile:{profileName}#{ctorIndex:D4}.{statementIndex:D4}";
                 var descriptors = AnalyseChain(
-                    exprStmt.Expression, ctx.SemanticModel, transformers, profileName, origin, out var skipped, ct);
+                    exprStmt.Expression, ctx.SemanticModel, transformers, profileName, origin, out bool skipped, ct);
                 builder.AddRange(descriptors);
                 hasSkippedMapping |= skipped;
             }
@@ -159,11 +193,17 @@ internal static class ProfileAnalyzer
         }
 
         // The innermost invocation should be CreateMap<Src,Dest>().
-        if (calls.Count == 0) return System.Array.Empty<MappingDescriptor>();
+        if (calls.Count == 0)
+        {
+            return System.Array.Empty<MappingDescriptor>();
+        }
 
         var innermost = calls[calls.Count - 1];
         var (sourceSymbol, destSymbol) = ExtractCreateMapTypes(innermost, model, out skippedUnresolved, ct);
-        if (sourceSymbol is null || destSymbol is null) return System.Array.Empty<MappingDescriptor>();
+        if (sourceSymbol is null || destSymbol is null)
+        {
+            return System.Array.Empty<MappingDescriptor>();
+        }
 
         // Walk calls from innermost (CreateMap) outward, collecting config.
         // Tuple: (destPropName, lambdaBody, isIgnore, perPropertyConverterType, the type of the MapFrom expression)
@@ -188,7 +228,7 @@ internal static class ProfileAnalyzer
             ct.ThrowIfCancellationRequested();
             var inv = calls[i];
             var memberAccess = (MemberAccessExpressionSyntax)inv.Expression;
-            var methodName = memberAccess.Name.Identifier.Text;
+            string methodName = memberAccess.Name.Identifier.Text;
 
             switch (methodName)
             {
@@ -198,9 +238,12 @@ internal static class ProfileAnalyzer
 
                 case "Ignore" when inv.ArgumentList.Arguments.Count == 1:
                     // Standalone .Ignore(dest => dest.Prop) — not inside ForMember
-                    var ignoreDestProp = ExtractMemberName(inv.ArgumentList.Arguments[0].Expression);
+                    string? ignoreDestProp = ExtractMemberName(inv.ArgumentList.Arguments[0].Expression);
                     if (ignoreDestProp is not null)
+                    {
                         forMemberConfigs.Add((ignoreDestProp, null, true, null, null));
+                    }
+
                     break;
 
                 case "When" when inv.ArgumentList.Arguments.Count == 1:
@@ -248,7 +291,9 @@ internal static class ProfileAnalyzer
         }
 
         if (lambdaDiagnostics.Count > 0)
+        {
             return new[] { MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(lambdaDiagnostics)) };
+        }
 
         var results = new List<MappingDescriptor>();
 
@@ -264,15 +309,22 @@ internal static class ProfileAnalyzer
             reportUnmapped: wholeObjectConverter is null && wholeObjectLambdaBody is null,
             PropertyTypeCheck.Origin.Profile, model, ct);
         // Null only when a converter type did not resolve.
-        if (forward is null) skippedUnresolved = true;
+        if (forward is null)
+        {
+            skippedUnresolved = true;
+        }
         else
+        {
             results.Add(forward.WithOrigin(
                 origin, $"MappingProfile '{profileName}'", originRank: 0, SymbolHelpers.GetDestinationNaming(destSymbol),
                 createMapLocation).WithMethodOverrides(methodOverrides));
+        }
 
         // IM0016 does not stop the mapping: it is generated with the assembly value for that overload.
         if (optionDiagnostics.Count > 0)
+        {
             results.Add(MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(optionDiagnostics)));
+        }
 
         if (reverseMap)
         {
@@ -293,9 +345,11 @@ internal static class ProfileAnalyzer
                 reportUnmapped: false,
                 PropertyTypeCheck.Origin.ReverseMap, model, ct);
             if (reverse is not null)
+            {
                 results.Add(reverse.WithOrigin(
                     origin + ":reverse", $"ReverseMap() in MappingProfile '{profileName}'", originRank: 1,
                     SymbolHelpers.GetDestinationNaming(sourceSymbol), reverseMapLocation ?? createMapLocation));
+            }
         }
 
         return results;
@@ -310,19 +364,29 @@ internal static class ProfileAnalyzer
         CancellationToken ct)
     {
         var args = inv.ArgumentList.Arguments;
-        if (args.Count < 2) return;
+        if (args.Count < 2)
+        {
+            return;
+        }
 
-        var destPropName = ExtractMemberName(args[0].Expression);
-        if (destPropName is null) return;
+        string? destPropName = ExtractMemberName(args[0].Expression);
+        if (destPropName is null)
+        {
+            return;
+        }
 
         // Second argument is Action<IMemberConfigurationExpression> — a lambda like opt => opt.MapFrom(...) or opt => opt.Ignore()
-        var optLambda = args[1].Expression as LambdaExpressionSyntax;
-        if (optLambda is null) return;
+        if (args[1].Expression is not LambdaExpressionSyntax optLambda)
+        {
+            return;
+        }
 
-        var optBody = optLambda.Body as InvocationExpressionSyntax;
-        if (optBody is null) return;
+        if (optLambda.Body is not InvocationExpressionSyntax optBody)
+        {
+            return;
+        }
 
-        var optMethod = (optBody.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text;
+        string? optMethod = (optBody.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text;
 
         if (optMethod == "Ignore")
         {
@@ -335,14 +399,17 @@ internal static class ProfileAnalyzer
             // UseConverter<TConverter>() — extract generic type argument.
             var converter = GetConverterTypeArgument(optBody, model, ct);
             if (converter is not null)
+            {
                 configs.Add((destPropName, null, false, converter, null));
+            }
+
             return;
         }
 
         if (optMethod == "MapFrom" && optBody.ArgumentList.Arguments.Count == 1)
         {
             var mapFromArg = optBody.ArgumentList.Arguments[0].Expression;
-            var body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
+            string? body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
             // The type of the expression the lambda returns (IM0002 when it cannot be assigned to the property).
             var expression = (mapFromArg as LambdaExpressionSyntax)?.ExpressionBody;
             var mapFrom = expression is null
@@ -360,13 +427,15 @@ internal static class ProfileAnalyzer
     private static ConverterReference? GetConverterTypeArgument(InvocationExpressionSyntax inv, SemanticModel model, CancellationToken ct)
     {
         // IM0015 points to the type argument, or to the call when it cannot be found.
-        var typeArgument = (inv.Expression as MemberAccessExpressionSyntax)?.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name
+        var typeArgument = inv.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } name }
             ? name.TypeArgumentList.Arguments[0]
             : null;
         var location = LocationInfo.From((SyntaxNode?)typeArgument ?? inv);
 
         if (model.GetSymbolInfo(inv, ct).Symbol is IMethodSymbol { TypeArguments.Length: > 0 } method)
+        {
             return method.TypeArguments[0] is INamedTypeSymbol type ? new ConverterReference(type, location) : null;
+        }
 
         return typeArgument is not null && model.GetTypeInfo(typeArgument, ct).Type is INamedTypeSymbol resolved
             ? new ConverterReference(resolved, location)
@@ -409,14 +478,24 @@ internal static class ProfileAnalyzer
     private static GeneratedMethodOverrides ParseGenerateMethods(InvocationExpressionSyntax inv, SemanticModel model,
         string profileName, List<DiagnosticInfo> diagnostics, CancellationToken ct)
     {
-        if (model.GetOperation(inv, ct) is not IInvocationOperation operation) return default;
+        if (model.GetOperation(inv, ct) is not IInvocationOperation operation)
+        {
+            return default;
+        }
 
         bool? inPlace = null, list = null, array = null;
         foreach (var argument in operation.Arguments)
         {
-            if (argument.ArgumentKind == ArgumentKind.DefaultValue || argument.Parameter is null) continue;
-            var name = argument.Parameter.Name;
-            if (name is not ("inPlace" or "list" or "array")) continue;
+            if (argument.ArgumentKind == ArgumentKind.DefaultValue || argument.Parameter is null)
+            {
+                continue;
+            }
+
+            string name = argument.Parameter.Name;
+            if (name is not ("inPlace" or "list" or "array"))
+            {
+                continue;
+            }
 
             // The argument is converted to bool?; its constant value is that of the expression the user wrote.
             var value = argument.Value is IConversionOperation conversion ? conversion.Operand : argument.Value;
@@ -428,7 +507,7 @@ internal static class ProfileAnalyzer
                 continue;
             }
 
-            var set = (bool?)value.ConstantValue.Value;
+            bool? set = (bool?)value.ConstantValue.Value;
             switch (name)
             {
                 case "inPlace": inPlace = set; break;
@@ -446,9 +525,11 @@ internal static class ProfileAnalyzer
     {
         foreach (var arg in inv.ArgumentList.Arguments)
         {
-            var memberName = ExtractMemberName(arg.Expression);
+            string? memberName = ExtractMemberName(arg.Expression);
             if (memberName is not null)
+            {
                 includedMembers.Add(memberName);
+            }
         }
     }
 
@@ -465,27 +546,43 @@ internal static class ProfileAnalyzer
         out ValueTransformerDescriptor? result)
     {
         result = null;
-        if (expr is not InvocationExpressionSyntax inv) return false;
+        if (expr is not InvocationExpressionSyntax inv)
+        {
+            return false;
+        }
 
-        var methodName = inv.Expression switch
+        string? methodName = inv.Expression switch
         {
             GenericNameSyntax gn => gn.Identifier.Text,
             MemberAccessExpressionSyntax { Name: GenericNameSyntax mgn } => mgn.Identifier.Text,
             _ => null
         };
-        if (methodName != "AddTransformer") return false;
-        if (inv.ArgumentList.Arguments.Count != 1) return false;
+        if (methodName != "AddTransformer")
+        {
+            return false;
+        }
+
+        if (inv.ArgumentList.Arguments.Count != 1)
+        {
+            return false;
+        }
 
         var methodSym = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
-        if (methodSym?.TypeArguments.Length != 1) return false;
+        if (methodSym?.TypeArguments.Length != 1)
+        {
+            return false;
+        }
 
         var typeArg = methodSym.TypeArguments[0];
-        var fqn = typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var friendlyName = typeArg.Name; // "String", "Decimal", etc.
+        string fqn = typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        string friendlyName = typeArg.Name; // "String", "Decimal", etc.
 
-        var lambdaBody = LambdaBodyRewriter.RewriteBody(
+        string? lambdaBody = LambdaBodyRewriter.RewriteBody(
             inv.ArgumentList.Arguments[0].Expression, model, TransformerParameter, profileName, diagnostics, ct);
-        if (lambdaBody is null) return false;
+        if (lambdaBody is null)
+        {
+            return false;
+        }
 
         result = new ValueTransformerDescriptor(
             fullyQualifiedTypeName: fqn,
@@ -518,13 +615,15 @@ internal static class ProfileAnalyzer
         CancellationToken ct)
     {
         // IM0010: generated methods cannot reference private/protected nested types.
-        var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
+        string? methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
             sourceSymbol, destSymbol, out var inaccessibleType);
         if (methodAccessibility is null)
+        {
             return MappingAnalyzer.CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!, origin);
+        }
 
-        var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
-        var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
+        string sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
+        string destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
 
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
 
@@ -555,35 +654,50 @@ internal static class ProfileAnalyzer
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var p in sourceProps)
+        {
             sourcePropsByName[p.Name] = p;
+        }
 
         // Index ForMember configs by dest property name.
         var configByDest = new Dictionary<string, (string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var (dp, lb, ign, cvt, mf) in forMemberConfigs)
+        {
             configByDest[dp] = (lb, ign, cvt, mf);
+        }
 
         // Build included-member resolution lookup (first-member-wins on name conflicts).
         // Key: dest property name (case-insensitive)
         // Value: (lambdaBody to emit, typeFqn of the nested property for transformer matching)
         var includedResolution = new Dictionary<string, (string lambdaBody, string typeFqn, IPropertySymbol property, string display)>(
             System.StringComparer.OrdinalIgnoreCase);
-        foreach (var memberName in includedMembers)
+        foreach (string memberName in includedMembers)
         {
-            if (!sourcePropsByName.TryGetValue(memberName, out var memberPropSym)) continue;
-            if (memberPropSym.Type is not INamedTypeSymbol memberType) continue;
+            if (!sourcePropsByName.TryGetValue(memberName, out var memberPropSym))
+            {
+                continue;
+            }
+
+            if (memberPropSym.Type is not INamedTypeSymbol memberType)
+            {
+                continue;
+            }
 
             bool parentIsRef = memberPropSym.Type.IsReferenceType;
             var nestedProps = SymbolHelpers.GetPublicReadableProperties(memberType);
             foreach (var nestedProp in nestedProps)
             {
-                if (includedResolution.ContainsKey(nestedProp.Name)) continue; // first member wins
-                var access = $"source.{memberName}.{nestedProp.Name}";
+                if (includedResolution.ContainsKey(nestedProp.Name))
+                {
+                    continue; // first member wins
+                }
+
+                string access = $"source.{memberName}.{nestedProp.Name}";
                 // Emit a null-guard ternary for reference-type nested members to avoid NRE.
-                var lambdaBody = parentIsRef
+                string lambdaBody = parentIsRef
                     ? $"source.{memberName} != null ? {access} : default!"
                     : access;
-                var typeFqn = nestedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                string typeFqn = nestedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 includedResolution[nestedProp.Name] = (lambdaBody, typeFqn, nestedProp, $"{sourceSymbol.Name}.{memberName}.{nestedProp.Name}");
             }
         }
@@ -612,7 +726,7 @@ internal static class ProfileAnalyzer
                     ? null
                     : converters.Add(cfg.converter.Value.Type, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'",
                         cfg.converter.Value.Location, ct);
-                var skipped = false;
+                bool skipped = false;
                 if (!cfg.isIgnore && converter is null && cfg.lambdaBody is not null && cfg.mapFrom is { } mapFrom
                     && PropertyTypeCheck.CheckMapFrom(compilation, mapFrom.Type, destProp, destSymbol, mapFrom.Location ?? origin) is { } wrong)
                 {
@@ -634,16 +748,18 @@ internal static class ProfileAnalyzer
             else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
             {
                 var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
-                var typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var skipped = false;
+                string typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                bool skipped = false;
                 var mappingPairs = default(EquatableArray<string>);
                 NestedObjectMapping? nested = null;
-                var sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
+                string sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
                 if (collection is not null)
                 {
                     if (MappingAnalyzer.CheckCollection(compilation, collection, namedProp, destProp, sourceDisplay, destSymbol,
                             checkOrigin, origin, out mappingPairs) is { } missing)
+                    {
                         diagnostics.Add(missing);
+                    }
                 }
                 else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, destProp.Type, sourceDisplay,
                              destProp, destSymbol, checkOrigin, origin, diagnostics)) is not null)
@@ -676,7 +792,11 @@ internal static class ProfileAnalyzer
             {
                 var incompatible = PropertyTypeCheck.CheckAssignment(compilation, included.property.Type, destProp.Type,
                     included.display, destProp, destSymbol, checkOrigin, origin);
-                if (incompatible is not null) diagnostics.Add(incompatible.Value);
+                if (incompatible is not null)
+                {
+                    diagnostics.Add(incompatible.Value);
+                }
+
                 propertyMappings.Add(new PropertyMappingDescriptor(
                     sourcePropertyName: destProp.Name,
                     destPropertyName: destProp.Name,
@@ -704,11 +824,16 @@ internal static class ProfileAnalyzer
         }
 
         // A converter type that did not resolve: the compiler reports it at UseConverter/ConvertUsing; skip the mapping.
-        if (converters.HasUnresolvedType) return null;
+        if (converters.HasUnresolvedType)
+        {
+            return null;
+        }
 
         // A converter that the generated code cannot create (IM0015): the mapping is not generated.
         if (!converters.CanGenerate)
+        {
             return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(converters.Diagnostics));
+        }
 
         return new MappingDescriptor(
             sourceTypeName: sourceSymbol.Name,
@@ -748,8 +873,15 @@ internal static class ProfileAnalyzer
         };
 
         // Handle casts: (object?)d.Prop → unwrap
-        if (body is CastExpressionSyntax cast) body = cast.Expression;
-        if (body is ParenthesizedExpressionSyntax paren2) body = paren2.Expression;
+        if (body is CastExpressionSyntax cast)
+        {
+            body = cast.Expression;
+        }
+
+        if (body is ParenthesizedExpressionSyntax paren2)
+        {
+            body = paren2.Expression;
+        }
 
         return (body as MemberAccessExpressionSyntax)?.Name.Identifier.Text;
     }
@@ -766,14 +898,21 @@ internal static class ProfileAnalyzer
     {
         unresolved = false;
         // CreateMap<TSource, TDest>() — type args on the generic name.
-        var methodSymbol = model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
-        if (methodSymbol is null) return (null, null);
-        if (methodSymbol.TypeArguments.Length < 2) return (null, null);
+        if (model.GetSymbolInfo(inv, ct).Symbol is not IMethodSymbol methodSymbol)
+        {
+            return (null, null);
+        }
 
-        var source = methodSymbol.TypeArguments[0] as INamedTypeSymbol;
-        var dest = methodSymbol.TypeArguments[1] as INamedTypeSymbol;
+        if (methodSymbol.TypeArguments.Length < 2)
+        {
+            return (null, null);
+        }
         // CreateMap<Source, Missing>(): the compiler reports it at the call; skip the mapping.
-        if (source is null || dest is null) return (null, null);
+        if (methodSymbol.TypeArguments[0] is not INamedTypeSymbol source || methodSymbol.TypeArguments[1] is not INamedTypeSymbol dest)
+        {
+            return (null, null);
+        }
+
         if (SymbolHelpers.ContainsErrorType(source) || SymbolHelpers.ContainsErrorType(dest))
         {
             unresolved = true;
@@ -792,7 +931,11 @@ internal static class ProfileAnalyzer
         var current = symbol.BaseType;
         while (current is not null)
         {
-            if (current.ToDisplayString() == baseTypeFqn) return true;
+            if (current.ToDisplayString() == baseTypeFqn)
+            {
+                return true;
+            }
+
             current = current.BaseType;
         }
         return false;

@@ -11,17 +11,23 @@ args = Terminal.Configure(args);
 // output (a file, a pipe) is written as UTF-8 without touching the console's code page.
 Encoding? originalEncoding = null;
 if (Console.IsOutputRedirected)
+{
     Console.SetOut(new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true });
+}
 else if (Console.OutputEncoding.CodePage != Encoding.UTF8.CodePage)
 {
     originalEncoding = Console.OutputEncoding;
     Console.OutputEncoding = new UTF8Encoding(false);
 }
 if (Console.IsErrorRedirected)
+{
     Console.SetError(new StreamWriter(Console.OpenStandardError(), new UTF8Encoding(false)) { AutoFlush = true });
+}
 // A file or a CI log has no width; Spectre would wrap at 80 columns.
 if (Console.IsOutputRedirected)
+{
     AnsiConsole.Profile.Width = 240;
+}
 
 try
 {
@@ -38,7 +44,10 @@ try
     if (args.Length == 0)
     {
         if (Terminal.Interactive)
+        {
             return await Menu.RunAsync(BenchPaths.Current);
+        }
+
         args = ["--help"];
     }
 
@@ -79,5 +88,7 @@ try
 finally
 {
     if (originalEncoding is not null)
+    {
         Console.OutputEncoding = originalEncoding;
+    }
 }

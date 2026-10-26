@@ -32,9 +32,9 @@ public sealed class TestDataGenerator
 
     public UserEntity CreateUser()
     {
-        var id = _nextId++;
-        var firstName = Pick(FirstNames);
-        var lastName = Pick(LastNames);
+        int id = _nextId++;
+        string firstName = Pick(FirstNames);
+        string lastName = Pick(LastNames);
         return new UserEntity
         {
             Id = id,
@@ -58,15 +58,19 @@ public sealed class TestDataGenerator
 
     public OrderEntity CreateOrder()
     {
-        var id = _nextId++;
-        var lineCount = _random.Next(MinOrderLines, MaxOrderLines + 1);
+        int id = _nextId++;
+        int lineCount = _random.Next(MinOrderLines, MaxOrderLines + 1);
         var lines = new List<OrderLineEntity>(lineCount);
-        for (var i = 0; i < lineCount; i++)
+        for (int i = 0; i < lineCount; i++)
+        {
             lines.Add(CreateOrderLine());
+        }
 
-        var total = 0m;
+        decimal total = 0m;
         foreach (var line in lines)
+        {
             total += line.UnitPrice * line.Quantity;
+        }
 
         return new OrderEntity
         {
@@ -82,16 +86,19 @@ public sealed class TestDataGenerator
     public List<OrderEntity> CreateOrders(int count)
     {
         var orders = new List<OrderEntity>(count);
-        for (var i = 0; i < count; i++)
+        for (int i = 0; i < count; i++)
+        {
             orders.Add(CreateOrder());
+        }
+
         return orders;
     }
 
     public EmployeeEntity CreateEmployee()
     {
-        var id = _nextId++;
-        var firstName = Pick(FirstNames);
-        var lastName = Pick(LastNames);
+        int id = _nextId++;
+        string firstName = Pick(FirstNames);
+        string lastName = Pick(LastNames);
         return new EmployeeEntity
         {
             Id = id,
@@ -108,10 +115,10 @@ public sealed class TestDataGenerator
 
     private CustomerEntity CreateCustomer()
     {
-        var id = _nextId++;
-        var firstName = Pick(FirstNames);
-        var lastName = Pick(LastNames);
-        var cityIndex = _random.Next(Cities.Length);
+        int id = _nextId++;
+        string firstName = Pick(FirstNames);
+        string lastName = Pick(LastNames);
+        int cityIndex = _random.Next(Cities.Length);
         return new CustomerEntity
         {
             Id = id,
@@ -129,8 +136,8 @@ public sealed class TestDataGenerator
 
     private OrderLineEntity CreateOrderLine()
     {
-        var productId = _random.Next(1, 1_000);
-        var price = NextMoney(1, 2_000);
+        int productId = _random.Next(1, 1_000);
+        decimal price = NextMoney(1, 2_000);
         return new OrderLineEntity
         {
             Id = _nextId++,
@@ -154,7 +161,7 @@ public sealed class TestDataGenerator
 
     private Guid NextGuid()
     {
-        var bytes = new byte[16];
+        byte[] bytes = new byte[16];
         _random.NextBytes(bytes);
         return new Guid(bytes);
     }

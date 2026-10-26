@@ -25,12 +25,12 @@ public class OpenLibraryService
 
     public async Task<BookSearchResponse?> SearchBooksAsync(string query, int limit = 5)
     {
-        var url = $"{BaseUrl}/search.json?q={Uri.EscapeDataString(query)}" +
+        string url = $"{BaseUrl}/search.json?q={Uri.EscapeDataString(query)}" +
                   $"&limit={limit}" +
                   "&fields=key,title,author_name,first_publish_year,edition_count,subject,cover_i";
         try
         {
-            var json = await _http.GetStringAsync(url);
+            string json = await _http.GetStringAsync(url);
             return JsonSerializer.Deserialize<BookSearchResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
@@ -42,10 +42,10 @@ public class OpenLibraryService
 
     public async Task<WorkResponse?> GetWorkAsync(string workId)
     {
-        var url = $"{BaseUrl}/works/{workId}.json";
+        string url = $"{BaseUrl}/works/{workId}.json";
         try
         {
-            var json = await _http.GetStringAsync(url);
+            string json = await _http.GetStringAsync(url);
             return JsonSerializer.Deserialize<WorkResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
@@ -57,10 +57,10 @@ public class OpenLibraryService
 
     public async Task<AuthorResponse?> GetAuthorAsync(string authorId)
     {
-        var url = $"{BaseUrl}/authors/{authorId}.json";
+        string url = $"{BaseUrl}/authors/{authorId}.json";
         try
         {
-            var json = await _http.GetStringAsync(url);
+            string json = await _http.GetStringAsync(url);
             return JsonSerializer.Deserialize<AuthorResponse>(json, _jsonOptions);
         }
         catch (Exception ex)
@@ -73,11 +73,13 @@ public class OpenLibraryService
     public async Task<List<AuthorResponse>> GetMultipleAuthorsAsync(params string[] authorIds)
     {
         var results = new List<AuthorResponse>();
-        foreach (var id in authorIds)
+        foreach (string id in authorIds)
         {
             var author = await GetAuthorAsync(id);
             if (author is not null)
+            {
                 results.Add(author);
+            }
         }
         return results;
     }

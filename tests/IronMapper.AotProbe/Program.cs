@@ -26,7 +26,10 @@ new User { Id = 9, Name = "In place", Role = "x" }.MapToUserDto(target);
 var failures = new List<string>();
 void Check(bool ok, string what)
 {
-    if (!ok) failures.Add(what);
+    if (!ok)
+    {
+        failures.Add(what);
+    }
 }
 
 Check(userDto is { Id: 7, FullName: "Alice", Secret: "", Role: "ADMIN" }, $"[MapTo] + [MapProperty] + [Ignore] + [MapConverter]: {userDto.Id} '{userDto.FullName}' '{userDto.Secret}' '{userDto.Role}'");
@@ -38,8 +41,11 @@ Check(target is { Id: 9, FullName: "In place", Secret: "kept", Role: "X" }, $"in
 
 if (failures.Count > 0)
 {
-    foreach (var failure in failures)
+    foreach (string failure in failures)
+    {
         Console.Error.WriteLine($"FAIL {failure}");
+    }
+
     return 1;
 }
 

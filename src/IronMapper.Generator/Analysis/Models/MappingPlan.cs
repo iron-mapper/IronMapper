@@ -39,7 +39,11 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
         if (_byOrigin is null)
         {
             var byOrigin = new Dictionary<string, MappingPlanEntry>(StringComparer.Ordinal);
-            foreach (var entry in Entries) byOrigin[entry.Origin] = entry;
+            foreach (var entry in Entries)
+            {
+                byOrigin[entry.Origin] = entry;
+            }
+
             _byOrigin = byOrigin;
         }
 
@@ -52,8 +56,14 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     /// </summary>
     public bool GeneratesAny(IEnumerable<string> pairKeys)
     {
-        foreach (var key in pairKeys)
-            if (GetMethodName(key) is not null) return true;
+        foreach (string key in pairKeys)
+        {
+            if (GetMethodName(key) is not null)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -66,8 +76,14 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     /// </summary>
     public MappingPlanEntry? FindFirstGenerated(IEnumerable<string> pairKeys)
     {
-        foreach (var key in pairKeys)
-            if (FindGenerated(key) is { } entry) return entry;
+        foreach (string key in pairKeys)
+        {
+            if (FindGenerated(key) is { } entry)
+            {
+                return entry;
+            }
+        }
+
         return null;
     }
 
@@ -78,7 +94,13 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
         {
             var entryByPair = new Dictionary<string, MappingPlanEntry>(StringComparer.Ordinal);
             foreach (var entry in Entries)
-                if (entry.Emit) entryByPair[entry.PairKey] = entry;
+            {
+                if (entry.Emit)
+                {
+                    entryByPair[entry.PairKey] = entry;
+                }
+            }
+
             _entryByPair = entryByPair;
         }
 
@@ -88,8 +110,16 @@ internal sealed class MappingPlan : IEquatable<MappingPlan>
     /// <inheritdoc/>
     public bool Equals(MappingPlan? other)
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
         return Entries.Equals(other.Entries) && Diagnostics.Equals(other.Diagnostics);
     }
 
@@ -201,7 +231,7 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = 17;
+        int hash = 17;
         hash = hash * 31 + Origin.GetHashCode();
         hash = hash * 31 + PairKey.GetHashCode();
         hash = hash * 31 + Emit.GetHashCode();

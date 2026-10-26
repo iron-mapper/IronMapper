@@ -26,17 +26,35 @@ internal sealed record QuickOptions
     {
         var args = new List<string>();
         if (Benchmarks is { Count: > 0 })
+        {
             args.AddRange(["-Filter", string.Join(",", Benchmarks.Select(BenchmarkCatalog.ToFilter))]);
+        }
+
         if (Frameworks is { Count: > 0 })
+        {
             args.AddRange(["-Frameworks", string.Join(",", Frameworks)]);
+        }
+
         if (PublishedVersion is not null)
+        {
             args.AddRange(["-PublishedVersion", PublishedVersion]);
+        }
+
         if (Branch is not null)
+        {
             args.AddRange(["-Branch", Branch]);
+        }
+
         if (Dry)
+        {
             args.Add("-Dry");
+        }
+
         if (CheckOnly)
+        {
             args.Add("-CheckOnly");
+        }
+
         return args;
     }
 
@@ -45,17 +63,35 @@ internal sealed record QuickOptions
     {
         var args = new List<string> { "quick" };
         if (Benchmarks is { Count: > 0 })
+        {
             args.AddRange(["--filter", string.Join(",", Benchmarks)]);
+        }
+
         if (Frameworks is { Count: > 0 })
+        {
             args.AddRange(["--frameworks", string.Join(",", Frameworks)]);
+        }
+
         if (PublishedVersion is not null)
+        {
             args.AddRange(["--published-version", PublishedVersion]);
+        }
+
         if (Branch is not null)
+        {
             args.AddRange(["--branch", Branch]);
+        }
+
         if (Dry)
+        {
             args.Add("--dry");
+        }
+
         if (CheckOnly)
+        {
             args.Add("--check-only");
+        }
+
         return BenchCommand.Display(args);
     }
 }

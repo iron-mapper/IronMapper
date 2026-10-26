@@ -19,7 +19,10 @@ internal sealed partial record PreflightCheck(CheckMark Mark, string Name, strin
     {
         Match m = Pattern().Match(line);
         if (!m.Success)
+        {
             return null;
+        }
+
         CheckMark mark = m.Groups["mark"].Value switch
         {
             "ok" => CheckMark.Ok,

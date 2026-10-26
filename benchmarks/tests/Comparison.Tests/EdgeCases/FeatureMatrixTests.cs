@@ -141,7 +141,9 @@ public class FeatureMatrixTests
         sb.AppendLine();
         AppendHeader(sb, "Scenario");
         foreach (var (scenario, cells) in Scenarios)
+        {
             AppendRow(sb, scenario, Mappers.Names.Select(n => cells[n]));
+        }
 
         sb.AppendLine();
         sb.AppendLine("## Edge cases: observed behavior");
@@ -151,19 +153,23 @@ public class FeatureMatrixTests
         sb.AppendLine();
         AppendHeader(sb, "Case");
         foreach (var edgeCase in EdgeCaseFacts.Cases)
+        {
             AppendRow(sb, edgeCase.Title, Mappers.Names.Select(edgeCase.Evaluate));
+        }
 
         sb.AppendLine();
         sb.AppendLine("Notes:");
         sb.AppendLine();
-        foreach (var note in Notes)
+        foreach (string note in Notes)
+        {
             sb.AppendLine($"- {note}");
+        }
 
         // The committed matrix comes from the reference runtime (.NET 10); other runtimes write theirs to raw/.
         // IRONMAPPER_RESULTS_DIR (set by run-all.ps1 -ResultsDir, relative to benchmarks/) moves it with the rest of the run.
-        var results = Environment.GetEnvironmentVariable("IRONMAPPER_RESULTS_DIR");
-        var resultsDir = Path.Combine(FindBenchmarksDirectory(), string.IsNullOrWhiteSpace(results) ? "results" : results);
-        var path = Environment.Version.Major == 10
+        string? results = Environment.GetEnvironmentVariable("IRONMAPPER_RESULTS_DIR");
+        string resultsDir = Path.Combine(FindBenchmarksDirectory(), string.IsNullOrWhiteSpace(results) ? "results" : results);
+        string path = Environment.Version.Major == 10
             ? Path.Combine(resultsDir, FileName)
             : Path.Combine(resultsDir, "raw", $"feature-matrix.net{Environment.Version.Major}.0.md");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -187,7 +193,9 @@ public class FeatureMatrixTests
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             if (File.Exists(Path.Combine(dir.FullName, "IronMapper.Comparison.slnx")))
+            {
                 return dir.FullName;
+            }
         }
         throw new InvalidOperationException("IronMapper.Comparison.slnx not found above " + AppContext.BaseDirectory);
     }

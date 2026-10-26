@@ -74,7 +74,7 @@ public static class MapperRegistry
     /// in this assembly), so an application that only calls the generated extension methods does not carry the
     /// registration and the registry.
     /// </remarks>
-    public static bool IsSupported => !AppContext.TryGetSwitch(FeatureSwitchName, out var isSupported) || isSupported;
+    public static bool IsSupported => !AppContext.TryGetSwitch(FeatureSwitchName, out bool isSupported) || isSupported;
 
     /// <summary>
     /// Throws when <see cref="IsSupported"/> is <see langword="false"/>: the generated mappings are not registered, so
@@ -83,7 +83,10 @@ public static class MapperRegistry
     /// <exception cref="InvalidOperationException">The registration is turned off.</exception>
     public static void EnsureSupported()
     {
-        if (!IsSupported) throw new InvalidOperationException(NotSupportedMessage);
+        if (!IsSupported)
+        {
+            throw new InvalidOperationException(NotSupportedMessage);
+        }
     }
 
     /// <summary>
@@ -93,7 +96,10 @@ public static class MapperRegistry
     /// <param name="registerMappings">Calls <see cref="Register{TSource, TDest}"/> for every mapping of the assembly.</param>
     public static void AddAssembly(Action registerMappings)
     {
-        if (registerMappings is null) throw new ArgumentNullException(nameof(registerMappings));
+        if (registerMappings is null)
+        {
+            throw new ArgumentNullException(nameof(registerMappings));
+        }
 
         PendingAssemblies.Push(registerMappings);
     }
@@ -118,13 +124,23 @@ public static class MapperRegistry
         Func<IEnumerable<TSource>?, List<TDest>>? mapList,
         Func<IEnumerable<TSource>?, TDest[]>? mapArray)
     {
-        if (map is null) throw new ArgumentNullException(nameof(map));
-        if (mapInto is null) throw new ArgumentNullException(nameof(mapInto));
+        if (map is null)
+        {
+            throw new ArgumentNullException(nameof(map));
+        }
+
+        if (mapInto is null)
+        {
+            throw new ArgumentNullException(nameof(mapInto));
+        }
 
         lock (s_lock)
         {
             var bySource = s_entries.GetOrAdd(typeof(TDest), static _ => new ConcurrentDictionary<Type, MapperEntry>());
-            if (bySource.ContainsKey(typeof(TSource))) return;
+            if (bySource.ContainsKey(typeof(TSource)))
+            {
+                return;
+            }
 
             var entry = new MapperEntry<TSource, TDest>(map, mapInto, mapList, mapArray);
             bySource[typeof(TSource)] = entry;
@@ -133,7 +149,9 @@ public static class MapperRegistry
                 : new MapperEntry[] { entry };
             MapperCache<TSource, TDest>.Set(map, mapInto);
             if (Interlocked.Exchange(ref s_resolvedUsed, 0) != 0)
+            {
                 Volatile.Write(ref s_resolved, new ConcurrentDictionary<Type, ConcurrentDictionary<Type, Func<object, object?>>>());
+            }
         }
     }
 
@@ -145,7 +163,10 @@ public static class MapperRegistry
     {
         // Not 0 from the moment an assembly is added until its registration has finished, so a caller that sees 0 never
         // runs ahead of a registration that another thread is still doing.
-        if (PendingAssemblies.Count == 0) return;
+        if (PendingAssemblies.Count == 0)
+        {
+            return;
+        }
 
         lock (s_lock)
         {
@@ -154,7 +175,10 @@ public static class MapperRegistry
             {
                 try
                 {
-                    foreach (var register in pending) register();
+                    foreach (var register in pending)
+                    {
+                        register();
+                    }
                 }
                 finally
                 {
@@ -174,7 +198,10 @@ public static class MapperRegistry
     /// <param name="assembly">An assembly with generated mappings (others are ignored).</param>
     public static void EnsureModuleInitialized(Assembly assembly)
     {
-        if (assembly is null) throw new ArgumentNullException(nameof(assembly));
+        if (assembly is null)
+        {
+            throw new ArgumentNullException(nameof(assembly));
+        }
 
         RunModuleInitializer(assembly);
     }
@@ -193,7 +220,11 @@ public static class MapperRegistry
         {
             foreach (var assembly in assemblies)
             {
-                if (IsFrameworkAssembly(assembly)) continue;
+                if (IsFrameworkAssembly(assembly))
+                {
+                    continue;
+                }
+
                 try
                 {
                     RunModuleInitializer(assembly);
@@ -226,8 +257,15 @@ public static class MapperRegistry
     /// <returns><see langword="true"/> if a mapping is found.</returns>
     public static bool TryGetMap(Type sourceType, Type destinationType, out Func<object, object?> map)
     {
-        if (sourceType is null) throw new ArgumentNullException(nameof(sourceType));
-        if (destinationType is null) throw new ArgumentNullException(nameof(destinationType));
+        if (sourceType is null)
+        {
+            throw new ArgumentNullException(nameof(sourceType));
+        }
+
+        if (destinationType is null)
+        {
+            throw new ArgumentNullException(nameof(destinationType));
+        }
 
         EnsureInitialized();
         var resolved = Volatile.Read(ref s_resolved);
@@ -261,8 +299,15 @@ public static class MapperRegistry
     /// <returns><see langword="true"/> if a mapping is found.</returns>
     public static bool TryGetMapInto(Type sourceType, Type destinationType, out Action<object, object> mapInto)
     {
-        if (sourceType is null) throw new ArgumentNullException(nameof(sourceType));
-        if (destinationType is null) throw new ArgumentNullException(nameof(destinationType));
+        if (sourceType is null)
+        {
+            throw new ArgumentNullException(nameof(sourceType));
+        }
+
+        if (destinationType is null)
+        {
+            throw new ArgumentNullException(nameof(destinationType));
+        }
 
         EnsureInitialized();
         if (s_entries.TryGetValue(destinationType, out var bySource))
@@ -294,17 +339,33 @@ public static class MapperRegistry
     /// <exception cref="MappingException">No mapping is registered for the types.</exception>
     public static object? Map(object source, Type sourceType, Type destinationType)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
-        if (sourceType is null) throw new ArgumentNullException(nameof(sourceType));
-        if (destinationType is null) throw new ArgumentNullException(nameof(destinationType));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        if (sourceType is null)
+        {
+            throw new ArgumentNullException(nameof(sourceType));
+        }
+
+        if (destinationType is null)
+        {
+            throw new ArgumentNullException(nameof(destinationType));
+        }
+
         if (!sourceType.IsInstanceOfType(source))
+        {
             throw new ArgumentException($"The source is a '{source.GetType()}', not a '{sourceType}'.", nameof(source));
+        }
 
         if (!TryGetMap(sourceType, destinationType, out var map))
         {
             EnsureLoadedAssembliesRegistered();
             if (!TryGetMap(sourceType, destinationType, out map))
+            {
                 throw NoMappingException(sourceType, destinationType);
+            }
         }
 
         return map(source);
@@ -334,16 +395,22 @@ public static class MapperRegistry
         {
             for (var type = sourceType; type is not null; type = type.BaseType)
             {
-                if (bySource.TryGetValue(type, out var entry)) return entry.Map;
+                if (bySource.TryGetValue(type, out var entry))
+                {
+                    return entry.Map;
+                }
             }
         }
 
-        if (TryGetCollectionElement(destinationType, out var element, out var isArray)
+        if (TryGetCollectionElement(destinationType, out var element, out bool isArray)
             && s_byDestination.TryGetValue(element, out var candidates))
         {
             foreach (var candidate in candidates)
             {
-                if (candidate.IsSourceCollection(sourceType)) return isArray ? candidate.MapArray : candidate.MapList;
+                if (candidate.IsSourceCollection(sourceType))
+                {
+                    return isArray ? candidate.MapArray : candidate.MapList;
+                }
             }
         }
 
@@ -361,7 +428,10 @@ public static class MapperRegistry
         }
 
         element = null!;
-        if (!type.IsGenericType || type.IsGenericTypeDefinition) return false;
+        if (!type.IsGenericType || type.IsGenericTypeDefinition)
+        {
+            return false;
+        }
 
         var definition = type.GetGenericTypeDefinition();
         if (definition != typeof(List<>)
@@ -370,7 +440,9 @@ public static class MapperRegistry
             && definition != typeof(ICollection<>)
             && definition != typeof(IReadOnlyList<>)
             && definition != typeof(IReadOnlyCollection<>))
+        {
             return false;
+        }
 
         element = type.GetGenericArguments()[0];
         return true;
@@ -378,13 +450,17 @@ public static class MapperRegistry
 
     private static void RunModuleInitializer(Assembly assembly)
     {
-        if (assembly.IsDynamic) return;
+        if (assembly.IsDynamic)
+        {
+            return;
+        }
+
         RuntimeHelpers.RunModuleConstructor(assembly.ManifestModule.ModuleHandle);
     }
 
     private static bool IsFrameworkAssembly(Assembly assembly)
     {
-        var name = assembly.GetName().Name;
+        string? name = assembly.GetName().Name;
         return name is null
                || name.StartsWith("System.", StringComparison.Ordinal)
                || name.StartsWith("Microsoft.", StringComparison.Ordinal)
@@ -405,7 +481,10 @@ public static class MapperRegistry
         {
             Interlocked.Increment(ref s_count);
             var node = new Node(register);
-            do node.Next = Volatile.Read(ref s_head);
+            do
+            {
+                node.Next = Volatile.Read(ref s_head);
+            }
             while (Interlocked.CompareExchange(ref s_head, node, node.Next) != node.Next);
         }
 
@@ -413,12 +492,23 @@ public static class MapperRegistry
         public static Action[]? TakeAll()
         {
             var node = Interlocked.Exchange(ref s_head, null);
-            if (node is null) return null;
+            if (node is null)
+            {
+                return null;
+            }
 
-            var length = 0;
-            for (var n = node; n is not null; n = n.Next) length++;
+            int length = 0;
+            for (var n = node; n is not null; n = n.Next)
+            {
+                length++;
+            }
+
             var result = new Action[length];
-            for (var i = length - 1; node is not null; node = node.Next, i--) result[i] = node.Register;
+            for (int i = length - 1; node is not null; node = node.Next, i--)
+            {
+                result[i] = node.Register;
+            }
+
             return result;
         }
 

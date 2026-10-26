@@ -31,7 +31,9 @@ internal static class Fixture
             for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
             {
                 if (File.Exists(Path.Combine(dir.FullName, "IronMapper.Comparison.slnx")))
+                {
                     return dir.FullName;
+                }
             }
             throw new InvalidOperationException("benchmarks/ not found above the test output folder.");
         }

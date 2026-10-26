@@ -25,7 +25,7 @@ public static class Demo5_CustomConverter
         Console.WriteLine("BEFORE  AuthorResponse.Bio (raw data):");
         if (author.Bio is not null)
         {
-            var preview = author.Bio.Length > 200 ? author.Bio.Substring(0, 200) + "..." : author.Bio;
+            string preview = author.Bio.Length > 200 ? author.Bio[..200] + "..." : author.Bio;
             Console.WriteLine($"  \"{preview}\"");
             Console.WriteLine($"  Length: {author.Bio.Length} chars");
         }
@@ -64,9 +64,9 @@ public static class Demo5_CustomConverter
         Console.WriteLine("  - Calls from generated code, with no reflection");
 
         // Demonstrate converter standalone
-        var htmlSample = "This is <b>bold</b> and <i>italic</i> text with <a href=\"#\">a link</a>.";
+        string htmlSample = "This is <b>bold</b> and <i>italic</i> text with <a href=\"#\">a link</a>.";
         var converter = new BioConverter();
-        var cleaned = converter.Convert(htmlSample);
+        string? cleaned = converter.Convert(htmlSample);
         Console.WriteLine();
         Console.WriteLine($"  Example: \"{htmlSample}\"");
         Console.WriteLine($"  → \"{cleaned}\"");

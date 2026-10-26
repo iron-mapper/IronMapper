@@ -22,7 +22,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void StatelessConverters_UseOneCacheDeclaredOnce()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Generated;
@@ -80,7 +80,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void NoCachedConverter_NoCacheDeclared()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -126,7 +126,7 @@ public class ConverterGeneratorTests
     [InlineData("public sealed class C : ITypeConverter<string, string> { public C(int start = 0) { } public string Convert(string s) => s; }")]
     public void ConverterThatMayHaveState_NewInstancePerCall(string converter)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -159,7 +159,7 @@ public class ConverterGeneratorTests
     [InlineData("public sealed class C : ITypeConverter<string, string> { public string Convert(string s) => s; } public partial class Unused { private int _n; }")]
     public void ConverterWithoutState_Cached(string converter)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -182,7 +182,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void GenericConverter_CachedPerConstructedType()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -204,7 +204,7 @@ public class ConverterGeneratorTests
         var (sources, _, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
         Assert.Empty(errors);
-        var code = Generated(sources, "MapToTagDto(");
+        string code = Generated(sources, "MapToTagDto(");
         Assert.Contains("ConverterCache<global::App.Echo<string>>.Instance.Convert(source.Label)", code);
         Assert.Contains("new global::App.Holder<int>().Convert(source.Count)", code);
     }
@@ -223,7 +223,7 @@ public class ConverterGeneratorTests
     [InlineData("public static class C { }", "it is static")]
     public void ConverterThatCannotBeCreated_IM0015_MappingSkipped_OthersGenerated(string converter, string reason)
     {
-        var source = $$"""
+        string source = $$"""
             using System;
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
@@ -258,7 +258,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void OpenGenericConverter_IM0015()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -283,7 +283,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void PrivateNestedConverter_IM0015_InsteadOfCS0122InGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -313,7 +313,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void ProfileConverterThatCannotBeCreated_IM0015_ForUseConverterAndConvertUsing()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Interfaces;
 
@@ -358,7 +358,7 @@ public class ConverterGeneratorTests
     [Fact]
     public void IgnoredPropertyWithConverterThatCannotBeCreated_NoDiagnostic()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 

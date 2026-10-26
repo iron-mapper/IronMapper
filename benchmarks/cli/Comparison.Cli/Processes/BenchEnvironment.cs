@@ -30,7 +30,10 @@ internal static partial class BenchEnvironment
     {
         string props = Path.Combine(benchmarksDir, "Directory.Build.props");
         if (File.Exists(props) && TargetFrameworks().Match(File.ReadAllText(props)) is { Success: true } m)
+        {
             return m.Groups[1].Value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
         return ["net10.0", "net8.0"];
     }
 
@@ -50,7 +53,10 @@ internal static partial class BenchEnvironment
                 RedirectStandardError = true,
             };
             foreach (string arg in arguments)
+            {
                 info.ArgumentList.Add(arg);
+            }
+
             using Process process = Process.Start(info)!;
             string output = process.StandardOutput.ReadToEnd();
             process.WaitForExit(30_000);

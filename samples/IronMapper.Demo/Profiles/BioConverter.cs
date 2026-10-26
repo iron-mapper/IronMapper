@@ -11,15 +11,18 @@ public class BioConverter : ITypeConverter<string?, string?>
 {
     public string? Convert(string? source)
     {
-        if (source is null) return null;
+        if (source is null)
+        {
+            return null;
+        }
 
         // Strip HTML tags
-        var clean = Regex.Replace(source, "<[^>]+>", string.Empty);
+        string clean = Regex.Replace(source, "<[^>]+>", string.Empty);
 
         // Normalize whitespace
         clean = Regex.Replace(clean.Trim(), @"\s{2,}", " ");
 
         // Truncate to 300 characters
-        return clean.Length > 300 ? clean.Substring(0, 297) + "..." : clean;
+        return clean.Length > 300 ? clean[..297] + "..." : clean;
     }
 }

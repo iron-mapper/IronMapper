@@ -22,7 +22,10 @@ internal sealed partial record ScriptCommand(string ScriptPath, IReadOnlyList<st
             string script = "./" + Path.GetRelativePath(WorkingDirectory, ScriptPath).Replace('\\', '/');
             var text = new StringBuilder("pwsh");
             foreach (string arg in PwshOptions.Append(script).Concat(Arguments))
+            {
                 text.Append(' ').Append(Quote(arg));
+            }
+
             return text.ToString();
         }
     }
@@ -35,9 +38,15 @@ internal sealed partial record ScriptCommand(string ScriptPath, IReadOnlyList<st
     public static string Quote(string arg)
     {
         if (PlainArgument().IsMatch(arg))
+        {
             return arg;
+        }
+
         if (!arg.Contains('\''))
+        {
             return "'" + arg + "'";
+        }
+
         return arg.IndexOfAny(['"', '$', '`', '\\', '!']) < 0 ? "\"" + arg + "\"" : "'" + arg.Replace("'", "''") + "'";
     }
 

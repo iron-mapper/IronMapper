@@ -26,6 +26,13 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
     <!--
+      Code style of the root .editorconfig, as in the root Directory.Build.props (AnalysisLevelStyle: see there). Not for
+      the generated build-time probes (probes/BuildProbe.*): analyzers would add to the timed build and to its warnings.
+    -->
+    <EnforceCodeStyleInBuild Condition="!$(MSBuildProjectName.StartsWith('BuildProbe.'))">true</EnforceCodeStyleInBuild>
+    <AnalysisLevelStyle Condition="!$(MSBuildProjectName.StartsWith('BuildProbe.'))">10.0</AnalysisLevelStyle>
+
+    <!--
       IronMapper source: the published NuGet package (default) or the local sources in ../src.
       Maintainer switch: dotnet run -c Release -f net10.0 -p:UseLocalIronMapper=true
     -->

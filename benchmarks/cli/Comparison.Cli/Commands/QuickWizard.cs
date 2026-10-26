@@ -36,7 +36,10 @@ internal static class QuickWizard
             .InstructionsText("[grey](space: select, enter: accept)[/]")
             .AddChoices(classes);
         foreach (string name in defaultClasses)
+        {
             classPrompt.Select(name);
+        }
+
         List<string> selectedClasses = AnsiConsole.Prompt(classPrompt);
 
         // Frameworks: only those with an installed runtime can be chosen.
@@ -44,7 +47,10 @@ internal static class QuickWizard
         IReadOnlyList<string> suite = BenchEnvironment.SuiteFrameworks(paths.BenchmarksDir);
         var available = suite.Where(f => BenchEnvironment.Major(f) is { } major && runtimes.Contains(major)).ToList();
         foreach (string framework in suite.Except(available))
+        {
             AnsiConsole.MarkupLine($"[grey]{Markup.Escape(framework)}: not available (no Microsoft.NETCore.App {BenchEnvironment.Major(framework)}.x runtime)[/]");
+        }
+
         if (available.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]None of the suite's frameworks has an installed runtime.[/]");
@@ -56,14 +62,19 @@ internal static class QuickWizard
             .InstructionsText("[grey](space: select, enter: accept)[/]")
             .AddChoices(available);
         foreach (string framework in defaultFrameworks.Intersect(available))
+        {
             frameworkPrompt.Select(framework);
+        }
+
         List<string> selectedFrameworks = AnsiConsole.Prompt(frameworkPrompt);
 
         string version = AnsiConsole.Prompt(new TextPrompt<string>(
                 $"Published version [grey](empty: script default, {Markup.Escape(defaultVersion ?? "unknown")})[/]")
             .AllowEmpty()).Trim();
         if (version.Length > 0 && version != defaultVersion && !git.TagExists(paths.RepoDir, "v" + version))
+        {
             AnsiConsole.MarkupLine($"[yellow]Tag v{Markup.Escape(version)} not found locally (git fetch --tags); the pre-flight will fail.[/]");
+        }
 
         bool dry = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Mode").AddChoices(NormalMode, DryMode)) == DryMode;
 
@@ -89,7 +100,10 @@ internal static class QuickWizard
         }
 
         if (runs is not null)
+        {
             AnsiConsole.MarkupLine($"[grey]{Markup.Escape(runs)}[/]");
+        }
+
         if (!AnsiConsole.Prompt(new ConfirmationPrompt("Start the run?")))
         {
             AnsiConsole.MarkupLine("[grey]Not started. The same run with the CLI:[/]");
@@ -106,7 +120,9 @@ internal static class QuickWizard
         grid.AddRow("[grey]Branch[/]", Markup.Escape(git.Branch ?? "?"));
         grid.AddRow("[grey]HEAD[/]", Markup.Escape(git.Head ?? "?") + (git.Uncommitted ? " [yellow](uncommitted changes)[/]" : " [green](clean)[/]"));
         if (version is null)
+        {
             grid.AddRow("[grey]Published[/]", "[yellow]script default unknown[/]");
+        }
         else
         {
             bool tag = git.TagExists(paths.RepoDir, "v" + version);

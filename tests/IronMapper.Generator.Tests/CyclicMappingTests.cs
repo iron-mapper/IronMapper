@@ -25,7 +25,7 @@ public class CyclicMappingTests
     [Fact]
     public void TreeThroughCollection_NoIM0004()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;
@@ -57,7 +57,7 @@ public class CyclicMappingTests
     [Fact]
     public void EmployeeManager_IM0004Warning_FiniteChainIsMapped()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -99,14 +99,14 @@ public class CyclicMappingTests
     public void IgnoreOrMapFromOnThePath_BreaksTheCycle(string mapTo, string ignore, string? forMember)
     {
         // [Ignore] in an attribute mapping; a profile does not read [Ignore] (plan item 2.6), there it is ForMember.
-        var profile = forMember is null ? "" : $$"""
+        string profile = forMember is null ? "" : $$"""
 
             public class EmployeeProfile : MappingProfile
             {
                 public EmployeeProfile() { CreateMap<Employee, EmployeeDto>(){{forMember}}; }
             }
             """;
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -125,7 +125,7 @@ public class CyclicMappingTests
     [Fact]
     public void OrderCustomerOrders_IM0004WithTheFullChain_AtCreateMap()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Configuration;
 
@@ -160,7 +160,7 @@ public class CyclicMappingTests
     [Fact]
     public void TwoNestedObjectsOnTheCycle_ReportedAtEach()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -186,7 +186,7 @@ public class CyclicMappingTests
     public void CycleThroughConvertUsing_NoIM0004()
     {
         // The mapping of Customer calls the converter, not the mappings of its properties: no recursion.
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Configuration;
 
@@ -219,7 +219,7 @@ public class CyclicMappingTests
         // The usual severity settings apply (.editorconfig, NoWarn, WarningsAsErrors). #pragma warning disable IM0004 is
         // applied by the compiler, not by the generator driver: checked by the build of tests/IronMapper.Tests
         // (TreatWarningsAsErrors; NestedObjectTests.cs, NestedProfile).
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -239,7 +239,7 @@ public class CyclicMappingTests
     {
         // What 2.0.0 compiles: trees and cycles through collections, nested objects through MapFrom (the documented
         // workaround), a nested property of the same type. With TreatWarningsAsErrors nothing new may appear.
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Configuration;
             using IronMapper.Generated;

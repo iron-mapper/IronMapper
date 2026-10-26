@@ -183,7 +183,7 @@ public class MappingValidatorTests
             errors: new[] { "err1" },
             warnings: new[] { "warn1" });
 
-        var formatted = result.FormatMessages();
+        string formatted = result.FormatMessages();
 
         Assert.Contains("[ERROR]", formatted);
         Assert.Contains("[WARNING]", formatted);

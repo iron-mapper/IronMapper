@@ -4,11 +4,15 @@ using IronMapper.AotProbe.Transitive.Services;
 // NativeAOT probe C: IMapper through a library that references IronMapper.Extensions.DI, mappings in a library
 // without it. eng/verify-aot.ps1 requires zero trim/AOT warnings and exit code 0 (JIT and NativeAOT).
 var mapper = MapperFactory.Create(typeof(Customer).Assembly);
-var failures = 0;
+int failures = 0;
 
 void Check(bool condition, string what)
 {
-    if (condition) return;
+    if (condition)
+    {
+        return;
+    }
+
     Console.WriteLine("FAILED: " + what);
     failures++;
 }

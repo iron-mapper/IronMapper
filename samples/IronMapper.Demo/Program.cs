@@ -12,7 +12,7 @@ Console.ResetColor();
 Console.WriteLine("Using Open Library API (openlibrary.org)");
 Console.WriteLine("Uses static data if API is unavailable.");
 
-var running = true;
+bool running = true;
 while (running)
 {
     Console.WriteLine();
@@ -30,7 +30,7 @@ while (running)
     Console.ResetColor();
     Console.Write("\nInput: ");
 
-    var input = Console.ReadLine()?.Trim();
+    string? input = Console.ReadLine()?.Trim();
     Console.WriteLine();
 
     try

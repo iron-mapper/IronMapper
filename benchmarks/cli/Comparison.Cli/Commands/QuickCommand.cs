@@ -43,14 +43,18 @@ internal sealed class QuickSettings : CommandSettings
             IReadOnlyList<string> known = BenchmarkCatalog.Discover(paths.BenchmarkSourcesDir);
             BenchmarkCatalog.ToFilters(Split(Filter), known, out IReadOnlyList<string> unknown);
             if (unknown.Count > 0 || Split(Filter).Count == 0)
+            {
                 return ValidationResult.Error($"Unknown benchmark '{string.Join(", ", unknown)}'. Known: {string.Join(", ", known)}.");
+            }
         }
         if (Frameworks is not null)
         {
             IReadOnlyList<string> known = BenchEnvironment.SuiteFrameworks(paths.BenchmarksDir);
             var unknown = Split(Frameworks).Where(f => !known.Contains(f, StringComparer.OrdinalIgnoreCase)).ToList();
             if (unknown.Count > 0 || Split(Frameworks).Count == 0)
+            {
                 return ValidationResult.Error($"Unknown framework '{string.Join(", ", unknown)}'. The suite targets: {string.Join(", ", known)}.");
+            }
         }
         return ValidationResult.Success();
     }
@@ -110,7 +114,7 @@ internal static class QuickRunner
     {
         var lines = new List<string>();
         using var interrupts = new InterruptHandler(confirm: false);
-        Task<ScriptResult> run = ScriptRunner.RunAsync(command, line => { lock (lines) lines.Add(line); }, _ => { }, interrupts);
+        Task<ScriptResult> run = ScriptRunner.RunAsync(command, line => { lock (lines) { lines.Add(line); } }, _ => { }, interrupts);
         ScriptResult result = Terminal.Plain
             ? await run.ConfigureAwait(false)
             : await AnsiConsole.Status().StartAsync("Pre-flight checks (restore, nuget.org comparison)...", _ => run).ConfigureAwait(false);
@@ -120,11 +124,18 @@ internal static class QuickRunner
         string? runs = events.OfType<QuickRunsPlanned>().FirstOrDefault()?.Text;
         CheckView.Write(checks);
         if (result.Interrupted)
+        {
             AnsiConsole.MarkupLine("[yellow]Stopped.[/]");
+        }
         else if (result.ExitCode != 0)
+        {
             AnsiConsole.MarkupLine($"[red]Pre-flight failed (exit code {result.ExitCode}):[/] {Markup.Escape(result.ErrorMessage)}");
+        }
         else
+        {
             AnsiConsole.MarkupLine("[green]Checks passed.[/]");
+        }
+
         return (result.ExitCode, checks, runs);
     }
 
@@ -133,14 +144,19 @@ internal static class QuickRunner
         var monitor = new QuickMonitor();
         ScriptResult result = await RunSession.RunAsync(command, monitor, keepAwake: true).ConfigureAwait(false);
         if (result.Interrupted)
+        {
             return result.ExitCode;
+        }
 
         bool started = monitor.Root is { } root && Directory.Exists(root);
         if (!started)
         {
             // Stopped before any run: the checks (or the arguments) failed.
             if (!Terminal.Plain)
+            {
                 CheckView.Write(monitor.Checks);
+            }
+
             AnsiConsole.MarkupLine($"[red]run-quick.ps1 failed before measuring (exit code {result.ExitCode}):[/] {Markup.Escape(result.ErrorMessage)}");
             return result.ExitCode;
         }
@@ -152,7 +168,10 @@ internal static class QuickRunner
             Console.WriteLine();
             Console.WriteLine("Runs:");
             foreach (QuickVariantRun r in run.Runs)
+            {
                 Console.WriteLine($"  {r.Variant} {r.Framework}: {r.Status.Text} (log: {Path.Combine(r.Dir, "run.log")})");
+            }
+
             Console.WriteLine($"Folder: {run.Dir}");
         }
         else
@@ -162,7 +181,10 @@ internal static class QuickRunner
             AnsiConsole.MarkupLine($"[grey]Logs: build.log and run.log in {Markup.Escape(string.Join(", ", run.Runs.Select(r => Path.GetFileName(r.Dir))))}[/]");
         }
         if (result.ExitCode != 0 && result.Stderr.Count > 0)
+        {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(result.ErrorMessage)}[/]");
+        }
+
         AnsiConsole.MarkupLine(result.ExitCode == 0
             ? "[green]Done.[/]"
             : $"[red]run-quick.ps1 exited with {result.ExitCode}[/] (a run is not ok, or the script stopped).");

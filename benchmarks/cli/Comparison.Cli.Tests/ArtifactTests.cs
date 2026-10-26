@@ -27,7 +27,9 @@ public class ArtifactTests
         RunStatus status = RunStatus.FromJson(json, dir);
         Assert.Equal(Enum.Parse<RunState>(state), status.State);
         if (text is not null)
+        {
             Assert.Equal(text.Replace("RUNDIR", dir).Replace('\\', Path.DirectorySeparatorChar), status.Text.Replace('\\', Path.DirectorySeparatorChar));
+        }
     }
 
     [Fact]

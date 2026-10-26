@@ -55,8 +55,8 @@ public static class Demo4_NestedObjects
 
         if (bookDetail.Description is not null)
         {
-            var desc = bookDetail.Description.Length > 120
-                ? bookDetail.Description.Substring(0, 120) + "..."
+            string desc = bookDetail.Description.Length > 120
+                ? bookDetail.Description[..120] + "..."
                 : bookDetail.Description;
             Console.WriteLine($"\n  Description: {desc}");
         }

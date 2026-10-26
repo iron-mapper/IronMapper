@@ -18,7 +18,11 @@ internal sealed class TestOptionsProvider : AnalyzerConfigOptionsProvider
     public static TestOptionsProvider FromBuildProperties(IReadOnlyDictionary<string, string> properties)
     {
         var global = new Dictionary<string, string>();
-        foreach (var (name, value) in properties) global["build_property." + name] = value;
+        foreach (var (name, value) in properties)
+        {
+            global["build_property." + name] = value;
+        }
+
         return new TestOptionsProvider(global);
     }
 

@@ -11,11 +11,15 @@ services.AddIronMapper(typeof(User).Assembly);
 
 using var provider = services.BuildServiceProvider();
 var mapper = provider.GetRequiredService<IMapper>();
-var failures = 0;
+int failures = 0;
 
 void Check(bool condition, string what)
 {
-    if (condition) return;
+    if (condition)
+    {
+        return;
+    }
+
     Console.WriteLine("FAILED: " + what);
     failures++;
 }

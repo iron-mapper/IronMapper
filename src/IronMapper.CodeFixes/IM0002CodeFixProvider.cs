@@ -44,17 +44,26 @@ public sealed class IM0002CodeFixProvider : CodeFixProvider
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-        if (root is null) return;
+        if (root is null)
+        {
+            return;
+        }
 
         foreach (var diagnostic in context.Diagnostics)
         {
             if (Get(diagnostic, SourceTypeKey) is not { } source || Get(diagnostic, DestinationTypeKey) is not { } dest
                 || Get(diagnostic, OriginKey) is not { } origin)
+            {
                 continue;
+            }
 
             if (origin is "Profile" or "ReverseMap")
             {
-                if (FindProfileStatement(root, diagnostic) is not { } statement) continue;
+                if (FindProfileStatement(root, diagnostic) is not { } statement)
+                {
+                    continue;
+                }
+
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         title: $"Add CreateMap<{Display(source)}, {Display(dest)}>() to the profile",
@@ -65,7 +74,10 @@ public sealed class IM0002CodeFixProvider : CodeFixProvider
             }
 
             var compilation = await context.Document.Project.GetCompilationAsync(context.CancellationToken).ConfigureAwait(false);
-            if (compilation is null) continue;
+            if (compilation is null)
+            {
+                continue;
+            }
 
             // [MapTo(typeof(D))] on the source type, else [MapFrom(typeof(S))] on the destination type.
             if (FindDeclaration(compilation, Get(diagnostic, SourceIdKey)) is { } sourceDeclaration)
@@ -90,12 +102,16 @@ public sealed class IM0002CodeFixProvider : CodeFixProvider
     }
 
     private static string? Get(Diagnostic diagnostic, string key)
-        => diagnostic.Properties.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value) ? value : null;
+        => diagnostic.Properties.TryGetValue(key, out string? value) && !string.IsNullOrEmpty(value) ? value : null;
 
     /// <summary>The statement of the <c>CreateMap</c>/<c>ReverseMap()</c> call the diagnostic points to, in a block.</summary>
     private static StatementSyntax? FindProfileStatement(SyntaxNode root, Diagnostic diagnostic)
     {
-        if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) return null;
+        if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree)
+        {
+            return null;
+        }
+
         var node = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true);
         return node.FirstAncestorOrSelf<StatementSyntax>() is { Parent: BlockSyntax } statement ? statement : null;
     }
@@ -122,10 +138,16 @@ public sealed class IM0002CodeFixProvider : CodeFixProvider
         string type, CancellationToken ct)
     {
         var document = solution.GetDocument(declaration.SyntaxTree);
-        if (document is null) return solution;
+        if (document is null)
+        {
+            return solution;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         if (root is null || await declaration.GetSyntaxAsync(ct).ConfigureAwait(false) is not TypeDeclarationSyntax typeDeclaration)
+        {
             return solution;
+        }
 
         var list = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                 SyntaxFactory.Attribute(SyntaxFactory.IdentifierName(attribute),
@@ -148,7 +170,10 @@ public sealed class IM0002CodeFixProvider : CodeFixProvider
     private static async Task<bool> AttributeIsInScopeAsync(Document document, SyntaxNode node, string attribute, CancellationToken ct)
     {
         var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        if (model is null) return true;
+        if (model is null)
+        {
+            return true;
+        }
 
         var type = model.GetSpeculativeTypeInfo(node.SpanStart, SyntaxFactory.ParseTypeName(attribute + "Attribute"),
             SpeculativeBindingOption.BindAsTypeOrNamespace).Type;

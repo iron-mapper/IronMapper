@@ -50,7 +50,9 @@ public static class ManualMappings
     {
         var lines = new List<OrderLineDto>(src.Lines.Count);
         foreach (var line in src.Lines)
+        {
             lines.Add(MapLine(line));
+        }
 
         return new OrderDto
         {
@@ -67,7 +69,10 @@ public static class ManualMappings
     {
         var result = new List<OrderDto>(src.Count);
         foreach (var order in src)
+        {
             result.Add(MapNested(order));
+        }
+
         return result;
     }
 

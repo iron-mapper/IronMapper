@@ -17,19 +17,26 @@ internal static class ObjectGraph
     {
         // Strings are immutable and shared by design; value types have no identity.
         if (value is null or string || value.GetType().IsValueType || !seen.Add(value))
+        {
             return;
+        }
 
         if (value is IEnumerable items)
         {
-            foreach (var item in items)
+            foreach (object? item in items)
+            {
                 Visit(item, seen);
+            }
+
             return;
         }
 
         foreach (var property in value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (property.GetIndexParameters().Length == 0)
+            {
                 Visit(property.GetValue(value), seen);
+            }
         }
     }
 }

@@ -33,8 +33,15 @@ public static class MappingValidator
     /// <returns>A <see cref="ValidationResult"/> with all detected issues.</returns>
     public static ValidationResult Validate(Type sourceType, Type destType)
     {
-        if (sourceType is null) throw new ArgumentNullException(nameof(sourceType));
-        if (destType is null) throw new ArgumentNullException(nameof(destType));
+        if (sourceType is null)
+        {
+            throw new ArgumentNullException(nameof(sourceType));
+        }
+
+        if (destType is null)
+        {
+            throw new ArgumentNullException(nameof(destType));
+        }
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -75,7 +82,10 @@ public static class MappingValidator
         var destProps = GetPublicWritableProperties(destType);
 
         var sourcePropNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in sourceProps) sourcePropNames.Add(p.Name);
+        foreach (var p in sourceProps)
+        {
+            sourcePropNames.Add(p.Name);
+        }
 
         foreach (var destProp in destProps)
         {
@@ -92,7 +102,10 @@ public static class MappingValidator
         foreach (var destProp in destProps)
         {
             var sourceProp = FindProperty(sourceProps, destProp.Name);
-            if (sourceProp is null) continue;
+            if (sourceProp is null)
+            {
+                continue;
+            }
 
             if (!destProp.PropertyType.IsAssignableFrom(sourceProp.PropertyType))
             {
@@ -136,16 +149,26 @@ public static class MappingValidator
         var all = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
         var result = new List<PropertyInfo>(all.Length);
         foreach (var p in all)
+        {
             if (p.CanWrite && p.GetSetMethod(nonPublic: false) is not null)
+            {
                 result.Add(p);
+            }
+        }
+
         return result.ToArray();
     }
 
     private static PropertyInfo? FindProperty(PropertyInfo[] props, string name)
     {
         foreach (var p in props)
+        {
             if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
                 return p;
+            }
+        }
+
         return null;
     }
 }

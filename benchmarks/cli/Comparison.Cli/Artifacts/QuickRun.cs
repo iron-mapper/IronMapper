@@ -55,7 +55,10 @@ internal sealed record QuickRun
     public static IReadOnlyList<QuickRun> List(string quickDir)
     {
         if (!Directory.Exists(quickDir))
+        {
             return [];
+        }
+
         return Directory.GetDirectories(quickDir)
             .Where(dir => DateTime.TryParseExact(Path.GetFileName(dir), StampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             .OrderByDescending(dir => Path.GetFileName(dir), StringComparer.Ordinal)
@@ -69,7 +72,9 @@ internal sealed record QuickRun
         string? problem = null;
         JsonElement info = default;
         if (!File.Exists(infoPath))
+        {
             problem = "no run-info.json";
+        }
         else
         {
             try
@@ -77,7 +82,9 @@ internal sealed record QuickRun
                 using JsonDocument document = JsonDocument.Parse(File.ReadAllText(infoPath));
                 info = document.RootElement.Clone();
                 if (info.ValueKind != JsonValueKind.Object)
+                {
                     problem = "run-info.json is not an object";
+                }
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
             {
@@ -88,7 +95,9 @@ internal sealed record QuickRun
         bool ok = problem is null;
         IReadOnlyList<string> frameworks = ok ? Strings(info, "Frameworks") : [];
         if (frameworks.Count == 0)
+        {
             frameworks = DiscoverFrameworks(dir);
+        }
 
         var runs = new List<QuickVariantRun>();
         foreach (string framework in frameworks)
@@ -135,7 +144,10 @@ internal sealed record QuickRun
     private static IReadOnlyList<string> Strings(JsonElement obj, string name)
     {
         if (!obj.TryGetProperty(name, out JsonElement value))
+        {
             return [];
+        }
+
         return value.ValueKind switch
         {
             JsonValueKind.Array => value.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!).ToList(),

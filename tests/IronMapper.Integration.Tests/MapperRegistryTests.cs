@@ -274,7 +274,7 @@ namespace IronMapper.Integration.Tests
         {
             var mapper = (RuntimeMapper)CreateMapper();
 
-            var result = mapper.Map(Parcels(), typeof(List<Parcel>), destinationType);
+            object? result = mapper.Map(Parcels(), typeof(List<Parcel>), destinationType);
 
             var list = Assert.IsType<List<ParcelDto>>(result);
             Assert.Equal(new[] { 1, 2, 3 }, list.Select(d => d.Id));
@@ -348,7 +348,7 @@ namespace IronMapper.Integration.Tests
         {
             var mapper = (RuntimeMapper)CreateMapper();
 
-            var result = mapper.Map(new Parcel { Id = 8 }, typeof(Parcel), typeof(ParcelDto));
+            object? result = mapper.Map(new Parcel { Id = 8 }, typeof(Parcel), typeof(ParcelDto));
 
             Assert.Equal(8, Assert.IsType<ParcelDto>(result).Id);
         }
@@ -485,7 +485,7 @@ namespace IronMapper.Integration.Tests
         [Fact]
         public void AddedRegistration_RunsOnlyWhenAMapperIsCreated()
         {
-            var runs = 0;
+            int runs = 0;
             MapperRegistry.AddAssembly(() =>
             {
                 runs++;
@@ -504,7 +504,7 @@ namespace IronMapper.Integration.Tests
         [Fact]
         public void MappersCreatedInParallel_RunTheRegistrationOnceAndEachSeesIt()
         {
-            var runs = 0;
+            int runs = 0;
             MapperRegistry.AddAssembly(() =>
             {
                 Interlocked.Increment(ref runs);
@@ -514,7 +514,7 @@ namespace IronMapper.Integration.Tests
 
             const int threads = 8;
             using var start = new Barrier(threads);
-            var seen = new bool[threads];
+            bool[] seen = new bool[threads];
             var workers = Enumerable.Range(0, threads).Select(i => new Thread(() =>
             {
                 start.SignalAndWait();

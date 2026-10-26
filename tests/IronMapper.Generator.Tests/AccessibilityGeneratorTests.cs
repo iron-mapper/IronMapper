@@ -26,7 +26,7 @@ public class AccessibilityGeneratorTests
     [InlineData("internal", "internal")]
     public void MapToAttribute_InternalSourceOrDestination_GeneratesInternalMethodsThatCompile(string sourceModifier, string destModifier)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
 
             namespace App;
@@ -49,7 +49,7 @@ public class AccessibilityGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("internal static global::App.UserDto MapToUserDto(this global::App.UserEntity source)", code);
         Assert.DoesNotContain("public static global::App.UserDto", code);
     }
@@ -60,7 +60,7 @@ public class AccessibilityGeneratorTests
     [InlineData("internal", "internal")]
     public void Profile_InternalSourceOrDestination_GeneratesInternalMethodsThatCompile(string sourceModifier, string destModifier)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Configuration;
 
             namespace App;
@@ -90,7 +90,7 @@ public class AccessibilityGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("internal static global::App.UserDto MapToUserDto(this global::App.UserEntity source)", code);
         Assert.Contains("internal static global::App.UserEntity MapToUserEntity(this global::App.UserDto source)", code);
     }
@@ -98,7 +98,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void MapToAttribute_PublicSourceAndDestination_KeepsPublicMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -112,7 +112,7 @@ public class AccessibilityGeneratorTests
         var (generated, _, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("public static global::App.UserDto MapToUserDto(this global::App.UserEntity source)", code);
         // The mapping methods; the registration for IMapper (RegisterIronMapperMappings) is always internal.
         Assert.DoesNotContain("internal static global::", code);
@@ -126,7 +126,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void InternalTypes_AllCompanionMethodsUseInternalAccessibility()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -163,7 +163,7 @@ public class AccessibilityGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("internal static global::App.OrderDto MapToOrderDto(this global::App.OrderEntity source)", code);
         Assert.Contains("internal static void MapToOrderDto(this global::App.OrderEntity source, global::App.OrderDto destination)", code);
         Assert.Contains("internal static global::System.Collections.Generic.List<global::App.OrderDto> MapToOrderDtoList(", code);
@@ -179,7 +179,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void InternalElementType_NestedCollectionMapping_Compiles()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
 
@@ -202,7 +202,7 @@ public class AccessibilityGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("public static global::App.PostDto MapToPostDto(this global::App.Post source)", code);
         Assert.Contains("internal static global::App.ThreadDto MapToThreadDto(this global::App.Thread source)", code);
     }
@@ -214,7 +214,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void PublicTypesNestedInInternalClass_GenerateInternalMethodsWithFullNames()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -244,7 +244,7 @@ public class AccessibilityGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("internal static global::App.Container.ItemDto MapToItemDto(this global::App.Container.Item source)", code);
         Assert.Contains("internal static global::App.Container.OtherDto MapToOtherDto(this global::App.Container.Other source)", code);
     }
@@ -252,7 +252,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void PublicTypesNestedInPublicClass_KeepPublicMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -275,7 +275,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void ProtectedInternalNestedType_GeneratesInternalMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -302,7 +302,7 @@ public class AccessibilityGeneratorTests
     [InlineData("private protected")]
     public void InaccessibleNestedType_ReportsIM0010_AndOtherMappingsStillGenerate(string modifier)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
 
             namespace App;
@@ -325,13 +325,13 @@ public class AccessibilityGeneratorTests
         var diagnostic = Assert.Single(generatorDiagnostics);
         Assert.Equal("IM0010", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        var message = diagnostic.GetMessage();
+        string message = diagnostic.GetMessage();
         Assert.Contains("App.Container.Secret", message);
         Assert.Contains("App.Container.SecretDto", message);
 
         // The inaccessible mapping produces no code, so nothing references the private type.
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.DoesNotContain("MapToSecretDto", code);
         Assert.Contains("public static global::App.UserDto MapToUserDto(this global::App.User source)", code);
     }
@@ -339,7 +339,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void Profile_PrivateNestedDestination_ReportsIM0010_AndOtherMappingsStillGenerate()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -368,7 +368,7 @@ public class AccessibilityGeneratorTests
         Assert.Equal("IM0010", diagnostic.Id);
         Assert.Contains("App.Outer.HiddenDto", diagnostic.GetMessage());
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.DoesNotContain("MapToHiddenDto", code);
         Assert.Contains("public static global::App.UserDto MapToUserDto(this global::App.User source)", code);
     }
@@ -380,7 +380,7 @@ public class AccessibilityGeneratorTests
     [Fact]
     public void GenericSourceWithInternalTypeArgument_GeneratesInternalMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;

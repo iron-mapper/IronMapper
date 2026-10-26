@@ -37,20 +37,33 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken)
             .ConfigureAwait(false);
-        if (root is null) return;
+        if (root is null)
+        {
+            return;
+        }
 
         foreach (var diagnostic in context.Diagnostics)
         {
             // The diagnostic points to the [MapProperty] attribute and carries the destination property names.
-            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) continue;
-            if (!diagnostic.Properties.TryGetValue(DestinationPropertiesKey, out var names) || string.IsNullOrEmpty(names)) continue;
+            if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree)
+            {
+                continue;
+            }
+
+            if (!diagnostic.Properties.TryGetValue(DestinationPropertiesKey, out string? names) || string.IsNullOrEmpty(names))
+            {
+                continue;
+            }
 
             var attributeNode = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true)
                 .AncestorsAndSelf().OfType<AttributeSyntax>().FirstOrDefault();
-            var wrongName = attributeNode?.ArgumentList?.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal
+            string? wrongName = attributeNode?.ArgumentList?.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal
                 ? literal.Token.ValueText
                 : null;
-            if (attributeNode is null || wrongName is null) continue;
+            if (attributeNode is null || wrongName is null)
+            {
+                continue;
+            }
 
             // The closest destination property names, Levenshtein distance <= 2 (case-insensitive).
             var suggestions = names!.Split(';')
@@ -61,9 +74,9 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
                 .Select(t => t.name)
                 .ToList();
 
-            foreach (var suggestion in suggestions)
+            foreach (string? suggestion in suggestions)
             {
-                var localSuggestion = suggestion;
+                string localSuggestion = suggestion;
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         title: $"Did you mean '{localSuggestion}'?",
@@ -84,7 +97,10 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
         CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null) return document;
+        if (root is null)
+        {
+            return document;
+        }
 
         // Replace the string literal argument inside [MapProperty("OldName")] → [MapProperty("NewName")].
         var oldLiteral = attributeNode.ArgumentList?.Arguments
@@ -92,7 +108,10 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
             .OfType<LiteralExpressionSyntax>()
             .FirstOrDefault(l => l.Token.ValueText == oldValue);
 
-        if (oldLiteral is null) return document;
+        if (oldLiteral is null)
+        {
+            return document;
+        }
 
         var newLiteral = SyntaxFactory.LiteralExpression(
             SyntaxKind.StringLiteralExpression,
@@ -109,21 +128,37 @@ public sealed class IM0006CodeFixProvider : CodeFixProvider
     /// <returns>The minimum number of single-character edits (insertions, deletions, substitutions) needed to transform <paramref name="s"/> into <paramref name="t"/>.</returns>
     private static int LevenshteinDistance(string s, string t)
     {
-        if (s.Length == 0) return t.Length;
-        if (t.Length == 0) return s.Length;
-
-        var d = new int[s.Length + 1, t.Length + 1];
-        for (var i = 0; i <= s.Length; i++) d[i, 0] = i;
-        for (var j = 0; j <= t.Length; j++) d[0, j] = j;
-
-        for (var i = 1; i <= s.Length; i++)
-        for (var j = 1; j <= t.Length; j++)
+        if (s.Length == 0)
         {
-            var cost = string.Compare(s, i - 1, t, j - 1, 1,
+            return t.Length;
+        }
+
+        if (t.Length == 0)
+        {
+            return s.Length;
+        }
+
+        int[,] d = new int[s.Length + 1, t.Length + 1];
+        for (int i = 0; i <= s.Length; i++)
+        {
+            d[i, 0] = i;
+        }
+
+        for (int j = 0; j <= t.Length; j++)
+        {
+            d[0, j] = j;
+        }
+
+        for (int i = 1; i <= s.Length; i++)
+        {
+            for (int j = 1; j <= t.Length; j++)
+        {
+                int cost = string.Compare(s, i - 1, t, j - 1, 1,
                 StringComparison.OrdinalIgnoreCase) == 0 ? 0 : 1;
             d[i, j] = Math.Min(
                 Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
                 d[i - 1, j - 1] + cost);
+        }
         }
 
         return d[s.Length, t.Length];

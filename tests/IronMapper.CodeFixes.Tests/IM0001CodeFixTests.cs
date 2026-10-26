@@ -181,7 +181,7 @@ public class IM0001CodeFixTests
     public async Task DestinationFromAnotherAssembly_NoFix()
     {
         // The diagnostic points to the attribute: there is no property declaration to change.
-        var source = """
+        string source = """
             namespace App;
 
             [{|IM0001:{|IM0001:{|IM0001:{|IM0001:{|IM0001:{|IM0001:{|IM0001:IronMapper.Attributes.MapTo(typeof(System.UriBuilder))|}|}|}|}|}|}|}]

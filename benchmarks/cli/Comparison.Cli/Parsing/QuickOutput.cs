@@ -61,7 +61,10 @@ internal static partial class QuickOutput
             return new QuickStage(TimeOnly.Parse(m.Groups["time"].Value), m.Groups["variant"].Value, m.Groups["framework"].Value, kind, text);
         }
         if ((m = OutputRoot().Match(line)).Success)
+        {
             return new QuickOutputRoot(m.Groups[1].Value.Trim());
+        }
+
         if ((m = Header().Match(line)).Success)
         {
             return new QuickHeader(
@@ -70,13 +73,25 @@ internal static partial class QuickOutput
                 m.Groups["job"].Value.Trim());
         }
         if (line.StartsWith("Runs: ", StringComparison.Ordinal))
+        {
             return new QuickRunsPlanned(line["Runs: ".Length..].Trim());
+        }
+
         if ((m = SummaryPath().Match(line)).Success)
+        {
             return new QuickSummaryWritten(m.Groups[1].Value.Trim());
+        }
+
         if (line.StartsWith("# Quick A/B", StringComparison.Ordinal))
+        {
             return new QuickSummaryEcho();
+        }
+
         if (line.StartsWith("Checks passed", StringComparison.Ordinal))
+        {
             return new QuickChecksPassed();
+        }
+
         return PreflightCheck.TryParse(line) is { } check ? new QuickPreflight(check) : null;
     }
 

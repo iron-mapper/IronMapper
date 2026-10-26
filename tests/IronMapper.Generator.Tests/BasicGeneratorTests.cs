@@ -13,7 +13,7 @@ public class BasicGeneratorTests
     [Fact]
     public void SimpleMapping_WhenMapToAttributeApplied_GeneratesMapToExtensionMethod()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(DestClass))]
@@ -34,7 +34,7 @@ public class BasicGeneratorTests
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
         Assert.NotEmpty(generatedSources);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToDestClass", code);
         Assert.Contains("Name = source.Name", code);
         Assert.Contains("Age = source.Age", code);
@@ -45,7 +45,7 @@ public class BasicGeneratorTests
     [Fact]
     public void SimpleMapping_WhenSourceCouldBeNull_GeneratedCodeContainsArgumentNullGuard()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(Dto))]
@@ -55,7 +55,7 @@ public class BasicGeneratorTests
 
         var (generatedSources, _) = GeneratorTestHelper.RunGenerator(source);
 
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("ArgumentNullException", code);
     }
 
@@ -66,7 +66,7 @@ public class BasicGeneratorTests
     [Fact]
     public void MapPropertyAttribute_WhenDestNameProvided_RemapsToDestPropertyName()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(PersonDto))]
@@ -85,7 +85,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("FullName = source.Name", code);
         // "Name" must not appear as a standalone destination property (only as the source side of FullName).
         // Space before "Name" ensures we don't accidentally match the "Name" inside "FullName".
@@ -99,7 +99,7 @@ public class BasicGeneratorTests
     [Fact]
     public void IgnoreAttribute_WhenAppliedToSourceProperty_ExcludesFromGeneratedMapping()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(OrderDto))]
@@ -120,7 +120,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("Id = source.Id", code);
         Assert.DoesNotContain("InternalToken", code);
     }
@@ -132,7 +132,7 @@ public class BasicGeneratorTests
     [Fact]
     public void UnmappedDestinationProperty_WhenNoSourceMatch_EmitsIM0001Diagnostic()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(DestClass))]
@@ -165,7 +165,7 @@ public class BasicGeneratorTests
     [Fact]
     public void MapFromAttribute_WhenAppliedToDestClass_GeneratesMapToExtensionMethod()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             public class UserEntity
@@ -183,7 +183,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToUserDto", code);
         Assert.Contains("Username = source.Username", code);
     }
@@ -199,7 +199,7 @@ public class BasicGeneratorTests
     [Fact]
     public void MapConverterAttribute_WhenAppliedToSource_EmitsConverterInstantiationInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Interfaces;
 
@@ -227,7 +227,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToPricedDto", code);
         Assert.Contains("PriceConverter", code);  // converter type is referenced in emitted code
         Assert.Contains(".Convert(", code);        // .Convert(...) call is emitted
@@ -240,7 +240,7 @@ public class BasicGeneratorTests
     [Fact]
     public void MapToAttribute_AlwaysEmitsListAndArrayCollectionHelpers()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(SnapshotDto))]
@@ -251,7 +251,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToSnapshotDtoList", code);
         Assert.Contains("MapToSnapshotDtoArray", code);
         Assert.Contains("Array.Empty<", code);
@@ -260,7 +260,7 @@ public class BasicGeneratorTests
     [Fact]
     public void MapToAttribute_WhenAppliedMultipleTimes_GeneratesOneMethodPerDestination()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(DestA))]
@@ -277,7 +277,7 @@ public class BasicGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToDestA", code);
         Assert.Contains("MapToDestB", code);
     }

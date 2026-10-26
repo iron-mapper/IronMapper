@@ -40,12 +40,19 @@ internal static partial class BenchmarkCatalog
         {
             string name = raw.Trim();
             if (name.EndsWith("Benchmark", StringComparison.OrdinalIgnoreCase))
+            {
                 name = name[..^"Benchmark".Length];
+            }
+
             string? match = known.FirstOrDefault(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
             if (match is null)
+            {
                 missing.Add(raw.Trim());
+            }
             else if (!filters.Contains(ToFilter(match)))
+            {
                 filters.Add(ToFilter(match));
+            }
         }
         unknown = missing;
         return filters;

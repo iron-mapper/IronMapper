@@ -51,11 +51,15 @@ public sealed class ValidationResult
     {
         var sb = new StringBuilder();
 
-        foreach (var error in Errors)
+        foreach (string error in Errors)
+        {
             sb.AppendLine($"[ERROR]   {error}");
+        }
 
-        foreach (var warning in Warnings)
+        foreach (string warning in Warnings)
+        {
             sb.AppendLine($"[WARNING] {warning}");
+        }
 
         return sb.ToString().TrimEnd();
     }

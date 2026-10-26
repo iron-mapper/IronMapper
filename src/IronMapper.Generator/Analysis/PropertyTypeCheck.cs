@@ -65,10 +65,13 @@ internal static class PropertyTypeCheck
     public static DiagnosticInfo? CheckAssignment(Compilation compilation, ITypeSymbol sourceType, ITypeSymbol destType,
         string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location)
     {
-        if (IsAssignable(compilation, sourceType, destType)) return null;
+        if (IsAssignable(compilation, sourceType, destType))
+        {
+            return null;
+        }
 
-        var st = Display(sourceType);
-        var dt = Display(destType);
+        string st = Display(sourceType);
+        string dt = Display(destType);
         string reason;
         if (IsObject(sourceType, allowInterface: true) && IsObject(destType))
         {
@@ -101,10 +104,13 @@ internal static class PropertyTypeCheck
         INamedTypeSymbol destSymbol, LocationInfo? location)
     {
         if (expressionType is null || expressionType.TypeKind == TypeKind.Error
-            || IsAssignable(compilation, expressionType, destProp.Type)) return null;
+            || IsAssignable(compilation, expressionType, destProp.Type))
+        {
+            return null;
+        }
 
-        var et = Display(expressionType);
-        var dt = Display(destProp.Type);
+        string et = Display(expressionType);
+        string dt = Display(destProp.Type);
         return Create(destProp, destSymbol,
             $"the MapFrom expression is '{et}', which cannot be assigned to '{dt}'. Convert the value in the expression, "
             + $"or use o.UseConverter<T>() (an ITypeConverter<...>) instead.", location);
@@ -121,10 +127,13 @@ internal static class PropertyTypeCheck
         LocationInfo? location, out bool mappedElsewhere)
     {
         mappedElsewhere = IsMappedByExistingMethod(compilation, collection.ElementMethod, sourceElement, destElement);
-        if (mappedElsewhere) return null;
+        if (mappedElsewhere)
+        {
+            return null;
+        }
 
-        var se = Display(sourceElement);
-        var de = Display(destElement);
+        string se = Display(sourceElement);
+        string de = Display(destElement);
         return MissingPair(destProp, destSymbol,
             $"the elements of '{sourceDisplay}' are '{se}' and the elements of the destination are '{de}', and there is no "
             + $"mapping from '{se}' to '{de}'. {AddMappingHint(se, de)}", location, sourceElement, destElement, origin);
@@ -155,12 +164,14 @@ internal static class PropertyTypeCheck
         ImmutableArray<DiagnosticInfo>.Builder diagnostics)
     {
         if (IsAssignable(compilation, sourceType, destType) || !IsObject(sourceType, allowInterface: true) || !IsObject(destType))
+        {
             return null;
+        }
 
-        var st = Display(sourceType);
-        var dt = Display(destType);
-        var method = $"MapTo{destType.Name}";
-        var nullHandling = NullHandling.ForNestedObject(sourceType, destType);
+        string st = Display(sourceType);
+        string dt = Display(destType);
+        string method = $"MapTo{destType.Name}";
+        string? nullHandling = NullHandling.ForNestedObject(sourceType, destType);
         if (nullHandling is null)
         {
             diagnostics.Add(Create(destProp, destSymbol,
@@ -179,15 +190,17 @@ internal static class PropertyTypeCheck
         var source = sourceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
         var dest = destType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
         // A struct is copied by the getter: updating the copy would change nothing, so it is assigned.
-        var readable = !destType.IsValueType && destProp.GetMethod is { } getter
+        bool readable = !destType.IsValueType && destProp.GetMethod is { } getter
                        && compilation.IsSymbolAccessibleWithin(getter, compilation.Assembly);
         if (IsMappedByExistingMethod(compilation, method, source, dest))
+        {
             return new NestedObjectMapping(method, nullHandling, default, skipped: false,
                 updatesInPlace: readable && IsUpdatedByExistingMethod(compilation, method, source, dest),
                 sourceTypeFqn: SymbolHelpers.GetFullyQualifiedName(source));
+        }
 
-        var ss = Display(source);
-        var ds = Display(dest);
+        string ss = Display(source);
+        string ds = Display(dest);
         diagnostics.Add(MissingPair(destProp, destSymbol,
             $"'{sourceDisplay}' is '{st}' and the destination is '{dt}', and there is no mapping from '{ss}' to '{ds}'. "
             + AddMappingHint(ss, ds), location, source, dest, origin));
@@ -228,12 +241,18 @@ internal static class PropertyTypeCheck
     /// </summary>
     public static ImmutableArray<string> ElementPairKeys(ITypeSymbol sourceElement, ITypeSymbol destElement)
     {
-        var dest = SymbolHelpers.GetFullyQualifiedName(destElement);
+        string dest = SymbolHelpers.GetFullyQualifiedName(destElement);
         var builder = ImmutableArray.CreateBuilder<string>();
         for (var type = sourceElement; type is not null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
+        {
             builder.Add($"{SymbolHelpers.GetFullyQualifiedName(type)}->{dest}");
+        }
+
         foreach (var iface in sourceElement.AllInterfaces)
+        {
             builder.Add($"{SymbolHelpers.GetFullyQualifiedName(iface)}->{dest}");
+        }
+
         return builder.ToImmutable();
     }
 
@@ -263,13 +282,32 @@ internal static class PropertyTypeCheck
     /// </summary>
     private static bool IsObject(ITypeSymbol type, bool allowInterface = false)
     {
-        if (type is not INamedTypeSymbol named) return false;
-        if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct) && !(allowInterface && named.TypeKind == TypeKind.Interface))
+        if (type is not INamedTypeSymbol named)
+        {
             return false;
-        if (named.SpecialType != SpecialType.None) return false;
-        if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return false;
-        if (SymbolHelpers.TryGetCollectionElementType(named, out _)) return false;
-        var ns = named.ContainingNamespace?.ToDisplayString();
+        }
+
+        if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct) && !(allowInterface && named.TypeKind == TypeKind.Interface))
+        {
+            return false;
+        }
+
+        if (named.SpecialType != SpecialType.None)
+        {
+            return false;
+        }
+
+        if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return false;
+        }
+
+        if (SymbolHelpers.TryGetCollectionElementType(named, out _))
+        {
+            return false;
+        }
+
+        string? ns = named.ContainingNamespace?.ToDisplayString();
         return ns is null || (ns != "System" && !ns.StartsWith("System.", System.StringComparison.Ordinal));
     }
 
@@ -288,17 +326,27 @@ internal static class PropertyTypeCheck
         var generated = ironMapper?.GetNamespaceMembers().FirstOrDefault(n => n.Name == "Generated");
         foreach (var ns in new[] { generated, ironMapper, compilation.GlobalNamespace })
         {
-            if (ns is null) continue;
+            if (ns is null)
+            {
+                continue;
+            }
+
             foreach (var type in ns.GetTypeMembers())
             {
-                if (!type.MightContainExtensionMethods) continue;
+                if (!type.MightContainExtensionMethods)
+                {
+                    continue;
+                }
+
                 foreach (var member in type.GetMembers(method))
                 {
                     if (member is IMethodSymbol { IsExtensionMethod: true, Parameters.Length: 1, IsGenericMethod: false } candidate
                         && compilation.IsSymbolAccessibleWithin(candidate, compilation.Assembly)
                         && IsReceiverConversion(compilation, sourceElement, candidate.Parameters[0].Type)
                         && compilation.ClassifyConversion(candidate.ReturnType, destElement).IsImplicit)
+                    {
                         return true;
+                    }
                 }
             }
         }
@@ -317,17 +365,27 @@ internal static class PropertyTypeCheck
         var generated = ironMapper?.GetNamespaceMembers().FirstOrDefault(n => n.Name == "Generated");
         foreach (var ns in new[] { generated, ironMapper, compilation.GlobalNamespace })
         {
-            if (ns is null) continue;
+            if (ns is null)
+            {
+                continue;
+            }
+
             foreach (var type in ns.GetTypeMembers())
             {
-                if (!type.MightContainExtensionMethods) continue;
+                if (!type.MightContainExtensionMethods)
+                {
+                    continue;
+                }
+
                 foreach (var member in type.GetMembers(method))
                 {
                     if (member is IMethodSymbol { IsExtensionMethod: true, Parameters.Length: 2, IsGenericMethod: false, ReturnsVoid: true } candidate
                         && compilation.IsSymbolAccessibleWithin(candidate, compilation.Assembly)
                         && IsReceiverConversion(compilation, source, candidate.Parameters[0].Type)
                         && IsReceiverConversion(compilation, dest, candidate.Parameters[1].Type))
+                    {
                         return true;
+                    }
                 }
             }
         }
@@ -338,7 +396,11 @@ internal static class PropertyTypeCheck
     // The conversions C# allows for the receiver of an extension method call: identity, implicit reference, boxing.
     private static bool IsReceiverConversion(Compilation compilation, ITypeSymbol receiver, ITypeSymbol parameter)
     {
-        if (compilation is not CSharpCompilation csharp) return SymbolEqualityComparer.Default.Equals(receiver, parameter);
+        if (compilation is not CSharpCompilation csharp)
+        {
+            return SymbolEqualityComparer.Default.Equals(receiver, parameter);
+        }
+
         var conversion = csharp.ClassifyConversion(receiver, parameter);
         return conversion.IsIdentity || (conversion.IsImplicit && (conversion.IsReference || conversion.IsBoxing));
     }

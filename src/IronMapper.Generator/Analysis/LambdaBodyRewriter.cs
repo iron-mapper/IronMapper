@@ -56,16 +56,24 @@ internal static class LambdaBodyRewriter
     {
         if (expr is not ParenthesizedLambdaExpressionSyntax lambda
             || lambda.ParameterList.Parameters.Count < parameterNames.Length)
+        {
             return null;
+        }
 
         var rewritten = Rewrite(expr, model, parameterNames, profileName, diagnostics, ct);
-        if (rewritten is null) return null;
+        if (rewritten is null)
+        {
+            return null;
+        }
 
         if (rewritten is BlockSyntax block)
         {
             var sb = new System.Text.StringBuilder();
             foreach (var statement in block.Statements)
+            {
                 sb.AppendLine(statement.ToString().TrimStart());
+            }
+
             return sb.ToString().TrimEnd();
         }
 
@@ -80,7 +88,10 @@ internal static class LambdaBodyRewriter
         List<DiagnosticInfo> diagnostics,
         CancellationToken ct)
     {
-        if (expr is not LambdaExpressionSyntax lambda) return null;
+        if (expr is not LambdaExpressionSyntax lambda)
+        {
+            return null;
+        }
 
         var parameters = lambda switch
         {
@@ -90,15 +101,20 @@ internal static class LambdaBodyRewriter
         };
 
         var renames = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
-        for (var i = 0; i < parameters.Length && i < parameterNames.Length; i++)
+        for (int i = 0; i < parameters.Length && i < parameterNames.Length; i++)
         {
             if (model.GetDeclaredSymbol(parameters[i], ct) is IParameterSymbol parameter)
+            {
                 renames[parameter] = parameterNames[i];
+            }
         }
 
         var rewriter = new Rewriter(model, lambda, renames, profileName, ct);
         var body = rewriter.Visit(lambda.Body);
-        if (rewriter.Problems.Count == 0) return body;
+        if (rewriter.Problems.Count == 0)
+        {
+            return body;
+        }
 
         diagnostics.AddRange(rewriter.Problems);
         return null;
@@ -135,7 +151,10 @@ internal static class LambdaBodyRewriter
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
-            if (node.IsVar || !IsStandaloneName(node)) return node;
+            if (node.IsVar || !IsStandaloneName(node))
+            {
+                return node;
+            }
 
             var symbol = GetSymbol(node);
             return symbol is null ? node : RewriteSimpleName(node, node.Identifier.Text, symbol) ?? node;
@@ -145,7 +164,10 @@ internal static class LambdaBodyRewriter
         {
             // Visit type arguments first; the name itself is rewritten only when it stands alone.
             var visited = (GenericNameSyntax)base.VisitGenericName(node)!;
-            if (!IsStandaloneName(node)) return visited;
+            if (!IsStandaloneName(node))
+            {
+                return visited;
+            }
 
             var symbol = GetSymbol(node);
             if (symbol is INamedTypeSymbol type)
@@ -165,18 +187,24 @@ internal static class LambdaBodyRewriter
         {
             switch (symbol)
             {
-                case IParameterSymbol when _renames.TryGetValue(symbol, out var newName):
+                case IParameterSymbol when _renames.TryGetValue(symbol, out string? newName):
                     return SyntaxFactory.IdentifierName(newName).WithTriviaFrom(node);
 
                 case IParameterSymbol or ILocalSymbol or IRangeVariableSymbol:
                     if (!IsDeclaredInsideLambda(symbol))
+                    {
                         Report(DiagnosticDescriptors.LambdaCapturesState, node,
                             symbol is IParameterSymbol ? "parameter" : "local variable", symbol.Name);
+                    }
+
                     return null;
 
                 case IMethodSymbol { MethodKind: MethodKind.LocalFunction }:
                     if (!IsDeclaredInsideLambda(symbol))
+                    {
                         Report(DiagnosticDescriptors.LambdaCapturesState, node, "local function", symbol.Name);
+                    }
+
                     return null;
 
                 case INamespaceSymbol ns:
@@ -193,7 +221,7 @@ internal static class LambdaBodyRewriter
                         return null;
                     }
                     ReportIfInaccessible(symbol, symbol, node);
-                    var containing = SymbolHelpers.GetFullyQualifiedName(symbol.ContainingType);
+                    string containing = SymbolHelpers.GetFullyQualifiedName(symbol.ContainingType);
                     return SyntaxFactory.ParseExpression(containing + "." + text).WithTriviaFrom(node);
 
                 default:
@@ -210,7 +238,9 @@ internal static class LambdaBodyRewriter
             // The right-hand name is kept as written, but it must still be reachable from generated code.
             if (GetSymbol(node) is { } member
                 and (IMethodSymbol or IFieldSymbol or IPropertySymbol or IEventSymbol or INamedTypeSymbol))
+            {
                 ReportIfInaccessible(member, member, node.Name);
+            }
 
             return base.VisitMemberAccessExpression(node);
         }
@@ -220,8 +250,10 @@ internal static class LambdaBodyRewriter
             // nameof(...) is a compile-time constant; emit it as a literal.
             if (node.Expression is IdentifierNameSyntax { Identifier.Text: "nameof" }
                 && _model.GetConstantValue(node, _ct) is { HasValue: true, Value: string name })
+            {
                 return SyntaxFactory.LiteralExpression(
                     SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(name)).WithTriviaFrom(node);
+            }
 
             // Inside `a?.b.Ext()` the receiver `.b` only exists within the conditional access,
             // so such calls cannot become static calls; they are emitted as written.
@@ -237,7 +269,7 @@ internal static class LambdaBodyRewriter
 
                 var allArguments = new[] { receiver.ToString() }
                     .Concat(arguments.Arguments.Select(a => a.ToString()));
-                var extensionClass = SymbolHelpers.GetFullyQualifiedName(method.ContainingType);
+                string extensionClass = SymbolHelpers.GetFullyQualifiedName(method.ContainingType);
                 return SyntaxFactory.ParseExpression(
                         $"{extensionClass}.{methodName}({string.Join(", ", allArguments)})")
                     .WithTriviaFrom(node);
@@ -265,7 +297,10 @@ internal static class LambdaBodyRewriter
         private ISymbol? GetSymbol(SyntaxNode node)
         {
             var info = _model.GetSymbolInfo(node, _ct);
-            if (info.Symbol is not null) return info.Symbol;
+            if (info.Symbol is not null)
+            {
+                return info.Symbol;
+            }
             // Method groups that are not yet invoked resolve to candidates only.
             return info.CandidateSymbols.Length == 1 ? info.CandidateSymbols[0] : null;
         }
@@ -334,7 +369,10 @@ internal static class LambdaBodyRewriter
         private void Report(DiagnosticDescriptor descriptor, SyntaxNode at, params string[] args)
         {
             var info = new DiagnosticInfo(descriptor, new[] { _profileName }.Concat(args).ToArray());
-            if (_seen.Add(info)) Problems.Add(info.WithLocation(LocationInfo.From(at)));
+            if (_seen.Add(info))
+            {
+                Problems.Add(info.WithLocation(LocationInfo.From(at)));
+            }
         }
     }
 }

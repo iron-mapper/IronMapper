@@ -83,7 +83,10 @@ internal static class EdgeCaseFacts
         var src = new TagsEntity { Id = 1, Tags = ["a", "b", "c"] };
         var result = Mappers.GetEdgeCase(name).MapTags(src);
         if (ReferenceEquals(result.Tags, src.Tags))
+        {
             return "reference copied (same list)";
+        }
+
         return result.Tags.SequenceEqual(src.Tags) ? "new list (copy)" : "new list, different content (?)";
     });
 
@@ -97,8 +100,8 @@ internal static class EdgeCaseFacts
     {
         var src = new TestDataGenerator().CreateOrder();
         var result = Mappers.GetEdgeCase(name).MapFlattening(src);
-        var city = result.CustomerAddressCity == src.Customer.Address.City;
-        var customerName = result.CustomerName == src.Customer.Name;
+        bool city = result.CustomerAddressCity == src.Customer.Address.City;
+        bool customerName = result.CustomerName == src.Customer.Name;
         return (city, customerName) switch
         {
             (true, true) => "automatic (2 and 3 levels)",

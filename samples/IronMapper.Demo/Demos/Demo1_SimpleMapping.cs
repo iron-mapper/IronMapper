@@ -35,18 +35,13 @@ public static class Demo1_SimpleMapping
 
         Console.WriteLine("Searching book with Open Library API...\n");
         var response = await api.SearchBooksAsync("Lord of the Rings", 1);
-        var doc = response?.Docs?.Count > 0 ? response.Docs[0] : null;
-
-        if (doc is null)
+        var doc = (response?.Docs?.Count > 0 ? response.Docs[0] : null) ?? new BookDoc
         {
-            doc = new BookDoc
-            {
-                Key = "/works/OL27448W",
-                Title = "The Lord of the Rings",
-                FirstPublishYear = 1954,
-                EditionCount = 120
-            };
-        }
+            Key = "/works/OL27448W",
+            Title = "The Lord of the Rings",
+            FirstPublishYear = 1954,
+            EditionCount = 120
+        };
 
         // Build a BookRawEntry from API data
         var raw = new BookRawEntry

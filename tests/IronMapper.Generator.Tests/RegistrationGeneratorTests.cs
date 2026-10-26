@@ -48,7 +48,7 @@ public class RegistrationGeneratorTests
 
         Assert.Empty(diagnostics);
         Assert.Empty(errors);
-        var registration = Assert.Single(generated, s => s.Contains("RegisterIronMapperMappings"));
+        string registration = Assert.Single(generated, s => s.Contains("RegisterIronMapperMappings"));
         Assert.Contains("[global::System.Runtime.CompilerServices.ModuleInitializer]", registration);
         Assert.DoesNotContain("class ModuleInitializerAttribute", registration);
         Assert.Equal("5,True,2", result);
@@ -89,7 +89,7 @@ public class RegistrationGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         Assert.Empty(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning));
-        var registration = Assert.Single(driver.GetRunResult().GeneratedTrees, t => t.ToString().Contains("RegisterIronMapperMappings")).ToString();
+        string registration = Assert.Single(driver.GetRunResult().GeneratedTrees, t => t.ToString().Contains("RegisterIronMapperMappings")).ToString();
         Assert.DoesNotContain("ModuleInitializer]", registration);
         Assert.Contains("internal static void RegisterIronMapperMappings()", registration);
     }

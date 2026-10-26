@@ -24,13 +24,15 @@ public static class Demo6_ConditionalMapping
             "OL26320A", "OL118077A", "OL2162284A", "OL23919A");
 
         if (authors.Count == 0)
+        {
             authors = FallbackAuthors();
+        }
 
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"SOURCE  List<AuthorResponse> — {authors.Count} authors:");
         foreach (var a in authors)
         {
-            var status = a.DeathDate is null ? "living" : $"died {a.DeathDate}";
+            string status = a.DeathDate is null ? "living" : $"died {a.DeathDate}";
             Console.WriteLine($"  {a.Name,-30} [{status}]");
         }
 

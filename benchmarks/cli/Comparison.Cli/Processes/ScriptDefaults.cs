@@ -43,7 +43,10 @@ internal sealed class ScriptDefaults
                 StandardOutputEncoding = ScriptProcess.OutputEncoding,
             };
             foreach (string arg in new[] { "-NoProfile", "-NonInteractive", "-Command", Reader })
+            {
                 info.ArgumentList.Add(arg);
+            }
+
             info.Environment["BENCH_CLI_SCRIPT"] = scriptPath;
             using Process process = Process.Start(info)!;
             string json = process.StandardOutput.ReadToEnd();
@@ -62,7 +65,10 @@ internal sealed class ScriptDefaults
         {
             using JsonDocument document = JsonDocument.Parse(json);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
                 return Empty;
+            }
+
             var values = document.RootElement.EnumerateObject()
                 .ToDictionary(p => p.Name, p => p.Value.Clone(), StringComparer.OrdinalIgnoreCase);
             return new ScriptDefaults(values);
@@ -81,7 +87,10 @@ internal sealed class ScriptDefaults
     public IReadOnlyList<string>? Strings(string name)
     {
         if (!_values.TryGetValue(name, out JsonElement value))
+        {
             return null;
+        }
+
         return value.ValueKind switch
         {
             JsonValueKind.Array => value.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!).ToList(),

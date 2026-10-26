@@ -218,7 +218,7 @@ namespace IronMapper.Tests
         [Fact]
         public void MapConverter_Stateless_OneInstanceForAllCalls()
         {
-            for (var i = 0; i < 5; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var dto = AttributeSource(i).MapToCacheAttributeDest();
                 Assert.Equal($"#{i}", dto.Stateless);
@@ -236,9 +236,11 @@ namespace IronMapper.Tests
         [Fact]
         public void MapConverter_WithField_NewInstancePerCall()
         {
-            var before = InstanceLog.Count(nameof(FieldConverter));
-            for (var i = 0; i < 5; i++)
+            int before = InstanceLog.Count(nameof(FieldConverter));
+            for (int i = 0; i < 5; i++)
+            {
                 Assert.Equal($"#{i}:1", AttributeSource(i).MapToCacheAttributeDest().Field);
+            }
 
             Assert.Equal(before + 5, InstanceLog.Count(nameof(FieldConverter)));
         }
@@ -246,9 +248,11 @@ namespace IronMapper.Tests
         [Fact]
         public void MapConverter_WithAutoProperty_NewInstancePerCall()
         {
-            var before = InstanceLog.Count(nameof(AutoPropertyConverter));
-            for (var i = 0; i < 5; i++)
+            int before = InstanceLog.Count(nameof(AutoPropertyConverter));
+            for (int i = 0; i < 5; i++)
+            {
                 Assert.Equal($"#{i}:1", AttributeSource(i).MapToCacheAttributeDest().AutoProperty);
+            }
 
             Assert.Equal(before + 5, InstanceLog.Count(nameof(AutoPropertyConverter)));
         }
@@ -256,9 +260,11 @@ namespace IronMapper.Tests
         [Fact]
         public void MapConverter_FieldInBaseClass_NewInstancePerCall()
         {
-            var before = InstanceLog.Count(nameof(DerivedFromBaseWithFieldConverter));
-            for (var i = 0; i < 5; i++)
+            int before = InstanceLog.Count(nameof(DerivedFromBaseWithFieldConverter));
+            for (int i = 0; i < 5; i++)
+            {
                 Assert.Equal($"#{i}:1", AttributeSource(i).MapToCacheAttributeDest().BaseField);
+            }
 
             Assert.Equal(before + 5, InstanceLog.Count(nameof(DerivedFromBaseWithFieldConverter)));
         }
@@ -266,9 +272,11 @@ namespace IronMapper.Tests
         [Fact]
         public void MapConverter_ConstructorWithCode_RunsOnEveryCall()
         {
-            var before = Volatile.Read(ref ConstructorSideEffectConverter.Constructed);
-            for (var i = 0; i < 5; i++)
+            int before = Volatile.Read(ref ConstructorSideEffectConverter.Constructed);
+            for (int i = 0; i < 5; i++)
+            {
                 AttributeSource(i).MapToCacheAttributeDest();
+            }
 
             // Other tests of this class map the same type in parallel: at least one construction per call here.
             Assert.True(Volatile.Read(ref ConstructorSideEffectConverter.Constructed) - before >= 5);
@@ -277,8 +285,8 @@ namespace IronMapper.Tests
         [Fact]
         public void UseConverter_StatelessCachedAndStatefulNew()
         {
-            var before = InstanceLog.Count(nameof(StatefulMemberConverter));
-            for (var i = 0; i < 5; i++)
+            int before = InstanceLog.Count(nameof(StatefulMemberConverter));
+            for (int i = 0; i < 5; i++)
             {
                 var dto = new CacheMemberSource { Stateless = i, Stateful = i }.MapToCacheMemberDest();
                 Assert.Equal($"#{i}", dto.Stateless);
@@ -292,8 +300,8 @@ namespace IronMapper.Tests
         [Fact]
         public void ConvertUsing_StatelessCachedAndStatefulNew()
         {
-            var before = InstanceLog.Count(nameof(StatefulObjectConverter));
-            for (var i = 0; i < 5; i++)
+            int before = InstanceLog.Count(nameof(StatefulObjectConverter));
+            for (int i = 0; i < 5; i++)
             {
                 Assert.Equal($"#{i}", new CacheObjectSource { Value = i }.MapToCacheObjectDest().Text);
                 Assert.Equal($"#{i}:1", new StatefulObjectSource { Value = i }.MapToCacheObjectDest().Text);
@@ -317,8 +325,10 @@ namespace IronMapper.Tests
             var tasks = Enumerable.Range(0, threads).Select(t => Task.Factory.StartNew(() =>
             {
                 start.SignalAndWait();
-                for (var i = 0; i < 1000; i++)
+                for (int i = 0; i < 1000; i++)
+                {
                     results.Add(new CacheParallelSource { Value = t }.MapToCacheParallelDest().Value);
+                }
             }, TaskCreationOptions.LongRunning)).ToArray();
             await Task.WhenAll(tasks);
 

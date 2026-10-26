@@ -39,7 +39,10 @@ public class BenchCommandTests
     {
         string? executable = shell == "pwsh" ? Tools.FindOnPath("pwsh") : FindBash();
         if (executable is null)
+        {
             return;
+        }
+
         var quick = new QuickOptions { Benchmarks = ["Nested", "InPlace"], Frameworks = ["net10.0", "net8.0"], Branch = "it's", Dry = true };
         var full = new FullOptions { Mode = FullMode.Dry, ResultsDir = @"..\artifacts\bench dry (1)" };
         string[][] expected =
@@ -72,14 +75,19 @@ public class BenchCommandTests
     private static string? FindBash()
     {
         if (!OperatingSystem.IsWindows())
+        {
             return Tools.FindOnPath("bash");
+        }
+
         foreach (string dir in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
             string candidate = Path.Combine(dir.Trim('"'), "bash.exe");
             if (File.Exists(candidate)
                 && !candidate.StartsWith(Environment.SystemDirectory, StringComparison.OrdinalIgnoreCase)
                 && !candidate.Contains("WindowsApps", StringComparison.OrdinalIgnoreCase))
+            {
                 return candidate;
+            }
         }
         return null;
     }
@@ -88,7 +96,10 @@ public class BenchCommandTests
     {
         var start = new ProcessStartInfo(file) { RedirectStandardOutput = true, RedirectStandardInput = stdin is not null, UseShellExecute = false };
         foreach (string argument in arguments)
+        {
             start.ArgumentList.Add(argument);
+        }
+
         using Process process = Process.Start(start)!;
         if (stdin is not null)
         {

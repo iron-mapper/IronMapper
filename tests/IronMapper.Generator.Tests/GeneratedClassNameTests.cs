@@ -30,9 +30,9 @@ public class GeneratedClassNameTests
     [Fact]
     public void LongName_ShortenedWithHash_StableAndDifferentForDifferentNames()
     {
-        var common = new string('A', 80) + ".";
-        var first = GeneratedClassName.For(common + "One");
-        var second = GeneratedClassName.For(common + "Two");
+        string common = new string('A', 80) + ".";
+        string first = GeneratedClassName.For(common + "One");
+        string second = GeneratedClassName.For(common + "Two");
 
         Assert.Equal("GeneratedMappers_".Length + GeneratedClassName.MaxAssemblyPartLength, first.Length);
         Assert.Equal(first.Length, second.Length);
@@ -46,7 +46,7 @@ public class GeneratedClassNameTests
     [Fact]
     public void NameOfExactlyMaxLength_NotShortened()
     {
-        var name = new string('B', GeneratedClassName.MaxAssemblyPartLength);
+        string name = new('B', GeneratedClassName.MaxAssemblyPartLength);
         Assert.Equal("GeneratedMappers_" + name, GeneratedClassName.For(name));
     }
 
@@ -62,14 +62,18 @@ public class GeneratedClassNameTests
     public void LongNameHash_IsPinned()
     {
         // Pins the hash function: a change would rename the generated class of every assembly with a long name.
-        var name = new string('C', 70);
+        string name = new('C', 70);
         Assert.Equal("GeneratedMappers_" + new string('C', 55) + "_" + Fnv1a(name).ToString("X8"), GeneratedClassName.For(name));
     }
 
     private static uint Fnv1a(string value)
     {
-        var hash = 2166136261;
-        foreach (var c in value) hash = (hash ^ c) * 16777619;
+        uint hash = 2166136261;
+        foreach (char c in value)
+        {
+            hash = (hash ^ c) * 16777619;
+        }
+
         return hash;
     }
 }

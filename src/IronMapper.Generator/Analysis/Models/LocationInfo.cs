@@ -37,17 +37,28 @@ internal readonly struct LocationInfo : IEquatable<LocationInfo>
     /// </summary>
     public static LocationInfo? From(Location? location)
     {
-        if (location is not { IsInSource: true, SourceTree: { } tree }) return null;
+        if (location is not { IsInSource: true, SourceTree: { } tree })
+        {
+            return null;
+        }
+
         return new LocationInfo(tree.FilePath, location.SourceSpan, location.GetLineSpan().Span);
     }
 
     /// <summary>The first source location of <paramref name="symbol"/>, or <see langword="null"/>.</summary>
     public static LocationInfo? From(ISymbol? symbol)
     {
-        if (symbol is null) return null;
+        if (symbol is null)
+        {
+            return null;
+        }
+
         foreach (var location in symbol.Locations)
         {
-            if (location.IsInSource) return From(location);
+            if (location.IsInSource)
+            {
+                return From(location);
+            }
         }
 
         return null;
@@ -75,7 +86,10 @@ internal readonly struct LocationInfo : IEquatable<LocationInfo>
     {
         var trees = new Dictionary<string, SyntaxTree?>(StringComparer.Ordinal);
         foreach (var tree in compilation.SyntaxTrees)
+        {
             trees[tree.FilePath] = trees.ContainsKey(tree.FilePath) ? null : tree;
+        }
+
         return trees;
     }
 

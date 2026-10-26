@@ -54,50 +54,50 @@ public class IncrementalDiagnosticsTests
     [Fact]
     public void AttributeMapping_IM0001_DisappearsWhenPropertyIgnored()
     {
-        var before = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "");
-        var after = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "[Ignore] ");
+        string before = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "");
+        string after = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "[Ignore] ");
 
-        var ids = AssertSameAsFreshRun(before, after);
+        string[] ids = AssertSameAsFreshRun(before, after);
         Assert.DoesNotContain("IM0001", ids);
     }
 
     [Fact]
     public void AttributeMapping_IM0001_AppearsWhenIgnoreRemoved()
     {
-        var before = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "[Ignore] ");
-        var after = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "");
+        string before = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "[Ignore] ");
+        string after = AttributeMappingWithUnmatchedProperty.Replace("/*IGNORE*/", "");
 
-        var ids = AssertSameAsFreshRun(before, after);
+        string[] ids = AssertSameAsFreshRun(before, after);
         Assert.Contains("IM0001", ids);
     }
 
     [Fact]
     public void ProfileLambda_OneOfTwoIM0011_DisappearsWhenMemberMadeInternal()
     {
-        var before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
-        var after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/", "");
+        string before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
+        string after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/", "");
 
-        var ids = AssertSameAsFreshRun(before, after);
+        string[] ids = AssertSameAsFreshRun(before, after);
         Assert.Equal(new[] { "IM0011" }, ids);
     }
 
     [Fact]
     public void ProfileLambda_SecondIM0011_AppearsWhenMemberMadePrivate()
     {
-        var before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/", "");
-        var after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
+        string before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/", "");
+        string after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
 
-        var ids = AssertSameAsFreshRun(before, after);
+        string[] ids = AssertSameAsFreshRun(before, after);
         Assert.Equal(new[] { "IM0011", "IM0011" }, ids);
     }
 
     [Fact]
     public void ProfileLambda_IM0011_DisappearsWhenAllMembersMadeInternal()
     {
-        var before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
-        var after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/private", "internal");
+        string before = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/", "").Replace("/*FORMAT*/", "");
+        string after = ProfileWithTwoPrivateMembers.Replace("/*PREFIX*/private", "internal").Replace("/*FORMAT*/private", "internal");
 
-        var ids = AssertSameAsFreshRun(before, after);
+        string[] ids = AssertSameAsFreshRun(before, after);
         Assert.Empty(ids);
     }
 
@@ -127,8 +127,8 @@ public class IncrementalDiagnosticsTests
     [Fact]
     public void Converter_FieldAddedInAnotherFile_CacheReplacedByNew()
     {
-        var sources = AssertSameAsFreshRun(
-            new[] { MappingWithConverter, Converter }, 1, Converter.Replace("/*MEMBER*/", "private int _calls;"), out var ids);
+        string[] sources = AssertSameAsFreshRun(
+            new[] { MappingWithConverter, Converter }, 1, Converter.Replace("/*MEMBER*/", "private int _calls;"), out string[]? ids);
 
         Assert.Empty(ids);
         Assert.Contains(sources, s => s.Contains("new global::App.Upper().Convert(source.Label)"));
@@ -138,8 +138,8 @@ public class IncrementalDiagnosticsTests
     [Fact]
     public void Converter_FieldRemovedInAnotherFile_Cached()
     {
-        var sources = AssertSameAsFreshRun(
-            new[] { MappingWithConverter, Converter.Replace("/*MEMBER*/", "private int _calls;") }, 1, Converter, out var ids);
+        string[] sources = AssertSameAsFreshRun(
+            new[] { MappingWithConverter, Converter.Replace("/*MEMBER*/", "private int _calls;") }, 1, Converter, out string[]? ids);
 
         Assert.Empty(ids);
         Assert.Contains(sources, s => s.Contains("ConverterCache<global::App.Upper>.Instance.Convert(source.Label)"));
@@ -148,12 +148,12 @@ public class IncrementalDiagnosticsTests
     [Fact]
     public void Converter_IM0015_AppearsAndDisappearsWithConstructor()
     {
-        var withArgument = Converter.Replace("/*MEMBER*/", "public Upper(int start) { }");
+        string withArgument = Converter.Replace("/*MEMBER*/", "public Upper(int start) { }");
 
-        AssertSameAsFreshRun(new[] { MappingWithConverter, Converter }, 1, withArgument, out var appeared);
+        AssertSameAsFreshRun(new[] { MappingWithConverter, Converter }, 1, withArgument, out string[]? appeared);
         Assert.Equal(new[] { "IM0015" }, appeared);
 
-        var sources = AssertSameAsFreshRun(new[] { MappingWithConverter, withArgument }, 1, Converter, out var disappeared);
+        string[] sources = AssertSameAsFreshRun(new[] { MappingWithConverter, withArgument }, 1, Converter, out string[]? disappeared);
         Assert.Empty(disappeared);
         Assert.Contains(sources, s => s.Contains("MapToTagDto(this"));
     }
@@ -165,7 +165,7 @@ public class IncrementalDiagnosticsTests
     /// </summary>
     private static string[] AssertSameAsFreshRun(string before, string after)
     {
-        AssertSameAsFreshRun(new[] { before }, 0, after, out var ids);
+        AssertSameAsFreshRun(new[] { before }, 0, after, out string[]? ids);
         return ids;
     }
 

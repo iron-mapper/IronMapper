@@ -34,16 +34,22 @@ public class FlexibleStringConverter : JsonConverter<string?>
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndObject)
+            {
                 break;
+            }
 
             if (reader.TokenType == JsonTokenType.PropertyName)
             {
-                var propName = reader.GetString();
+                string? propName = reader.GetString();
                 reader.Read(); // advance to value token
                 if (propName == "value")
+                {
                     result = reader.GetString();
+                }
                 else
+                {
                     reader.Skip();
+                }
             }
         }
         return result;
@@ -52,8 +58,12 @@ public class FlexibleStringConverter : JsonConverter<string?>
     public override void Write(Utf8JsonWriter writer, string? value, JsonSerializerOptions options)
     {
         if (value is null)
+        {
             writer.WriteNullValue();
+        }
         else
+        {
             writer.WriteStringValue(value);
+        }
     }
 }

@@ -1,13 +1,22 @@
 name: Benchmark CLI
 
-# Build and tests of the benchmark CLI (benchmarks/cli), only for pull requests that change benchmarks/. A workflow of
+# Build and tests of the benchmark CLI (benchmarks/cli), only for pull requests that change benchmarks/ or the root
+# build files below. A workflow of
 # its own: a paths filter on ci.yml would skip its required checks in every other PR. No push trigger, and not a
 # required check in the ruleset (a PR without changes under benchmarks/ never gets it).
 on:
   pull_request:
     branches: [ main, dev ]
+    # Root files that reach the CLI build: .editorconfig (code style is enforced in its build, warnings are errors) and
+    # global.json (the SDK). benchmarks/cli has its own Directory.Build.props/.targets/Directory.Packages.props, so the
+    # root ones are not imported today; they are listed so that a change there is still checked if that changes.
     paths:
       - 'benchmarks/**'
+      - '.editorconfig'
+      - 'global.json'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
 
 jobs:
   cli:
