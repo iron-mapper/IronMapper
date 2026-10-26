@@ -12,8 +12,13 @@
     ./bench.ps1
 .EXAMPLE
     ./bench.ps1 results
+.EXAMPLE
+    ./bench.ps1 quick --filter 'Nested,InPlace' --frameworks 'net10.0,net8.0'
 #>
 $ErrorActionPreference = 'Stop'
+# pwsh reads an unquoted list (--filter Nested,InPlace) as an array and would pass its elements to dotnet as separate
+# arguments ("Unknown command 'InPlace'"). Joined back with commas, the command works with or without the quotes.
+$cliArgs = @(foreach ($arg in $args) { if ($arg -is [array]) { $arg -join ',' } else { $arg } })
 $cli = Join-Path $PSScriptRoot 'cli' 'Comparison.Cli'
 $build = & dotnet build (Join-Path $cli 'Comparison.Cli.csproj') -c Release -v q -nologo -tl:off 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -24,7 +29,7 @@ if ($LASTEXITCODE -ne 0) {
 # Ctrl+C reaches this pwsh too: it waits for the CLI (which decides whether to stop the run), then stops the script.
 # The exit code is set in finally, which still runs then, so it stays the CLI's (130 after a stopped run).
 try {
-    & dotnet (Join-Path $cli 'bin' 'Release' 'net10.0' 'Comparison.Cli.dll') @args
+    & dotnet (Join-Path $cli 'bin' 'Release' 'net10.0' 'Comparison.Cli.dll') @cliArgs
 }
 finally {
     exit $LASTEXITCODE

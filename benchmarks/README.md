@@ -344,20 +344,22 @@ Without the menu — to reproduce a run, in CI, or from another tool — the sam
 once, without a question. A flag that is left out is not passed: the script's default applies.
 
 ```powershell
-./bench.ps1 quick --filter Nested,InPlace --frameworks net10.0,net8.0   # run-quick.ps1 -Filter '*.NestedBenchmark.*,*.InPlaceBenchmark.*' -Frameworks 'net10.0,net8.0'
-./bench.ps1 quick --filter Flat --frameworks net10.0 --dry               # checks the commands in a few minutes
-./bench.ps1 quick --check-only                                            # only the pre-flight checks
-./bench.ps1 full                                                          # the full run as published (run-all.ps1)
-./bench.ps1 full --local --results-dir results/2.1.0                      # a release run of the local sources
-./bench.ps1 full --mode dry --results-dir ../artifacts/bench-dry          # checks every command; results/ stays untouched
-./bench.ps1 full --check-only                                             # the estimate and the environment checks
-./bench.ps1 results                                                       # finished runs: ../artifacts/quick/*, results/*/RESULTS.md
-./bench.ps1 results 20261024-113550                                       # one run: statuses and summary tables
-./bench.ps1 results summarize 20261024-113550                             # run-quick.ps1 -SummarizeOnly
+./bench.ps1 quick --filter 'Nested,InPlace' --frameworks 'net10.0,net8.0'   # run-quick.ps1 -Filter '*.NestedBenchmark.*,*.InPlaceBenchmark.*' -Frameworks 'net10.0,net8.0'
+./bench.ps1 quick --filter Flat --frameworks net10.0 --dry                   # checks the commands in a few minutes
+./bench.ps1 quick --check-only                                                # only the pre-flight checks
+./bench.ps1 full                                                              # the full run as published (run-all.ps1)
+./bench.ps1 full --local --results-dir results/2.1.0                          # a release run of the local sources
+./bench.ps1 full --mode dry --results-dir ../artifacts/bench-dry              # checks every command; results/ stays untouched
+./bench.ps1 full --check-only                                                 # the estimate and the environment checks
+./bench.ps1 results                                                           # finished runs: ../artifacts/quick/*, results/*/RESULTS.md
+./bench.ps1 results 20261024-113550                                           # one run: statuses and summary tables
+./bench.ps1 results summarize 20261024-113550                                 # run-quick.ps1 -SummarizeOnly
 ```
 
 `--filter` takes the benchmark class names (`Flat`, `Nested`, `Collection`, `CustomConfig`, `InPlace`, `DiOverhead`);
-lists are comma-separated. A menu run ends with the equivalent `./bench.ps1 ...` command.
+lists are comma-separated, in single quotes (`--filter 'Nested,InPlace'`, the same in pwsh and bash). Without the
+quotes pwsh hands `./bench.ps1` a list as an array; the wrapper joins it back, so `--filter Nested,InPlace` works too.
+A menu run ends with the equivalent `./bench.ps1 ...` command, quoted so that it can be pasted into pwsh or bash.
 
 The menu keeps the committed reports safe: for a Quick or Dry full run it proposes its own folder,
 `../artifacts/bench-<mode>-<yyyyMMdd-HHmmss>`, passed as `-ResultsDir` (`results/` only if you type it), and it offers
