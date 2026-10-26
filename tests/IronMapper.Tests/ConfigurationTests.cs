@@ -35,7 +35,7 @@ public class ConfigurationTests
         var profile = new CfgProfile();
         var expr = profile.ExposeCreateMap<CfgSource, CfgDest>();
 
-        var delegateCalled = false;
+        bool delegateCalled = false;
         expr.ForMember(d => d.Name, o =>
         {
             delegateCalled = true;

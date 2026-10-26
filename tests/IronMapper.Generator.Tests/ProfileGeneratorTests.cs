@@ -18,7 +18,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ProfileDetection_ClassInheritingMappingProfile_GeneratesMapper()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class ProductEntity { public int Id { get; set; } public string Name { get; set; } = ""; }
@@ -36,7 +36,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToProductDto", code);
         Assert.Contains("Id = source.Id", code);
         Assert.Contains("Name = source.Name", code);
@@ -49,7 +49,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ForMemberInCode_ForMemberMapFrom_EmitsLambdaBodyInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class UserEntity
@@ -77,7 +77,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToUserDto", code);
         // The lambda body should be emitted verbatim (with "source" as the param name).
         Assert.Contains("source.FirstName", code);
@@ -92,7 +92,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ForMemberIgnore_IgnoredProperty_NotEmittedInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class InvoiceEntity { public int Id { get; set; } public string Secret { get; set; } = ""; }
@@ -111,7 +111,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("Id = source.Id", code);
         Assert.DoesNotContain("Secret = source.Secret", code);
     }
@@ -123,7 +123,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void WhenCondition_WhenClause_EmittedAsGuardInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class ItemEntity { public int Id { get; set; } public bool IsActive { get; set; } }
@@ -141,7 +141,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // Guard should appear before the return statement.
         Assert.Contains("if (!", code);
         Assert.Contains("source.IsActive", code);
@@ -155,7 +155,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ReverseMap_ReverseMapCall_GeneratesBothDirections()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class CatEntity { public int Id { get; set; } public string Name { get; set; } = ""; }
@@ -173,7 +173,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToCatDto", code);
         Assert.Contains("MapToCatEntity", code);
     }
@@ -187,7 +187,7 @@ public class ProfileGeneratorTests
     {
         // A MappingProfile subclass with an empty constructor should not crash
         // and should not produce any generated mapping files.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class NodeEntity { public int Id { get; set; } }
@@ -214,7 +214,7 @@ public class ProfileGeneratorTests
     public void ForMember_ParenthesisedDestLambda_ExtractsPropertyNameCorrectly()
     {
         // Uses (dest) => dest.FullName (parenthesised) instead of dest => dest.FullName (simple).
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class EmpEntity { public string First { get; set; } = ""; public string Last { get; set; } = ""; }
@@ -234,7 +234,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("FullName =", code);
         Assert.Contains("source.First", code);
         Assert.Contains("source.Last", code);
@@ -249,7 +249,7 @@ public class ProfileGeneratorTests
     {
         // When the lambda parameter is already called "source", ReplaceIdentifier
         // should be a no-op and the body should still be emitted correctly.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class BoxEntity { public int Width { get; set; } public int Height { get; set; } }
@@ -269,7 +269,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("Area =", code);
         Assert.Contains("source.Width", code);
         Assert.Contains("source.Height", code);
@@ -284,7 +284,7 @@ public class ProfileGeneratorTests
     {
         // GoodsProfile → BaseProfile → MappingProfile (three levels deep).
         // InheritsFrom walks the full base-type chain, so this must be detected.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class GoodsEntity { public int Id { get; set; } }
@@ -304,7 +304,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToGoodsDto", code);
         Assert.Contains("Id = source.Id", code);
     }
@@ -318,7 +318,7 @@ public class ProfileGeneratorTests
     {
         // Uses the chain-level .Ignore(dest => dest.Prop) shorthand instead of
         // .ForMember(dest => dest.Prop, opt => opt.Ignore()).
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class TaskEntity { public int Id { get; set; } public string InternalRef { get; set; } = ""; }
@@ -337,7 +337,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("Id = source.Id", code);
         Assert.DoesNotContain("InternalRef = source.InternalRef", code);
     }
@@ -351,7 +351,7 @@ public class ProfileGeneratorTests
     {
         // When [MapProperty] remaps a source property to a dest property AND [Ignore] is also
         // present, the mapping for that destination property should be skipped in the output.
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(ReportDto))]
@@ -374,7 +374,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("Id = source.Id", code);
         // Title is mapped from InternalCode which carries [Ignore] — must not appear in output.
         Assert.DoesNotContain("Title = source.InternalCode", code);
@@ -387,7 +387,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ConvertUsing_WholeObjectConverter_EmitsConverterCallInsteadOfInitializer()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Interfaces;
 
@@ -412,7 +412,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToShapeDto", code);
         // Should delegate to converter, NOT use object initializer
         Assert.Contains("ShapeConverter", code);
@@ -426,7 +426,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void ConvertUsing_LambdaBody_EmitsLambdaReturnInsteadOfInitializer()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using System;
 
@@ -446,7 +446,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToTempDto", code);
         // Lambda body must appear verbatim (with source renaming)
         Assert.Contains("source.Celsius", code);
@@ -460,7 +460,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void UseConverter_SingleProperty_EmitsConverterCallForThatProperty()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Interfaces;
 
@@ -486,7 +486,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToPaymentDto", code);
         Assert.Contains("Id = source.Id", code);
         Assert.Contains("DecimalToStringConverter", code);
@@ -500,7 +500,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void Generator_AlwaysEmitsListAndArrayCollectionMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class NoteEntity { public int Id { get; set; } }
@@ -518,7 +518,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToNoteDtoList", code);
         Assert.Contains("MapToNoteDtoArray", code);
         Assert.Contains("IEnumerable", code);
@@ -532,7 +532,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void NestedList_MappedPropertyType_EmitsLoopWithoutLinq()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using System.Collections.Generic;
 
@@ -557,7 +557,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToOrderDto", code);
         // Nested List<T> source: a loop with the exact capacity and a direct call of MapToLineItemDto, no LINQ.
         Assert.Contains("result.Add(source[i].MapToLineItemDto())", code);
@@ -572,7 +572,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void AddTransformer_StringAndDecimal_EmitsTransformerCallsAndHelperMethods()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using System;
 
@@ -593,7 +593,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("TransformValue_String_PriceEntity_PriceDto(source.Name)", code);
         Assert.Contains("TransformValue_Decimal_PriceEntity_PriceDto(source.Price)", code);
         Assert.Contains("private static string TransformValue_String_PriceEntity_PriceDto", code);
@@ -607,7 +607,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void IncludeMembers_SingleMember_EmitsNestedAccessExpression()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class ContactInfo { public string Email { get; set; } = ""; }
@@ -627,7 +627,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("MapToUserDto", code);
         Assert.Contains("Id = source.Id", code);
         // Email must come from the nested member with null guard.
@@ -639,7 +639,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void IncludeMembers_DuplicatePropertyAcrossMembers_FirstMemberWinsInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class ContactInfo  { public string Phone { get; set; } = ""; }
@@ -660,7 +660,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // Phone must come from Contact (first member), not Address.
         Assert.Contains("source.Contact.Phone", code);
         Assert.DoesNotContain("source.Address.Phone", code);
@@ -671,7 +671,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void IncludeMembers_ForMemberAlsoPresent_ForMemberTakesPriorityInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class ContactInfo    { public string Email { get; set; } = ""; }
@@ -692,7 +692,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("hardcoded@example.com", code);
         Assert.DoesNotContain("source.Contact.Email", code);
     }
@@ -700,7 +700,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void IncludeMembers_ReferenceTypeNestedMember_EmitsNullGuardTernary()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class AddressInfo  { public string City { get; set; } = ""; }
@@ -720,7 +720,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         Assert.Contains("source.Location != null", code);
         Assert.Contains("source.Location.City", code);
         Assert.Contains("default!", code);
@@ -733,7 +733,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void AddTransformer_BlockBodyLambda_EmitsBlockMethodInGeneratedCode()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using System;
 
@@ -753,7 +753,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // Transformer helper must be emitted as a block method containing a return statement.
         Assert.Contains("TransformValue_String_BlockEntity_BlockDto", code);
         Assert.Contains("return", code);
@@ -767,7 +767,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void IncludeMembers_ValueTypeNestedMember_EmitsDirectAccessWithoutNullGuard()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public struct GeoPoint { public double Lat { get; set; } public double Lon { get; set; } }
@@ -787,7 +787,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // Struct member: direct access, no null-guard ternary.
         Assert.Contains("source.Coords.Lat", code);
         Assert.Contains("source.Coords.Lon", code);
@@ -801,7 +801,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void NestedList_SameElementType_CopiedDirectlyWithoutSelect()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using System.Collections.Generic;
 
@@ -820,7 +820,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // Same element type (string→string): the Tags property is directly assigned.
         Assert.Contains("Tags = source.Tags", code);
         // No per-element mapper should be generated for string (the element type is not a mapped type).
@@ -834,7 +834,7 @@ public class ProfileGeneratorTests
     [Fact]
     public void Generator_AlwaysEmitsInPlaceVoidOverload()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(WidgetDto))]
@@ -845,7 +845,7 @@ public class ProfileGeneratorTests
         var (generatedSources, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var code = string.Join("\n", generatedSources);
+        string code = string.Join("\n", generatedSources);
         // In-place method: void return, two parameters (source, destination)
         Assert.Contains("void MapToWidgetDto", code);
         Assert.Contains("destination.Id = source.Id", code);

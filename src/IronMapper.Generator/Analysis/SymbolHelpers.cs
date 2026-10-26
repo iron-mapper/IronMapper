@@ -87,12 +87,19 @@ internal static class SymbolHelpers
     {
         var segments = new List<string>();
         for (var containing = destType.ContainingType; containing is not null; containing = containing.ContainingType)
+        {
             segments.Insert(0, containing.Name);
+        }
+
         for (var ns = destType.ContainingNamespace; ns is not null && !ns.IsGlobalNamespace; ns = ns.ContainingNamespace)
+        {
             segments.Insert(0, ns.Name);
+        }
 
         if (destType.TypeArguments.Length == 0)
+        {
             return new DestinationNaming(string.Join(".", segments), string.Empty, string.Empty);
+        }
 
         var shortArgs = new List<string>();
         var fullArgs = new List<string>();
@@ -115,11 +122,19 @@ internal static class SymbolHelpers
     public static string ToIdentifier(string typeName)
     {
         if (typeName.StartsWith("global::", System.StringComparison.Ordinal))
+        {
             typeName = typeName.Substring("global::".Length);
+        }
 
-        var chars = typeName.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-            if (!char.IsLetterOrDigit(chars[i]) && chars[i] != '_') chars[i] = '_';
+        char[] chars = typeName.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (!char.IsLetterOrDigit(chars[i]) && chars[i] != '_')
+            {
+                chars[i] = '_';
+            }
+        }
+
         return new string(chars);
     }
 
@@ -149,10 +164,14 @@ internal static class SymbolHelpers
         ITypeSymbol destType,
         out INamedTypeSymbol? inaccessibleType)
     {
-        var isInternal = false;
+        bool isInternal = false;
         inaccessibleType = FindInaccessibleType(sourceType, ref isInternal)
                            ?? FindInaccessibleType(destType, ref isInternal);
-        if (inaccessibleType is not null) return null;
+        if (inaccessibleType is not null)
+        {
+            return null;
+        }
+
         return isInternal ? "internal" : "public";
     }
 
@@ -170,9 +189,19 @@ internal static class SymbolHelpers
             case IArrayTypeSymbol array:
                 return ContainsErrorType(array.ElementType);
             case INamedTypeSymbol named:
-                if (named.ContainingType is not null && ContainsErrorType(named.ContainingType)) return true;
+                if (named.ContainingType is not null && ContainsErrorType(named.ContainingType))
+                {
+                    return true;
+                }
+
                 foreach (var argument in named.TypeArguments)
-                    if (ContainsErrorType(argument)) return true;
+                {
+                    if (ContainsErrorType(argument))
+                    {
+                        return true;
+                    }
+                }
+
                 return false;
             default:
                 return false;
@@ -223,7 +252,10 @@ internal static class SymbolHelpers
                 foreach (var typeArgument in named.TypeArguments)
                 {
                     var inaccessible = FindInaccessibleType(typeArgument, ref isInternal);
-                    if (inaccessible is not null) return inaccessible;
+                    if (inaccessible is not null)
+                    {
+                        return inaccessible;
+                    }
                 }
                 return null;
 
@@ -284,17 +316,22 @@ internal static class SymbolHelpers
     /// </summary>
     public static string GetCollectionOutputType(ITypeSymbol type)
     {
-        if (type is IArrayTypeSymbol) return "Array";
+        if (type is IArrayTypeSymbol)
+        {
+            return "Array";
+        }
 
         if (type is INamedTypeSymbol { IsGenericType: true } namedType)
         {
-            var def = namedType.OriginalDefinition.ToDisplayString();
+            string def = namedType.OriginalDefinition.ToDisplayString();
             if (def == "System.Collections.Generic.List<T>"
                 || def == "System.Collections.Generic.IList<T>"
                 || def == "System.Collections.Generic.ICollection<T>"
                 || def == "System.Collections.Generic.IReadOnlyList<T>"
                 || def == "System.Collections.Generic.IReadOnlyCollection<T>")
+            {
                 return "List";
+            }
         }
 
         return "Enumerable";
@@ -311,9 +348,14 @@ internal static class SymbolHelpers
     public static string GetCollectionSourceKind(ITypeSymbol type)
     {
         if (type is IArrayTypeSymbol array)
+        {
             return array.IsSZArray ? "Array" : "Enumerable";
+        }
 
-        if (type is not INamedTypeSymbol named) return "Enumerable";
+        if (type is not INamedTypeSymbol named)
+        {
+            return "Enumerable";
+        }
 
         if (named.IsGenericType)
         {
@@ -331,7 +373,10 @@ internal static class SymbolHelpers
         }
 
         // Other interfaces may inherit Count from both ICollection<T> and IReadOnlyCollection<T> (ambiguous).
-        if (named.TypeKind == TypeKind.Interface) return "Enumerable";
+        if (named.TypeKind == TypeKind.Interface)
+        {
+            return "Enumerable";
+        }
 
         for (var current = named; current is not null; current = current.BaseType)
         {
@@ -340,7 +385,9 @@ internal static class SymbolHelpers
                 if (member is IPropertySymbol { IsStatic: false, IsIndexer: false, DeclaredAccessibility: Accessibility.Public } count
                     && count.GetMethod is { DeclaredAccessibility: Accessibility.Public }
                     && count.Type.SpecialType == SpecialType.System_Int32)
+                {
                     return "Counted";
+                }
             }
         }
 
@@ -358,12 +405,23 @@ internal static class SymbolHelpers
     /// </summary>
     public static CollectionMapping? DetectCollectionMapping(ITypeSymbol sourcePropType, ITypeSymbol destPropType)
     {
-        if (!TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null) return null;
-        if (!TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null) return null;
-        if (srcElem.ToDisplayString() == dstElem.ToDisplayString()) return null;
+        if (!TryGetCollectionElementType(sourcePropType, out var srcElem) || srcElem is null)
+        {
+            return null;
+        }
+
+        if (!TryGetCollectionElementType(destPropType, out var dstElem) || dstElem is null)
+        {
+            return null;
+        }
+
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
+        {
+            return null;
+        }
 
         // The helper parameter is declared nullable: drop a top-level `?` of the property type first.
-        var sourceType = sourcePropType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+        string sourceType = sourcePropType.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
             .ToDisplayString(FullyQualifiedNullableFormat);
 
         return new CollectionMapping(

@@ -139,9 +139,19 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     {
         get
         {
-            if (WholeObjectConverterIsCached) return true;
+            if (WholeObjectConverterIsCached)
+            {
+                return true;
+            }
+
             foreach (var property in PropertyMappings)
-                if (property.ConverterIsCached) return true;
+            {
+                if (property.ConverterIsCached)
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
     }
@@ -156,9 +166,19 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     {
         get
         {
-            if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null) return false;
+            if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
+            {
+                return false;
+            }
+
             foreach (var property in PropertyMappings)
-                if (property.IsInitOnly && !property.IsIgnored) return false;
+            {
+                if (property.IsInitOnly && !property.IsIgnored)
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
     }
@@ -288,8 +308,15 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
 
         if (SourceTypeName != other.SourceTypeName
             || SourceNamespace != other.SourceNamespace
@@ -313,7 +340,9 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestTypeArgsFull != other.DestTypeArgsFull
             || !Nullable.Equals(OriginLocation, other.OriginLocation)
             || !MethodOverrides.Equals(other.MethodOverrides))
+        {
             return false;
+        }
 
         // Diagnostics count too: an edit that only adds or removes a diagnostic must reach the output.
         return PropertyMappings.Equals(other.PropertyMappings)
@@ -327,7 +356,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = 17;
+        int hash = 17;
         hash = hash * 31 + SourceTypeName.GetHashCode();
         hash = hash * 31 + (SourceNamespace?.GetHashCode() ?? 0);
         hash = hash * 31 + DestTypeName.GetHashCode();

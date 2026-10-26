@@ -42,12 +42,20 @@ public sealed class MstatFile
         foreach (var handle in moduleType.GetMethods())
         {
             var method = _md.GetMethodDefinition(handle);
-            if (method.RelativeVirtualAddress == 0) continue;
-            var section = _md.GetString(method.Name);
+            if (method.RelativeVirtualAddress == 0)
+            {
+                continue;
+            }
+
+            string section = _md.GetString(method.Name);
             var il = pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader();
             foreach (var (key, values) in ReadRecords(il))
             {
-                if (values.Count == 0) continue;
+                if (values.Count == 0)
+                {
+                    continue;
+                }
+
                 var (owner, member) = Resolve(key);
                 entries.Add(new SizeEntry(section, owner, member, values[0]));
             }
@@ -78,7 +86,7 @@ public sealed class MstatFile
                     records.Add((new RecordKey(il.ReadInt32(), null), current));
                     break;
                 case 0x72: // ldstr
-                    var text = _md.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0xFFFFFF));
+                    string text = _md.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0xFFFFFF));
                     current = [];
                     records.Add((new RecordKey(0, text), current));
                     break;
@@ -99,7 +107,10 @@ public sealed class MstatFile
 
     private (TypeKey Owner, string Member) Resolve(RecordKey key)
     {
-        if (key.Text is not null) return (Unattributed, key.Text);
+        if (key.Text is not null)
+        {
+            return (Unattributed, key.Text);
+        }
 
         var handle = MetadataTokens.EntityHandle(key.Token);
         switch (handle.Kind)
@@ -142,12 +153,12 @@ public sealed class MstatFile
     private TypeKey FromTypeReference(TypeReferenceHandle handle)
     {
         var tr = _md.GetTypeReference(handle);
-        var name = _md.GetString(tr.Name);
+        string name = _md.GetString(tr.Name);
         var scope = tr.ResolutionScope;
         switch (scope.Kind)
         {
             case HandleKind.AssemblyReference:
-                var asm = _md.GetString(_md.GetAssemblyReference((AssemblyReferenceHandle)scope).Name);
+                string asm = _md.GetString(_md.GetAssemblyReference((AssemblyReferenceHandle)scope).Name);
                 return new TypeKey(asm, _md.GetString(tr.Namespace), name);
             case HandleKind.TypeReference:
                 var outer = FromTypeReference((TypeReferenceHandle)scope);
@@ -161,7 +172,7 @@ public sealed class MstatFile
     private TypeKey FromTypeDefinition(TypeDefinitionHandle handle)
     {
         var td = _md.GetTypeDefinition(handle);
-        var name = _md.GetString(td.Name);
+        string name = _md.GetString(td.Name);
         var declaring = td.GetDeclaringType();
         if (!declaring.IsNil)
         {

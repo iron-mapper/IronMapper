@@ -120,8 +120,10 @@ public class CollectionMappingTests
         var dtos = entities.MapToEventDtoArray();
 
         Assert.Equal(10, dtos.Length);
-        for (var i = 0; i < 10; i++)
+        for (int i = 0; i < 10; i++)
+        {
             Assert.Equal(i + 1, dtos[i].Id);
+        }
     }
 
     // ------------------------------------------------------------------

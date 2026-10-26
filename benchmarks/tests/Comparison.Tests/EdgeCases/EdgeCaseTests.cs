@@ -15,8 +15,10 @@ public class EdgeCaseTests(ITestOutputHelper output)
         var data = new TheoryData<string, string>();
         foreach (var edgeCase in EdgeCaseFacts.Cases)
         {
-            foreach (var name in Mappers.Names)
+            foreach (string name in Mappers.Names)
+            {
                 data.Add(edgeCase.Id, name);
+            }
         }
         return data;
     }
@@ -47,7 +49,7 @@ public class EdgeCaseTests(ITestOutputHelper output)
     [MemberData(nameof(CaseAndMapper))]
     public void Record_behavior(string caseId, string name)
     {
-        var outcome = EdgeCaseFacts.Get(caseId).Evaluate(name);
+        string outcome = EdgeCaseFacts.Get(caseId).Evaluate(name);
         output.WriteLine($"{caseId} | {name} | {outcome}");
     }
 }

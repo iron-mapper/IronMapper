@@ -36,17 +36,26 @@ internal static class MappingAnalyzer
         CancellationToken ct)
     {
         if (ctx.TargetSymbol is not INamedTypeSymbol sourceSymbol)
+        {
             return ImmutableArray<MappingDescriptor>.Empty;
+        }
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
-        var index = 0;
+        int index = 0;
         foreach (var attr in ctx.Attributes)
         {
             ct.ThrowIfCancellationRequested();
-            if (attr.ConstructorArguments.Length == 0) continue;
+            if (attr.ConstructorArguments.Length == 0)
+            {
+                continue;
+            }
+
             var location = LocationInfo.From(attr.ApplicationSyntaxReference?.GetSyntax(ct));
             var destSymbol = GetMappedType(attr, "MapTo", sourceSymbol, location, builder);
-            if (destSymbol is null) continue;
+            if (destSymbol is null)
+            {
+                continue;
+            }
 
             var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, location, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapTo", sourceSymbol, destSymbol, index++),
@@ -55,7 +64,9 @@ internal static class MappingAnalyzer
                 SymbolHelpers.GetDestinationNaming(destSymbol),
                 location).WithMethodOverrides(GetMethodOverrides(attr));
             if (descriptor is not null)
+            {
                 builder.Add(descriptor);
+            }
         }
 
         return builder.ToImmutable();
@@ -71,17 +82,26 @@ internal static class MappingAnalyzer
         CancellationToken ct)
     {
         if (ctx.TargetSymbol is not INamedTypeSymbol destSymbol)
+        {
             return ImmutableArray<MappingDescriptor>.Empty;
+        }
 
         var builder = ImmutableArray.CreateBuilder<MappingDescriptor>();
-        var index = 0;
+        int index = 0;
         foreach (var attr in ctx.Attributes)
         {
             ct.ThrowIfCancellationRequested();
-            if (attr.ConstructorArguments.Length == 0) continue;
+            if (attr.ConstructorArguments.Length == 0)
+            {
+                continue;
+            }
+
             var location = LocationInfo.From(attr.ApplicationSyntaxReference?.GetSyntax(ct));
             var sourceSymbol = GetMappedType(attr, "MapFrom", destSymbol, location, builder);
-            if (sourceSymbol is null) continue;
+            if (sourceSymbol is null)
+            {
+                continue;
+            }
 
             var descriptor = BuildDescriptor(sourceSymbol, destSymbol, ctx.SemanticModel.Compilation, location, ct)?.WithOrigin(
                 CreateAttributeOrigin("MapFrom", sourceSymbol, destSymbol, index++),
@@ -90,7 +110,9 @@ internal static class MappingAnalyzer
                 SymbolHelpers.GetDestinationNaming(destSymbol),
                 location).WithMethodOverrides(GetMethodOverrides(attr));
             if (descriptor is not null)
+            {
                 builder.Add(descriptor);
+            }
         }
 
         return builder.ToImmutable();
@@ -105,18 +127,29 @@ internal static class MappingAnalyzer
     private static INamedTypeSymbol? GetMappedType(AttributeData attr, string attribute, INamedTypeSymbol annotated,
         LocationInfo? location, ImmutableArray<MappingDescriptor>.Builder builder)
     {
-        if (attr.ConstructorArguments[0].Value is not ITypeSymbol type) return null;
+        if (attr.ConstructorArguments[0].Value is not ITypeSymbol type)
+        {
+            return null;
+        }
 
         string problem;
         // Checked before the error types: the type arguments of typeof(Box<>) are error types.
         if (type is INamedTypeSymbol { IsUnboundGenericType: true })
+        {
             problem = "an open generic type cannot be mapped; use a constructed type such as typeof(Box<int>)";
+        }
         else if (SymbolHelpers.ContainsErrorType(type))
+        {
             return null;
+        }
         else if (type is INamedTypeSymbol named)
+        {
             return named;
+        }
         else
+        {
             problem = "only classes, structs and records can be mapped";
+        }
 
         builder.Add(CreateDiagnosticOnlyDescriptor(ImmutableArray.Create(new DiagnosticInfo(
             DiagnosticDescriptors.UnsupportedAttributeType, attribute, type.ToDisplayString(), annotated.ToDisplayString(), problem)
@@ -133,7 +166,11 @@ internal static class MappingAnalyzer
         bool? inPlace = null, list = null, array = null;
         foreach (var argument in attr.NamedArguments)
         {
-            if (argument.Value.Value is not bool value) continue;
+            if (argument.Value.Value is not bool value)
+            {
+                continue;
+            }
+
             switch (argument.Key)
             {
                 case "GenerateInPlace": inPlace = value; break;
@@ -165,13 +202,15 @@ internal static class MappingAnalyzer
         CancellationToken ct)
     {
         // IM0010: generated methods cannot reference private/protected nested types.
-        var methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
+        string? methodAccessibility = SymbolHelpers.GetGeneratedMethodAccessibility(
             sourceSymbol, destSymbol, out var inaccessibleType);
         if (methodAccessibility is null)
+        {
             return CreateInaccessibleTypeDescriptor(sourceSymbol, destSymbol, inaccessibleType!, origin);
+        }
 
-        var sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
-        var destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
+        string sourceFullName = SymbolHelpers.GetFullyQualifiedName(sourceSymbol);
+        string destFullName = SymbolHelpers.GetFullyQualifiedName(destSymbol);
 
         var sourceProps = SymbolHelpers.GetPublicReadableProperties(sourceSymbol);
         var destProps = SymbolHelpers.GetPublicSettableProperties(destSymbol);
@@ -202,7 +241,9 @@ internal static class MappingAnalyzer
         var sourcePropsByName = new Dictionary<string, IPropertySymbol>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var p in sourceProps)
+        {
             sourcePropsByName[p.Name] = p;
+        }
 
         // Build reverse index: destination property name → source property (via [MapProperty]), and where each
         // [MapProperty] is (IM0006 points to it).
@@ -212,7 +253,7 @@ internal static class MappingAnalyzer
         foreach (var sourceProp in sourceProps)
         {
             ct.ThrowIfCancellationRequested();
-            var destName = GetMapPropertyDestName(sourceProp, out var mapProperty);
+            string? destName = GetMapPropertyDestName(sourceProp, out var mapProperty);
             if (destName is not null)
             {
                 sourceByDestName[destName] = sourceProp;
@@ -224,7 +265,9 @@ internal static class MappingAnalyzer
         var destPropNames = new System.Collections.Generic.HashSet<string>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var p in destProps)
+        {
             destPropNames.Add(p.Name);
+        }
 
         // IM0006: validate that every [MapProperty] destination name actually exists. The code fix suggests one of
         // the destination properties, passed as a diagnostic property.
@@ -249,7 +292,11 @@ internal static class MappingAnalyzer
             foreach (var ctor in destSymbol.Constructors)
             {
                 ct.ThrowIfCancellationRequested();
-                if (ctor.IsImplicitlyDeclared) continue;
+                if (ctor.IsImplicitlyDeclared)
+                {
+                    continue;
+                }
+
                 foreach (var param in ctor.Parameters)
                 {
                     if (!sourcePropsByName.ContainsKey(param.Name))
@@ -270,7 +317,10 @@ internal static class MappingAnalyzer
             ct.ThrowIfCancellationRequested();
 
             // Destination property explicitly ignored via [Ignore] — skip silently.
-            if (HasIgnoreAttribute(destProp)) continue;
+            if (HasIgnoreAttribute(destProp))
+            {
+                continue;
+            }
 
             bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
 
@@ -280,7 +330,7 @@ internal static class MappingAnalyzer
                 || sourcePropsByName.TryGetValue(destProp.Name, out sourceProp))
             {
                 var collection = SymbolHelpers.DetectCollectionMapping(sourceProp.Type, destProp.Type);
-                var isIgnored = HasIgnoreAttribute(sourceProp);
+                bool isIgnored = HasIgnoreAttribute(sourceProp);
                 // An ignored property does not use its converter, so the converter is not checked.
                 var converter = isIgnored ? null : GetConverter(sourceProp, converters, ct);
                 // A nested object is mapped by the mapping of its type pair. IM0002: a value the generated assignment cannot
@@ -290,12 +340,14 @@ internal static class MappingAnalyzer
                 if (!isIgnored && converter is null)
                 {
                     var location = LocationInfo.From(destProp) ?? origin;
-                    var sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
+                    string sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
                     if (collection is not null)
                     {
                         if (CheckCollection(compilation, collection, sourceProp, destProp, sourceDisplay, destSymbol,
                                 PropertyTypeCheck.Origin.Attribute, location, out mappingPairs) is { } missing)
+                        {
                             diagnostics.Add(missing);
+                        }
                     }
                     else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, destProp.Type,
                                  sourceDisplay, destProp, destSymbol, PropertyTypeCheck.Origin.Attribute, location, diagnostics)) is not null)
@@ -338,7 +390,10 @@ internal static class MappingAnalyzer
         }
 
         // A converter type that did not resolve: the compiler reports it at [MapConverter]; skip the mapping.
-        if (converters.HasUnresolvedType) return null;
+        if (converters.HasUnresolvedType)
+        {
+            return null;
+        }
 
         // A converter that the generated code cannot create (IM0015): the mapping is not generated.
         if (!converters.CanGenerate)
@@ -415,7 +470,9 @@ internal static class MappingAnalyzer
         foreach (var attr in prop.GetAttributes())
         {
             if (attr.AttributeClass?.ToDisplayString() == IgnoreAttributeFqn)
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -457,18 +514,30 @@ internal static class MappingAnalyzer
         mappingPairs = default;
         if (!SymbolHelpers.TryGetCollectionElementType(sourceProp.Type, out var sourceElement) || sourceElement is null
             || !SymbolHelpers.TryGetCollectionElementType(destProp.Type, out var destElement) || destElement is null)
+        {
             return null;
+        }
 
         var diagnostic = PropertyTypeCheck.CheckCollection(compilation, collection, sourceElement, destElement, sourceDisplay,
-            destProp, destSymbol, origin, location, out var mappedElsewhere);
-        if (!mappedElsewhere) mappingPairs = PropertyTypeCheck.ElementPairKeys(sourceElement, destElement);
+            destProp, destSymbol, origin, location, out bool mappedElsewhere);
+        if (!mappedElsewhere)
+        {
+            mappingPairs = PropertyTypeCheck.ElementPairKeys(sourceElement, destElement);
+        }
+
         return diagnostic;
     }
 
     private static bool HasAnyConverter(ImmutableArray<PropertyMappingDescriptor>.Builder mappings)
     {
         foreach (var m in mappings)
-            if (m.ConverterType is not null) return true;
+        {
+            if (m.ConverterType is not null)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 }

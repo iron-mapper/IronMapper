@@ -22,7 +22,7 @@ public class GeneratedClassVisibilityTests
 
     private static INamedTypeSymbol GetGeneratedClass(Compilation compilation)
     {
-        var name = "IronMapper.Generated." + GeneratedClassName.For(compilation.AssemblyName);
+        string name = "IronMapper.Generated." + GeneratedClassName.For(compilation.AssemblyName);
         return compilation.Assembly.GetTypeByMetadataName(name) ?? throw new InvalidOperationException($"{name} was not generated.");
     }
 
@@ -33,7 +33,7 @@ public class GeneratedClassVisibilityTests
     [Fact]
     public void AllMappingsInternal_ClassIsInternal()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -63,7 +63,7 @@ public class GeneratedClassVisibilityTests
     [InlineData("", "CreateMap<User, UserDto>();")]
     public void OnePublicMapping_ClassIsPublic(string attribute, string profileMap)
     {
-        var source = $$"""
+        string source = $$"""
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -93,7 +93,7 @@ public class GeneratedClassVisibilityTests
     [Fact]
     public void AccessibilityIsDeclaredOnce_InASeparateFile()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -124,7 +124,7 @@ public class GeneratedClassVisibilityTests
     public void NoGeneratedMappings_NoClass()
     {
         // The only mapping is skipped with IM0010, so there is nothing to declare.
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -147,7 +147,7 @@ public class GeneratedClassVisibilityTests
     [Fact]
     public void NoMappings_UsingOfGeneratedNamespaceCompiles()
     {
-        var source = """
+        string source = """
             global using IronMapper.Generated;
 
             namespace App;
@@ -164,7 +164,7 @@ public class GeneratedClassVisibilityTests
     [Fact]
     public void NoGeneratedMappings_UsingOfGeneratedNamespaceCompiles()
     {
-        var source = """
+        string source = """
             global using IronMapper.Generated;
             using IronMapper.Attributes;
 
@@ -375,8 +375,8 @@ public class GeneratedClassVisibilityTests
             static string[] GeneratedTypes(System.Reflection.Assembly assembly) => assembly.GetTypes()
                 .Select(t => t.FullName!).Where(n => n.StartsWith("IronMapper.Generated.", StringComparison.Ordinal)).ToArray();
 
-            var libraryTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(libraryImage)));
-            var appTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(appImage)));
+            string[] libraryTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(libraryImage)));
+            string[] appTypes = GeneratedTypes(context.LoadFromStream(new MemoryStream(appImage)));
 
             Assert.Contains("IronMapper.Generated.GeneratedMappers_Lib", libraryTypes);
             Assert.Contains("IronMapper.Generated.GeneratedMappers_App", appTypes);
@@ -399,7 +399,7 @@ public class GeneratedClassVisibilityTests
         var (library, _) = GeneratorTestHelper.CompileProject("Lib", LibraryWithPublicMaps);
         var (libraryRef, _) = GeneratorTestHelper.EmitReference(library);
 
-        var app = """
+        string app = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -421,7 +421,7 @@ public class GeneratedClassVisibilityTests
         var (library, _) = GeneratorTestHelper.CompileProject("Lib", LibraryWithPublicMaps);
         var (libraryRef, _) = GeneratorTestHelper.EmitReference(library);
 
-        var app = """
+        string app = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -450,7 +450,7 @@ public class GeneratedClassVisibilityTests
         var (library, _) = GeneratorTestHelper.CompileProject("Lib", LibraryWithPublicMaps);
         var (libraryRef, _) = GeneratorTestHelper.EmitReference(library);
 
-        var app = """
+        string app = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Configuration;
@@ -479,7 +479,7 @@ public class GeneratedClassVisibilityTests
         // A name collision (IM0013) inside a library with public maps: the qualified methods are public, the library's
         // List/Array call them by their qualified simple name, the nested collection uses the qualified element map,
         // and the referencing assembly (with its own GeneratedMappers) calls all of them.
-        var library = """
+        string library = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Configuration;
@@ -513,7 +513,7 @@ public class GeneratedClassVisibilityTests
                 public class MemberDto { public string Name { get; set; } = ""; }
             }
             """;
-        var calls = """
+        string calls = """
             parts.Add(new Lib.Member { Name = "m" }.MapToAdminMemberDto().Name);
             parts.Add(new[] { new Lib.Member { Name = "l" } }.MapToPublicMemberDtoList()[0].Name);
             parts.Add(new[] { new Lib.Member { Name = "a" } }.MapToAdminMemberDtoArray()[0].Name);
@@ -541,7 +541,7 @@ public class GeneratedClassVisibilityTests
     [Fact]
     public void RuntimeMapper_FindsMethodsOfInternalGeneratedClass()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -596,7 +596,9 @@ public class GeneratedClassVisibilityTests
         try
         {
             foreach (var (_, image) in dependencies)
+            {
                 context.LoadFromStream(new MemoryStream(image));
+            }
 
             var (_, appImage) = GeneratorTestHelper.EmitReference(compilation);
             var assembly = context.LoadFromStream(new MemoryStream(appImage));

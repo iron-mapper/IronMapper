@@ -61,16 +61,16 @@ internal static class MapperCodeEmitter
     public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan, GeneratedCodeOptions options,
         GeneratedMethods methods)
     {
-        var sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
-        var destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
+        string sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
+        string destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
         // Never more accessible than the mapped types (CS0050/CS0051 otherwise).
-        var accessibility  = descriptor.MethodAccessibility;
+        string accessibility  = descriptor.MethodAccessibility;
         // MapTo{Name}, or a qualified name when it collides (IM0013).
-        var methodName     = entry.MethodName;
+        string methodName     = entry.MethodName;
 
         // Scope hook and transformer method names to this mapping to avoid CS0111 conflicts
         // (simple names, or full names when another mapping has the same simple names).
-        var scope = entry.HelperScope;
+        string scope = entry.HelperScope;
         var scopedTransformers = ScopeTransformers(descriptor.ValueTransformers.AsImmutableArray(), scope);
 
         var sb = new StringBuilder();
@@ -107,11 +107,13 @@ internal static class MapperCodeEmitter
         sb.AppendLine("        {");
 
         if (descriptor.WhenConditionBody is not null)
+        {
             sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return default!;"); // safe: `default!` is part of the emitted C# text, not a local operator
+        }
 
-        var hasHooks = descriptor.BeforeMapLambdaBody is not null || descriptor.AfterMapLambdaBody is not null;
-        var beforeMapMethodName = $"BeforeMap{scope}";
-        var afterMapMethodName  = $"AfterMap{scope}";
+        bool hasHooks = descriptor.BeforeMapLambdaBody is not null || descriptor.AfterMapLambdaBody is not null;
+        string beforeMapMethodName = $"BeforeMap{scope}";
+        string afterMapMethodName  = $"AfterMap{scope}";
 
         if (descriptor.WholeObjectConverterType is not null)
         {
@@ -127,16 +129,24 @@ internal static class MapperCodeEmitter
             sb.AppendLine($"            var destination = new {destFullName}();");
 
             if (descriptor.BeforeMapLambdaBody is not null)
+            {
                 sb.AppendLine($"            {beforeMapMethodName}(source, destination);");
+            }
 
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan)) continue;
+                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+                {
+                    continue;
+                }
+
                 sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
             }
 
             if (descriptor.AfterMapLambdaBody is not null)
+            {
                 sb.AppendLine($"            {afterMapMethodName}(source, destination);");
+            }
 
             sb.AppendLine("            return destination;");
         }
@@ -146,7 +156,11 @@ internal static class MapperCodeEmitter
             sb.AppendLine("            {");
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || IsMappingMissing(prop, plan)) continue;
+                if (prop.IsIgnored || IsMappingMissing(prop, plan))
+                {
+                    continue;
+                }
+
                 sb.Append("                ");
                 sb.AppendLine(BuildPropertyInitializer(descriptor, prop, scopedTransformers, scope, plan) + ",");
             }
@@ -190,8 +204,16 @@ internal static class MapperCodeEmitter
         sb.AppendLine("        {");
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan)) continue;
-            if (EmitNestedUpdate(sb, descriptor, prop, plan)) continue;
+            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+            {
+                continue;
+            }
+
+            if (EmitNestedUpdate(sb, descriptor, prop, plan))
+            {
+                continue;
+            }
+
             sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
         }
         sb.AppendLine("        }");
@@ -207,10 +229,10 @@ internal static class MapperCodeEmitter
         // inlinable call: no delegate, no interface dispatch. The parameter stays IEnumerable<T>.
         // Either method can be turned off (IronMapperGenerateList/Array, GenerateList/Array = false); nothing else calls
         // them: nested collection properties call Method 1 per element, and IMapper's registry then loops itself.
-        var list = $"global::System.Collections.Generic.List<{destFullName}>";
-        var src = sourceFullName;
-        var elementMapper = ElementMapperName(scope);
-        var typeArguments = $"{src}, {destFullName}, {elementMapper}";
+        string list = $"global::System.Collections.Generic.List<{destFullName}>";
+        string src = sourceFullName;
+        string elementMapper = ElementMapperName(scope);
+        string typeArguments = $"{src}, {destFullName}, {elementMapper}";
         if (methods.List)
         {
             sb.AppendLine();
@@ -241,7 +263,11 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (!UsesCollectionHelper(prop) || IsMappingMissing(prop, plan)) continue;
+            if (!UsesCollectionHelper(prop) || IsMappingMissing(prop, plan))
+            {
+                continue;
+            }
+
             sb.AppendLine();
             EmitCollectionHelper(sb, prop, scope, plan);
         }
@@ -254,8 +280,11 @@ internal static class MapperCodeEmitter
             sb.AppendLine();
             sb.AppendLine($"        private static void {beforeMapMethodName}({sourceFullName} source, {destFullName} destination)");
             sb.AppendLine("        {");
-            foreach (var line in descriptor.BeforeMapLambdaBody.Split('\n'))
+            foreach (string? line in descriptor.BeforeMapLambdaBody.Split('\n'))
+            {
                 sb.AppendLine($"            {line.TrimEnd()}");
+            }
+
             sb.AppendLine("        }");
         }
 
@@ -264,23 +293,29 @@ internal static class MapperCodeEmitter
             sb.AppendLine();
             sb.AppendLine($"        private static void {afterMapMethodName}({sourceFullName} source, {destFullName} destination)");
             sb.AppendLine("        {");
-            foreach (var line in descriptor.AfterMapLambdaBody.Split('\n'))
+            foreach (string? line in descriptor.AfterMapLambdaBody.Split('\n'))
+            {
                 sb.AppendLine($"            {line.TrimEnd()}");
+            }
+
             sb.AppendLine("        }");
         }
 
         foreach (var t in scopedTransformers)
         {
-            var fqn = t.FullyQualifiedTypeName;
+            string fqn = t.FullyQualifiedTypeName;
             sb.AppendLine();
             if (t.LambdaBody.TrimStart().StartsWith("{", System.StringComparison.Ordinal))
             {
-                var trimmedBody = t.LambdaBody.Trim();
-                var blockContent = trimmedBody.Substring(1, trimmedBody.Length - 2).Trim();
+                string trimmedBody = t.LambdaBody.Trim();
+                string blockContent = trimmedBody.Substring(1, trimmedBody.Length - 2).Trim();
                 sb.AppendLine($"        private static {fqn} {t.MethodName}({fqn} value)");
                 sb.AppendLine("        {");
-                foreach (var line in blockContent.Split('\n'))
+                foreach (string? line in blockContent.Split('\n'))
+                {
                     sb.AppendLine($"            {line.TrimStart()}");
+                }
+
                 sb.AppendLine("        }");
             }
             else
@@ -331,16 +366,25 @@ internal static class MapperCodeEmitter
         sb.AppendLine("{");
         sb.AppendLine("    /// <summary>Mapping extension methods generated by IronMapper for this assembly.</summary>");
         if (generatedCodeAttribute && options.HasGeneratedCodeAttribute)
+        {
             sb.AppendLine($"    [global::System.CodeDom.Compiler.GeneratedCode(\"IronMapper\", \"{GeneratorVersion}\")]");
+        }
+
         if (excludeFromCodeCoverage && options.HasExcludeFromCodeCoverage)
+        {
             sb.AppendLine("    [global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]");
+        }
+
         sb.AppendLine($"    {accessibility} static partial class {options.ClassName}");
         sb.AppendLine("    {");
         if (!options.UseThrowIfNull)
         {
             // One throw site for every null check: the mapping methods stay small enough to be inlined.
             if (options.HasDoesNotReturn)
+            {
                 sb.AppendLine("        [global::System.Diagnostics.CodeAnalysis.DoesNotReturn]");
+            }
+
             sb.AppendLine($"        private static void {GeneratedCodeOptions.ThrowHelperName}(string paramName)");
             sb.AppendLine("            => throw new global::System.ArgumentNullException(paramName);");
         }
@@ -348,7 +392,11 @@ internal static class MapperCodeEmitter
         {
             // One instance per converter type for the whole assembly. Created on first use by the type initializer,
             // which the runtime runs once even when several threads race; only converters without state get here.
-            if (!options.UseThrowIfNull) sb.AppendLine();
+            if (!options.UseThrowIfNull)
+            {
+                sb.AppendLine();
+            }
+
             sb.AppendLine("        /// <summary>The single instance of a converter without state, created on first use.</summary>");
             sb.AppendLine($"        private static class {ConverterCacheName}<TConverter> where TConverter : class, new()");
             sb.AppendLine("        {");
@@ -359,16 +407,26 @@ internal static class MapperCodeEmitter
         {
             // Out of line (NoInlining) and with the message as a constant: the mapping that calls it stays small, and
             // the check costs one comparison when the value is there.
-            if (!options.UseThrowIfNull || usesConverterCache) sb.AppendLine();
+            if (!options.UseThrowIfNull || usesConverterCache)
+            {
+                sb.AppendLine();
+            }
+
             sb.AppendLine("        /// <summary>Throws for a nested object that is null although the destination property is not nullable.</summary>");
             if (options.HasDoesNotReturn)
+            {
                 sb.AppendLine("        [global::System.Diagnostics.CodeAnalysis.DoesNotReturn]");
+            }
+
             sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
             sb.AppendLine($"        private static T {NestedObjectIsNullName}<T>(string message)");
             sb.AppendLine("            => throw new global::System.InvalidOperationException(message);");
         }
         if (usesList || usesArray)
+        {
             EmitElementLoops(sb, usesList, usesArray, needsSeparator: !options.UseThrowIfNull || usesConverterCache || usesNestedObjectCheck);
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
@@ -391,7 +449,11 @@ internal static class MapperCodeEmitter
         const string list = "global::System.Collections.Generic.List<TDest>";
         const string constraint = "            where TMapper : struct, " + ElementMapperInterface + "<TSource, TDest>";
 
-        if (needsSeparator) sb.AppendLine();
+        if (needsSeparator)
+        {
+            sb.AppendLine();
+        }
+
         sb.AppendLine("        /// <summary>Maps one element; implemented by a private struct of each mapping that has MapToXList or MapToXArray.</summary>");
         sb.AppendLine($"        private interface {ElementMapperInterface}<TSource, TDest>");
         sb.AppendLine("        {");
@@ -513,9 +575,9 @@ internal static class MapperCodeEmitter
         foreach (var registration in registrations)
         {
             // A turned-off overload: in-place through the private method, List/Array as null (the registry loops itself).
-            var method = registration.MethodName;
+            string method = registration.MethodName;
             var methods = registration.Methods;
-            var mapInto = methods.InPlace ? method : PrivateInPlaceName(registration.HelperScope);
+            string mapInto = methods.InPlace ? method : PrivateInPlaceName(registration.HelperScope);
             sb.AppendLine($"            {registry}.Register<{registration.SourceFullName}, {registration.DestFullName}>(");
             sb.AppendLine($"                source => {method}(source),");
             sb.AppendLine($"                (source, destination) => {mapInto}(source, destination),");
@@ -580,29 +642,41 @@ internal static class MapperCodeEmitter
     {
         string raw;
         if (prop.LambdaBody is not null)
+        {
             raw = prop.LambdaBody;
+        }
         else if (prop.ConverterType is not null)
+        {
             raw = $"{ConverterInstance(prop.ConverterType, prop.ConverterIsCached)}.Convert(source.{prop.SourcePropertyName})";
+        }
         else if (prop.CollectionElementMapMethod is not null)
+        {
             raw = $"{CollectionHelperName(prop, scope)}(source.{prop.SourcePropertyName})";
+        }
         else if (prop.NestedMapMethod is not null)
+        {
             // The mapped value, not the source value: a transformer of the source type does not apply to it.
             return MapNestedObject(descriptor, prop, plan);
+        }
         else
+        {
             raw = $"source.{prop.SourcePropertyName}";
+        }
 
         // Apply transformer if type matches.
         // - Name-matched properties:      LambdaBody is null,  SourcePropertyTypeFqn is set.
         // - IncludeMembers properties:    LambdaBody is set,   IncludedMemberTypeFqn is set.
         // - ForMember lambda properties:  LambdaBody is set,   both Fqn fields are null → no transform.
-        var fqnToMatch = prop.IncludedMemberTypeFqn
+        string? fqnToMatch = prop.IncludedMemberTypeFqn
             ?? (prop.LambdaBody is null ? prop.SourcePropertyTypeFqn : null);
         if (fqnToMatch is not null)
         {
             foreach (var t in transformers)
             {
                 if (t.FullyQualifiedTypeName == fqnToMatch)
+                {
                     return $"{t.MethodName}({raw})";
+                }
             }
         }
 
@@ -632,8 +706,8 @@ internal static class MapperCodeEmitter
         var assembly = typeof(MapperCodeEmitter).Assembly;
         var informational = (System.Reflection.AssemblyInformationalVersionAttribute?)System.Attribute.GetCustomAttribute(
             assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
-        var version = informational?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "0.0.0";
-        var plus = version.IndexOf('+');
+        string version = informational?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "0.0.0";
+        int plus = version.IndexOf('+');
         return plus < 0 ? version : version.Substring(0, plus);
     }
 
@@ -673,14 +747,14 @@ internal static class MapperCodeEmitter
     /// </summary>
     private static string MapNestedObject(MappingDescriptor descriptor, PropertyMappingDescriptor prop, MappingPlan plan)
     {
-        var value = $"source.{prop.SourcePropertyName}";
+        string value = $"source.{prop.SourcePropertyName}";
         var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
         switch (prop.NullHandling)
         {
             case Analysis.NullHandling.Check:
                 return $"{value} is null ? null : {MapNested(prop, entry, value)}";
             case Analysis.NullHandling.Throw:
-                var checkedValue = $"{value} ?? {NestedObjectIsNull(descriptor, prop)}";
+                string checkedValue = $"{value} ?? {NestedObjectIsNull(descriptor, prop)}";
                 return MapNested(prop, entry, entry is null ? $"({checkedValue})" : checkedValue);
             default:
                 return MapNested(prop, entry, value);
@@ -697,7 +771,7 @@ internal static class MapperCodeEmitter
     /// </summary>
     private static string NestedObjectIsNull(MappingDescriptor descriptor, PropertyMappingDescriptor prop)
     {
-        var message = $"{descriptor.SourceTypeName}.{prop.SourcePropertyName} is null, but {descriptor.DestTypeName}.{prop.DestPropertyName} "
+        string message = $"{descriptor.SourceTypeName}.{prop.SourcePropertyName} is null, but {descriptor.DestTypeName}.{prop.DestPropertyName} "
                       + "is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property "
                       + "nullable (null is then mapped to null) or configure the property explicitly.";
         // Type and property names: no quote or backslash to escape.
@@ -718,13 +792,20 @@ internal static class MapperCodeEmitter
     private static bool EmitNestedUpdate(StringBuilder sb, MappingDescriptor descriptor, PropertyMappingDescriptor prop,
         MappingPlan plan)
     {
-        if (!IsMappedNestedObject(prop) || !prop.NestedUpdatesInPlace) return false;
-        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
-        if (entry is { CanUpdateInPlace: false }) return false;
+        if (!IsMappedNestedObject(prop) || !prop.NestedUpdatesInPlace)
+        {
+            return false;
+        }
 
-        var value = $"source.{prop.SourcePropertyName}";
-        var target = $"destination.{prop.DestPropertyName}";
-        var otherwise = string.Empty;
+        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
+        if (entry is { CanUpdateInPlace: false })
+        {
+            return false;
+        }
+
+        string value = $"source.{prop.SourcePropertyName}";
+        string target = $"destination.{prop.DestPropertyName}";
+        string otherwise = string.Empty;
         if (prop.NullHandling == Analysis.NullHandling.Check)
         {
             sb.AppendLine($"            if ({value} is null) {target} = null;");
@@ -760,17 +841,17 @@ internal static class MapperCodeEmitter
     private static void EmitCollectionHelper(StringBuilder sb, PropertyMappingDescriptor prop, string scope, MappingPlan plan)
     {
         // The element mapping may have a qualified name (IM0013); mappings not in this compilation keep MapTo{Name}.
-        var element = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
+        string element = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
                       ?? prop.CollectionElementMapMethod!;
-        var name = CollectionHelperName(prop, scope);
-        var sourceType = prop.CollectionSourceTypeFqn;
-        var destElement = prop.CollectionDestElementFqn!;
-        var list = $"global::System.Collections.Generic.List<{destElement}>";
-        var kind = prop.CollectionSourceKind;
+        string name = CollectionHelperName(prop, scope);
+        string? sourceType = prop.CollectionSourceTypeFqn;
+        string destElement = prop.CollectionDestElementFqn!;
+        string list = $"global::System.Collections.Generic.List<{destElement}>";
+        string? kind = prop.CollectionSourceKind;
 
         if (prop.CollectionOutputType == "Enumerable")
         {
-            var sequence = $"global::System.Collections.Generic.IEnumerable<{destElement}>";
+            string sequence = $"global::System.Collections.Generic.IEnumerable<{destElement}>";
             sb.AppendLine($"        private static {sequence} {name}({sourceType}? source)");
             sb.AppendLine($"            => source is null ? null! : Enumerate{name}(source);");
             sb.AppendLine();
@@ -781,15 +862,15 @@ internal static class MapperCodeEmitter
             return;
         }
 
-        var toArray = prop.CollectionOutputType == "Array";
-        var returnType = toArray ? $"{destElement}[]" : list;
+        bool toArray = prop.CollectionOutputType == "Array";
+        string returnType = toArray ? $"{destElement}[]" : list;
         sb.AppendLine($"        private static {returnType} {name}({sourceType}? source)");
         sb.AppendLine("        {");
         sb.AppendLine("            if (source is null) return null!;");
 
         if (kind is "Array" or "List" or "IndexedList")
         {
-            var length = kind == "Array" ? "source.Length" : "source.Count";
+            string length = kind == "Array" ? "source.Length" : "source.Count";
             sb.AppendLine(toArray
                 ? $"            var result = new {ArrayOf(destElement, length)};"
                 : $"            var result = new {list}({length});");
@@ -830,14 +911,22 @@ internal static class MapperCodeEmitter
     /// </summary>
     private static string ArrayOf(string elementType, string length)
     {
-        var depth = 0;
-        for (var i = 0; i < elementType.Length; i++)
+        int depth = 0;
+        for (int i = 0; i < elementType.Length; i++)
         {
-            var c = elementType[i];
-            if (c == '<') depth++;
-            else if (c == '>') depth--;
+            char c = elementType[i];
+            if (c == '<')
+            {
+                depth++;
+            }
+            else if (c == '>')
+            {
+                depth--;
+            }
             else if (c == '[' && depth == 0)
+            {
                 return $"{elementType.Substring(0, i)}[{length}]{elementType.Substring(i)}";
+            }
         }
 
         return $"{elementType}[{length}]";
@@ -850,11 +939,18 @@ internal static class MapperCodeEmitter
     private static ImmutableArray<ValueTransformerDescriptor> ScopeTransformers(
         ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
     {
-        if (transformers.IsEmpty) return transformers;
+        if (transformers.IsEmpty)
+        {
+            return transformers;
+        }
+
         var builder = ImmutableArray.CreateBuilder<ValueTransformerDescriptor>(transformers.Length);
         foreach (var t in transformers)
+        {
             builder.Add(new ValueTransformerDescriptor(
                 t.FullyQualifiedTypeName, t.FriendlyTypeName, t.LambdaBody, t.MethodName + scope));
+        }
+
         return builder.ToImmutable();
     }
 

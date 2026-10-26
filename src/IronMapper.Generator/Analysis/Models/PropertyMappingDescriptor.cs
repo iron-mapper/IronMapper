@@ -184,8 +184,16 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <inheritdoc/>
     public bool Equals(PropertyMappingDescriptor? other)
     {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
+        if (other is null)
+        {
+            return false;
+        }
+
+        if (ReferenceEquals(this, other))
+        {
+            return true;
+        }
+
         return SourcePropertyName == other.SourcePropertyName
             && DestPropertyName == other.DestPropertyName
             && IsIgnored == other.IsIgnored
@@ -215,7 +223,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = 17;
+        int hash = 17;
         hash = hash * 31 + SourcePropertyName.GetHashCode();
         hash = hash * 31 + DestPropertyName.GetHashCode();
         hash = hash * 31 + IsIgnored.GetHashCode();

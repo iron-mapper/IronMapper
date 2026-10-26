@@ -27,11 +27,16 @@ internal static class GeneratedClassName
     /// </summary>
     public static string For(string? assemblyName)
     {
-        if (string.IsNullOrEmpty(assemblyName)) return Prefix;
+        if (string.IsNullOrEmpty(assemblyName))
+        {
+            return Prefix;
+        }
 
         var part = new StringBuilder(assemblyName!.Length);
-        foreach (var c in assemblyName)
+        foreach (char c in assemblyName)
+        {
             part.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+        }
 
         if (part.Length > MaxAssemblyPartLength)
         {
@@ -45,8 +50,8 @@ internal static class GeneratedClassName
     // Stable across processes and runtimes (string.GetHashCode is randomized), so the name does not change between builds.
     private static uint Fnv1a(string value)
     {
-        var hash = 2166136261;
-        foreach (var c in value)
+        uint hash = 2166136261;
+        foreach (char c in value)
         {
             hash = (hash ^ c) * 16777619;
         }

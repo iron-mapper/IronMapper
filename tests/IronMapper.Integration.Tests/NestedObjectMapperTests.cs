@@ -49,7 +49,7 @@ namespace IronMapper.Integration.Tests
         public void Map_NewObjectInPlaceRuntimeTypeAndCollection()
         {
             var mapper = CreateMapper();
-            Warehouse Create(string city) => new() { Code = "w", Location = new Location { City = city } };
+            static Warehouse Create(string city) => new() { Code = "w", Location = new Location { City = city } };
 
             var target = new WarehouseDto();
             var location = target.Location;

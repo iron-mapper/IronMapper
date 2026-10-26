@@ -45,12 +45,18 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     public override async Task RegisterCodeFixesAsync(CodeFixContext context)
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-        if (root is null) return;
+        if (root is null)
+        {
+            return;
+        }
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            var name = GetPropertyName(diagnostic);
-            if (name is null) continue;
+            string? name = GetPropertyName(diagnostic);
+            if (name is null)
+            {
+                continue;
+            }
 
             switch (FindTarget(root, diagnostic))
             {
@@ -79,15 +85,21 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     private static async Task<Document> FixAsync(Document document, ImmutableArray<Diagnostic> diagnostics, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-        if (root is null) return document;
+        if (root is null)
+        {
+            return document;
+        }
 
         // Destination properties to mark, and profile mappings with the properties to ignore in them.
         var ignored = new HashSet<SyntaxNode>();
         var forMembers = new Dictionary<ExpressionSyntax, List<string>>();
         foreach (var diagnostic in diagnostics)
         {
-            var name = GetPropertyName(diagnostic);
-            if (name is null) continue;
+            string? name = GetPropertyName(diagnostic);
+            if (name is null)
+            {
+                continue;
+            }
 
             switch (FindTarget(root, diagnostic))
             {
@@ -99,13 +111,24 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
                     break;
                 case InvocationExpressionSyntax createMap:
                     var anchor = LastForMember(createMap);
-                    if (!forMembers.TryGetValue(anchor, out var names)) forMembers[anchor] = names = new List<string>();
-                    if (!names.Contains(name)) names.Add(name);
+                    if (!forMembers.TryGetValue(anchor, out var names))
+                    {
+                        forMembers[anchor] = names = new List<string>();
+                    }
+
+                    if (!names.Contains(name))
+                    {
+                        names.Add(name);
+                    }
+
                     break;
             }
         }
 
-        if (ignored.Count == 0 && forMembers.Count == 0) return document;
+        if (ignored.Count == 0 && forMembers.Count == 0)
+        {
+            return document;
+        }
 
         var newRoot = root.ReplaceNodes(ignored.Concat(forMembers.Keys), (original, _) => original switch
         {
@@ -131,7 +154,10 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
         var list = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
             SyntaxFactory.Attribute(SyntaxFactory.IdentifierName("Ignore"))));
         if (propertyTarget)
+        {
             list = list.WithTarget(SyntaxFactory.AttributeTargetSpecifier(SyntaxFactory.Token(SyntaxKind.PropertyKeyword)));
+        }
+
         return list.WithAdditionalAnnotations(Formatter.Annotation);
     }
 
@@ -146,7 +172,10 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
         while (anchor.Parent is MemberAccessExpressionSyntax { Name.Identifier.Text: "ForMember" } access
                && access.Expression == anchor
                && access.Parent is InvocationExpressionSyntax forMember)
+        {
             anchor = forMember;
+        }
+
         return anchor;
     }
 
@@ -154,7 +183,7 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     private static ExpressionSyntax AddForMemberIgnore(ExpressionSyntax anchor, List<string> names)
     {
         ExpressionSyntax result = anchor.WithoutTrailingTrivia();
-        foreach (var name in names)
+        foreach (string name in names)
         {
             result = SyntaxFactory.ParseExpression(
                 $"{result}.ForMember(dest => dest.{name}, opt => opt.Ignore())");
@@ -167,9 +196,12 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     private static async Task<bool> IgnoreAttributeIsInScopeAsync(Document document, SyntaxNode root, SyntaxNode node, CancellationToken ct)
     {
         var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        if (model is null) return true;
+        if (model is null)
+        {
+            return true;
+        }
 
-        var position = root.FindNode(node.Span).SpanStart;
+        int position = root.FindNode(node.Span).SpanStart;
         var type = model.GetSpeculativeTypeInfo(position, SyntaxFactory.ParseTypeName("IgnoreAttribute"),
             SpeculativeBindingOption.BindAsTypeOrNamespace).Type;
         return type?.ToDisplayString() == AttributesNamespace + ".IgnoreAttribute";
@@ -182,7 +214,10 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     /// </summary>
     private static SyntaxNode? FindTarget(SyntaxNode root, Diagnostic diagnostic)
     {
-        if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree) return null;
+        if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree != root.SyntaxTree)
+        {
+            return null;
+        }
 
         var node = root.FindNode(diagnostic.Location.SourceSpan, getInnermostNodeForTie: true);
         return node.AncestorsAndSelf().FirstOrDefault(n => n is PropertyDeclarationSyntax or ParameterSyntax
@@ -202,5 +237,5 @@ public sealed class IM0001CodeFixProvider : CodeFixProvider
     };
 
     private static string? GetPropertyName(Diagnostic diagnostic)
-        => diagnostic.Properties.TryGetValue(PropertyNameKey, out var name) && !string.IsNullOrEmpty(name) ? name : null;
+        => diagnostic.Properties.TryGetValue(PropertyNameKey, out string? name) && !string.IsNullOrEmpty(name) ? name : null;
 }

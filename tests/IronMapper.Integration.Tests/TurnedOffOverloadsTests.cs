@@ -132,7 +132,7 @@ namespace IronMapper.Integration.Tests
             Assert.Contains("MapToFullDtoList/1", methods);
             Assert.Contains("MapToFullDtoArray/1", methods);
 
-            foreach (var name in new[] { "BareDto", "LeanDto" })
+            foreach (string? name in new[] { "BareDto", "LeanDto" })
             {
                 Assert.Contains($"MapTo{name}/1", methods);
                 Assert.DoesNotContain($"MapTo{name}/2", methods);
@@ -149,7 +149,7 @@ namespace IronMapper.Integration.Tests
         public void IMapper_SingleObject_SameResult()
         {
             var mapper = CreateMapper();
-            var expected = FullSources.Select(s => Describe(mapper.Map<Full, FullDto>(s))).ToArray();
+            string[] expected = FullSources.Select(s => Describe(mapper.Map<Full, FullDto>(s))).ToArray();
 
             Assert.Equal(expected, BareSources.Select(s => Describe(mapper.Map<Bare, BareDto>(s))));
             Assert.Equal(expected, LeanSources.Select(s => Describe(mapper.Map<Lean, LeanDto>(s))));
@@ -163,7 +163,7 @@ namespace IronMapper.Integration.Tests
         public void IMapper_List_SameResult()
         {
             var mapper = CreateMapper();
-            var expected = mapper.Map<List<FullDto>>(FullSources).Select(Describe).ToArray();
+            string[] expected = mapper.Map<List<FullDto>>(FullSources).Select(Describe).ToArray();
 
             // Array, List and a lazy sequence as the source.
             Assert.Equal(expected, mapper.Map<List<BareDto>>(BareSources).Select(Describe));
@@ -177,7 +177,7 @@ namespace IronMapper.Integration.Tests
         public void IMapper_Array_SameResult()
         {
             var mapper = CreateMapper();
-            var expected = mapper.Map<FullDto[]>(FullSources).Select(Describe).ToArray();
+            string[] expected = mapper.Map<FullDto[]>(FullSources).Select(Describe).ToArray();
 
             Assert.Equal(expected, mapper.Map<BareDto[]>(BareSources).Select(Describe));
             Assert.Equal(expected, mapper.Map<BareDto[]>(new HashSet<Bare>(BareSources)).Select(Describe).OrderBy(s => s));
@@ -189,7 +189,7 @@ namespace IronMapper.Integration.Tests
         public void IMapper_MapCollection_SameResult()
         {
             var mapper = CreateMapper();
-            var expected = mapper.MapCollection<Full, FullDto>(FullSources).Select(Describe).ToArray();
+            string[] expected = mapper.MapCollection<Full, FullDto>(FullSources).Select(Describe).ToArray();
 
             Assert.Equal(expected, mapper.MapCollection<Bare, BareDto>(BareSources).Select(Describe));
             Assert.Equal(expected, mapper.MapCollection<Lean, LeanDto>(LeanSources).Select(Describe));
@@ -199,7 +199,7 @@ namespace IronMapper.Integration.Tests
         public void IMapper_InPlace_SameResult()
         {
             var mapper = CreateMapper();
-            var expected = FullSources.Select(s =>
+            string[] expected = FullSources.Select(s =>
             {
                 var d = new FullDto { Untouched = "existing" };
                 mapper.Map(s, d);

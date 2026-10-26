@@ -41,7 +41,11 @@ public sealed class IronMapperOptions
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
     public IronMapperOptions AddProfilesFromAssembly(Assembly assembly)
     {
-        if (assembly is null) throw new ArgumentNullException(nameof(assembly));
+        if (assembly is null)
+        {
+            throw new ArgumentNullException(nameof(assembly));
+        }
+
         MappingAssemblies.Add(assembly);
         return this;
     }

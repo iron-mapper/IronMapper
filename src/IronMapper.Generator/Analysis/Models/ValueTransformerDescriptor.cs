@@ -44,7 +44,7 @@ internal sealed class ValueTransformerDescriptor : IEquatable<ValueTransformerDe
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var h = 17;
+        int h = 17;
         h = h * 31 + FullyQualifiedTypeName.GetHashCode();
         h = h * 31 + FriendlyTypeName.GetHashCode();
         h = h * 31 + LambdaBody.GetHashCode();

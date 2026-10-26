@@ -31,8 +31,8 @@ public class DiagnosticLocationTests
     /// <summary>Asserts that <paramref name="diagnostic"/> covers exactly <paramref name="snippet"/> in the file.</summary>
     internal static void AssertAt(Diagnostic diagnostic, string path, string source, string snippet, int occurrence = 0)
     {
-        var start = -1;
-        for (var i = 0; i <= occurrence; i++)
+        int start = -1;
+        for (int i = 0; i <= occurrence; i++)
         {
             start = source.IndexOf(snippet, start + 1, StringComparison.Ordinal);
             Assert.True(start >= 0, $"Snippet not found: {snippet}");
@@ -50,7 +50,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0001_Attribute_PointsToDestinationPropertyName()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(Dest))]
@@ -68,13 +68,13 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0001_DestinationInAnotherFile_PointsToPropertyThere()
     {
-        var mapping = """
+        string mapping = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(Dest))]
             public class Source { public int Id { get; set; } }
             """;
-        var dest = """
+        string dest = """
             namespace App;
             public class Dest
             {
@@ -90,7 +90,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0001_DestinationFromMetadata_PointsToAttribute()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(System.Version))]
@@ -98,7 +98,7 @@ public class DiagnosticLocationTests
             """;
 
         // System.Version has get-only properties: nothing settable, nothing unmapped. Use a settable BCL type instead.
-        var settable = """
+        string settable = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(System.UriBuilder))]
@@ -118,7 +118,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0003_PointsToAttribute()
     {
-        var source = """
+        string source = """
             namespace App;
             public class Box<T> { }
             [IronMapper.Attributes.MapTo(typeof(Box<>))]
@@ -131,7 +131,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0005_PointsToProfileName()
     {
-        var source = """
+        string source = """
             namespace App;
             public class EmptyProfile : IronMapper.Configuration.MappingProfile
             {
@@ -145,7 +145,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0006_PointsToMapPropertyAttribute_WithDestinationPropertiesForTheCodeFix()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(Dest))]
@@ -161,7 +161,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0007_PointsToTheDefinitionNotGenerated_WithTheOthersAsAdditionalLocations()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(Dest))]
@@ -180,7 +180,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0008_IM0010_PointToCreateMap()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             namespace App;
             public class Source { public int Id { get; set; } }
@@ -200,7 +200,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0009_PointsToRecordParameterName()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App;
             [MapTo(typeof(Dest))]
@@ -214,7 +214,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0011_IM0012_PointToTheMemberInTheLambda()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             namespace App;
             public class Source { public int Id { get; set; } }
@@ -240,7 +240,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0013_PointsToTheMappingDefinition()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             namespace App
             {
@@ -261,7 +261,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0015_PointsToConverterType()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Interfaces;
@@ -286,7 +286,7 @@ public class DiagnosticLocationTests
     [Fact]
     public void IM0007_ReverseMap_PointsToReverseMapCall()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             namespace App;
             public class Source { public int Id { get; set; } }

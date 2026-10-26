@@ -17,7 +17,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0001_UnmappedDestinationProperty_EmitsWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(Dest))]
@@ -41,7 +41,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0001_WhenDestPropertyHasIgnoreAttribute_NoWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(Dest))]
@@ -67,7 +67,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0005_EmptyMappingProfile_EmitsWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class MyEmptyProfile : MappingProfile
@@ -87,7 +87,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0005_ProfileWithMappings_NoWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class Src { public int Id { get; set; } }
@@ -114,7 +114,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0006_MapPropertyDestNotFound_EmitsError()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(Dest))]
@@ -141,7 +141,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0006_MapPropertyDestExists_NoError()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(Dest))]
@@ -169,7 +169,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0008_AbstractDestinationType_EmitsError()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(AbstractDest))]
@@ -189,7 +189,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0008_InterfaceDestinationType_EmitsError()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(IDest))]
@@ -208,7 +208,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0008_ProfileWithAbstractDest_EmitsError()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class Src { public int Id { get; set; } }
@@ -237,7 +237,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0009_RecordDestWithUnmappedParameter_EmitsWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(DestRecord))]
@@ -260,7 +260,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0009_RecordDestAllParametersMapped_NoWarning()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(DestRecord))]
@@ -285,7 +285,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0001_WhenSourcePropertyIsIgnored_DiagnosticNotEmitted()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             [MapTo(typeof(OrderDto))]
@@ -315,7 +315,7 @@ public class DiagnosticsTests
     [Fact]
     public void IM0005_EmptyProfile_ProducesNoGeneratedSource()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public class EmptyProfile : MappingProfile

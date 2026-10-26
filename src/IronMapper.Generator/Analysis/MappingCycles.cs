@@ -27,13 +27,24 @@ internal sealed class MappingCycles
             _byPair[descriptor.PairKey] = descriptor;
             var edges = new List<Edge>();
             _edges[descriptor.PairKey] = edges;
-            if (descriptor.WholeObjectConverterType is not null || descriptor.WholeObjectLambdaBody is not null) continue;
+            if (descriptor.WholeObjectConverterType is not null || descriptor.WholeObjectLambdaBody is not null)
+            {
+                continue;
+            }
 
             foreach (var prop in descriptor.PropertyMappings)
             {
-                var nested = MapperCodeEmitter.IsMappedNestedObject(prop);
-                if (!nested && !MapperCodeEmitter.UsesCollectionHelper(prop)) continue;
-                if (prop.MappingPairs.Length == 0 || plan.FindFirstGenerated(prop.MappingPairs) is not { } target) continue;
+                bool nested = MapperCodeEmitter.IsMappedNestedObject(prop);
+                if (!nested && !MapperCodeEmitter.UsesCollectionHelper(prop))
+                {
+                    continue;
+                }
+
+                if (prop.MappingPairs.Length == 0 || plan.FindFirstGenerated(prop.MappingPairs) is not { } target)
+                {
+                    continue;
+                }
+
                 edges.Add(new Edge(prop.DestPropertyName, !nested, target.PairKey));
             }
         }
@@ -46,15 +57,22 @@ internal sealed class MappingCycles
     /// </summary>
     public string? FindCycle(MappingDescriptor descriptor, string property)
     {
-        var start = descriptor.PairKey;
-        if (!_edges.TryGetValue(start, out var edges)) return null;
+        string start = descriptor.PairKey;
+        if (!_edges.TryGetValue(start, out var edges))
+        {
+            return null;
+        }
+
         var first = edges.FirstOrDefault(e => e.Property == property);
-        if (first is null) return null;
+        if (first is null)
+        {
+            return null;
+        }
 
         // Breadth first from the target back to the start: the shortest chain, deterministic (properties in order).
         var previous = new Dictionary<string, (string from, Edge edge)>(StringComparer.Ordinal);
         var queue = new Queue<string>();
-        var found = first.Target == start;
+        bool found = first.Target == start;
         if (!found)
         {
             previous[first.Target] = (start, first);
@@ -63,8 +81,12 @@ internal sealed class MappingCycles
 
         while (!found && queue.Count > 0)
         {
-            var node = queue.Dequeue();
-            if (!_edges.TryGetValue(node, out var next)) continue;
+            string node = queue.Dequeue();
+            if (!_edges.TryGetValue(node, out var next))
+            {
+                continue;
+            }
+
             foreach (var edge in next)
             {
                 if (edge.Target == start)
@@ -73,13 +95,20 @@ internal sealed class MappingCycles
                     found = true;
                     break;
                 }
-                if (previous.ContainsKey(edge.Target)) continue;
+                if (previous.ContainsKey(edge.Target))
+                {
+                    continue;
+                }
+
                 previous[edge.Target] = (node, edge);
                 queue.Enqueue(edge.Target);
             }
         }
 
-        if (!found) return null;
+        if (!found)
+        {
+            return null;
+        }
 
         var chain = new List<Edge>();
         if (first.Target == start)
@@ -88,11 +117,15 @@ internal sealed class MappingCycles
         }
         else
         {
-            for (var node = start; ; )
+            for (string node = start; ; )
             {
                 var (from, edge) = previous[node];
                 chain.Add(edge);
-                if (from == start && edge == first) break;
+                if (from == start && edge == first)
+                {
+                    break;
+                }
+
                 node = from;
             }
             chain.Reverse();
@@ -100,7 +133,10 @@ internal sealed class MappingCycles
 
         var parts = new List<string> { Display(start) };
         foreach (var edge in chain)
+        {
             parts.Add($"{edge.Property}{(edge.IsCollection ? " (elements)" : string.Empty)}: {Display(edge.Target)}");
+        }
+
         return string.Join(", ", parts);
     }
 

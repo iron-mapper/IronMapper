@@ -157,13 +157,13 @@ public class CollectionShapeTests
         Row("ListToReadOnlyCollection", (s, items) => s.ListToReadOnlyCollection = items is null ? null : items, d => d.ListToReadOnlyCollection, "ReadOnlyCollection"),
         Row("ListToReadOnlyList", (s, items) => s.ListToReadOnlyList = items is null ? null : items, d => d.ListToReadOnlyList, "ReadOnlyList"),
         Row("ListToIList", (s, items) => s.ListToIList = items is null ? null : items, d => d.ListToIList, "IList"),
-        Row("ArrayToList", (s, items) => s.ArrayToList = items is null ? null : items.ToArray(), d => d.ArrayToList, "List"),
-        Row("ArrayToArray", (s, items) => s.ArrayToArray = items is null ? null : items.ToArray(), d => d.ArrayToArray, "Array"),
-        Row("ArrayToEnumerable", (s, items) => s.ArrayToEnumerable = items is null ? null : items.ToArray(), d => d.ArrayToEnumerable, "Enumerable"),
-        Row("ArrayToCollection", (s, items) => s.ArrayToCollection = items is null ? null : items.ToArray(), d => d.ArrayToCollection, "Collection"),
-        Row("ArrayToReadOnlyCollection", (s, items) => s.ArrayToReadOnlyCollection = items is null ? null : items.ToArray(), d => d.ArrayToReadOnlyCollection, "ReadOnlyCollection"),
-        Row("ArrayToReadOnlyList", (s, items) => s.ArrayToReadOnlyList = items is null ? null : items.ToArray(), d => d.ArrayToReadOnlyList, "ReadOnlyList"),
-        Row("ArrayToIList", (s, items) => s.ArrayToIList = items is null ? null : items.ToArray(), d => d.ArrayToIList, "IList"),
+        Row("ArrayToList", (s, items) => s.ArrayToList = items?.ToArray(), d => d.ArrayToList, "List"),
+        Row("ArrayToArray", (s, items) => s.ArrayToArray = items?.ToArray(), d => d.ArrayToArray, "Array"),
+        Row("ArrayToEnumerable", (s, items) => s.ArrayToEnumerable = items?.ToArray(), d => d.ArrayToEnumerable, "Enumerable"),
+        Row("ArrayToCollection", (s, items) => s.ArrayToCollection = items?.ToArray(), d => d.ArrayToCollection, "Collection"),
+        Row("ArrayToReadOnlyCollection", (s, items) => s.ArrayToReadOnlyCollection = items?.ToArray(), d => d.ArrayToReadOnlyCollection, "ReadOnlyCollection"),
+        Row("ArrayToReadOnlyList", (s, items) => s.ArrayToReadOnlyList = items?.ToArray(), d => d.ArrayToReadOnlyList, "ReadOnlyList"),
+        Row("ArrayToIList", (s, items) => s.ArrayToIList = items?.ToArray(), d => d.ArrayToIList, "IList"),
         Row("EnumerableToList", (s, items) => s.EnumerableToList = items is null ? null : Yield(items), d => d.EnumerableToList, "List"),
         Row("EnumerableToArray", (s, items) => s.EnumerableToArray = items is null ? null : Yield(items), d => d.EnumerableToArray, "Array"),
         Row("EnumerableToEnumerable", (s, items) => s.EnumerableToEnumerable = items is null ? null : Yield(items), d => d.EnumerableToEnumerable, "Enumerable"),
@@ -185,13 +185,13 @@ public class CollectionShapeTests
         Row("ReadOnlyCollectionToReadOnlyCollection", (s, items) => s.ReadOnlyCollectionToReadOnlyCollection = items is null ? null : new Queue<ShapeItem>(items), d => d.ReadOnlyCollectionToReadOnlyCollection, "ReadOnlyCollection"),
         Row("ReadOnlyCollectionToReadOnlyList", (s, items) => s.ReadOnlyCollectionToReadOnlyList = items is null ? null : new Queue<ShapeItem>(items), d => d.ReadOnlyCollectionToReadOnlyList, "ReadOnlyList"),
         Row("ReadOnlyCollectionToIList", (s, items) => s.ReadOnlyCollectionToIList = items is null ? null : new Queue<ShapeItem>(items), d => d.ReadOnlyCollectionToIList, "IList"),
-        Row("ReadOnlyListToList", (s, items) => s.ReadOnlyListToList = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToList, "List"),
-        Row("ReadOnlyListToArray", (s, items) => s.ReadOnlyListToArray = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToArray, "Array"),
-        Row("ReadOnlyListToEnumerable", (s, items) => s.ReadOnlyListToEnumerable = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToEnumerable, "Enumerable"),
-        Row("ReadOnlyListToCollection", (s, items) => s.ReadOnlyListToCollection = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToCollection, "Collection"),
-        Row("ReadOnlyListToReadOnlyCollection", (s, items) => s.ReadOnlyListToReadOnlyCollection = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToReadOnlyCollection, "ReadOnlyCollection"),
-        Row("ReadOnlyListToReadOnlyList", (s, items) => s.ReadOnlyListToReadOnlyList = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToReadOnlyList, "ReadOnlyList"),
-        Row("ReadOnlyListToIList", (s, items) => s.ReadOnlyListToIList = items is null ? null : items.AsReadOnly(), d => d.ReadOnlyListToIList, "IList"),
+        Row("ReadOnlyListToList", (s, items) => s.ReadOnlyListToList = items?.AsReadOnly(), d => d.ReadOnlyListToList, "List"),
+        Row("ReadOnlyListToArray", (s, items) => s.ReadOnlyListToArray = items?.AsReadOnly(), d => d.ReadOnlyListToArray, "Array"),
+        Row("ReadOnlyListToEnumerable", (s, items) => s.ReadOnlyListToEnumerable = items?.AsReadOnly(), d => d.ReadOnlyListToEnumerable, "Enumerable"),
+        Row("ReadOnlyListToCollection", (s, items) => s.ReadOnlyListToCollection = items?.AsReadOnly(), d => d.ReadOnlyListToCollection, "Collection"),
+        Row("ReadOnlyListToReadOnlyCollection", (s, items) => s.ReadOnlyListToReadOnlyCollection = items?.AsReadOnly(), d => d.ReadOnlyListToReadOnlyCollection, "ReadOnlyCollection"),
+        Row("ReadOnlyListToReadOnlyList", (s, items) => s.ReadOnlyListToReadOnlyList = items?.AsReadOnly(), d => d.ReadOnlyListToReadOnlyList, "ReadOnlyList"),
+        Row("ReadOnlyListToIList", (s, items) => s.ReadOnlyListToIList = items?.AsReadOnly(), d => d.ReadOnlyListToIList, "IList"),
         Row("IListToList", (s, items) => s.IListToList = items is null ? null : new System.Collections.ObjectModel.Collection<ShapeItem>(items), d => d.IListToList, "List"),
         Row("IListToArray", (s, items) => s.IListToArray = items is null ? null : new System.Collections.ObjectModel.Collection<ShapeItem>(items), d => d.IListToArray, "Array"),
         Row("IListToEnumerable", (s, items) => s.IListToEnumerable = items is null ? null : new System.Collections.ObjectModel.Collection<ShapeItem>(items), d => d.IListToEnumerable, "Enumerable"),
@@ -207,7 +207,10 @@ public class CollectionShapeTests
 
     private static IEnumerable<ShapeItem> Yield(IEnumerable<ShapeItem> items)
     {
-        foreach (var item in items) yield return item;
+        foreach (var item in items)
+        {
+            yield return item;
+        }
     }
 
     private static List<ShapeItem> Items(int count)
@@ -217,7 +220,11 @@ public class CollectionShapeTests
     {
         var source = new ShapeSource();
         row.Fill(source, items);
-        if (!inPlace) return source.MapToShapeDest();
+        if (!inPlace)
+        {
+            return source.MapToShapeDest();
+        }
+
         var destination = new ShapeDest();
         source.MapToShapeDest(destination);
         return destination;
@@ -227,7 +234,7 @@ public class CollectionShapeTests
     [MemberData(nameof(AllRows))]
     public void NestedProperty_MapsValuesInOrder(string name)
     {
-        foreach (var inPlace in new[] { false, true })
+        foreach (bool inPlace in new[] { false, true })
         {
             var row = Get(name);
             var result = row.Read(MapWith(row, Items(5), inPlace));
@@ -242,7 +249,7 @@ public class CollectionShapeTests
     [MemberData(nameof(AllRows))]
     public void NestedProperty_NullStaysNull(string name)
     {
-        foreach (var inPlace in new[] { false, true })
+        foreach (bool inPlace in new[] { false, true })
         {
             var row = Get(name);
             Assert.Null(row.Read(MapWith(row, null, inPlace)));
@@ -253,7 +260,7 @@ public class CollectionShapeTests
     [MemberData(nameof(AllRows))]
     public void NestedProperty_EmptyStaysEmpty(string name)
     {
-        foreach (var inPlace in new[] { false, true })
+        foreach (bool inPlace in new[] { false, true })
         {
             var row = Get(name);
             var result = row.Read(MapWith(row, Items(0), inPlace));
@@ -261,7 +268,10 @@ public class CollectionShapeTests
             Assert.NotNull(result);
             Assert.Empty(result!);
             // LINQ returned Array.Empty for an empty array source; the type of an empty lazy sequence is not pinned.
-            if (row.DestKind != "Enumerable") AssertResultKind(row.DestKind, result);
+            if (row.DestKind != "Enumerable")
+            {
+                AssertResultKind(row.DestKind, result);
+            }
         }
     }
 
@@ -342,7 +352,11 @@ public class CollectionShapeTests
 
         Assert.IsType<List<ShapeItemDto>>(result);
         var ids = result.Select(d => d.Id);
-        if (kind == "HashSet") ids = ids.OrderBy(i => i);
+        if (kind == "HashSet")
+        {
+            ids = ids.OrderBy(i => i);
+        }
+
         Assert.Equal(new[] { 1, 2, 3, 4 }, ids);
     }
 
@@ -353,7 +367,11 @@ public class CollectionShapeTests
         var result = Source(kind, Items(4)).MapToShapeItemDtoArray();
 
         var ids = result.Select(d => d.Id);
-        if (kind == "HashSet") ids = ids.OrderBy(i => i);
+        if (kind == "HashSet")
+        {
+            ids = ids.OrderBy(i => i);
+        }
+
         Assert.Equal(new[] { 1, 2, 3, 4 }, ids);
     }
 
@@ -369,7 +387,11 @@ public class CollectionShapeTests
     [MemberData(nameof(RuntimeSources))]
     public void MapToListAndArray_NullElement_ThrowsArgumentNullException(string kind)
     {
-        if (kind is "CovariantArray" or "HashSet") return; // no null element in these sources
+        if (kind is "CovariantArray" or "HashSet")
+        {
+            return; // no null element in these sources
+        }
+
         var items = new List<ShapeItem> { new() { Id = 1 }, null! };
 
         Assert.Equal("source", Assert.Throws<ArgumentNullException>(() => Source(kind, items).MapToShapeItemDtoList()).ParamName);

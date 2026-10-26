@@ -58,7 +58,7 @@ try
         config.SetApplicationName(BenchCommand.Wrapper);
         config.AddCommand<QuickCommand>("quick")
             .WithDescription("Quick A/B: the published IronMapper package against the local sources (scripts/run-quick.ps1). Runs at once; --check-only for the checks.")
-            .WithExample("quick", "--filter", "Nested,InPlace", "--frameworks", "net10.0", "--dry")
+            .WithExample("quick", "--filter", "'Nested,InPlace'", "--frameworks", "'net10.0,net8.0'", "--dry")
             .WithExample("quick", "--check-only");
         config.AddCommand<FullCommand>("full")
             .WithDescription("Full run: every scenario, then RESULTS.md (scripts/run-all.ps1). Runs at once; --check-only for the estimate and the checks.")

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using IronMapper.Generator.Analysis;
 using IronMapper.Generator.Analysis.Models;
@@ -8,7 +9,6 @@ using IronMapper.Generator.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Collections.Immutable;
 
 namespace IronMapper.Generator;
 
@@ -126,10 +126,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (spc, item) =>
         {
             var (found, compilation) = item;
-            if (found.Length == 0) return;
+            if (found.Length == 0)
+            {
+                return;
+            }
+
             var trees = LocationInfo.TreesByPath(compilation);
             foreach (var diagnostic in found)
+            {
                 spc.ReportDiagnostic(diagnostic.ToDiagnostic(location => location.ToLocation(trees)));
+            }
         });
 
         // Accessibility of the generated class over all generated mappings of the assembly: public if any generated
@@ -164,7 +170,11 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(registrations.Combine(codeOptions), static (spc, item) =>
         {
             var (mappings, options) = item;
-            if (mappings.Count == 0) return;
+            if (mappings.Count == 0)
+            {
+                return;
+            }
+
             var (hintName, source) = MapperCodeEmitter.EmitRegistration(mappings, options);
             spc.AddSource(hintName, source);
         });
@@ -194,31 +204,46 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         Add(fromMapFrom, isProfile: false);
         Add(fromProfiles, isProfile: true);
         foreach (var diagnostic in plan.Diagnostics)
+        {
             builder.Add(diagnostic.Descriptor == DiagnosticDescriptors.QualifiedMethodName
                 ? diagnostic.WithMessageArg(className)
                 : diagnostic);
+        }
+
         return builder.ToImmutable();
 
         void Add(ImmutableArray<MappingDescriptor> descriptors, bool isProfile)
         {
             foreach (var descriptor in descriptors)
             {
-                if (descriptor.SourceTypeName.Length != 0 && plan.Find(descriptor.Origin) is not { Emit: true }) continue;
+                if (descriptor.SourceTypeName.Length != 0 && plan.Find(descriptor.Origin) is not { Emit: true })
+                {
+                    continue;
+                }
+
                 foreach (var diagnostic in descriptor.Diagnostics)
                 {
                     if (isProfile && !settings.ReportUnmappedInProfiles
                                   && diagnostic.Descriptor == DiagnosticDescriptors.UnmappedDestinationProperty)
+                    {
                         continue;
+                    }
                     // IM0002 of a collection element or a nested object: only when no mapping of the pair is generated (the
                     // same condition skips the property in the generated code, MapperCodeEmitter.IsMappingMissing).
                     if (diagnostic.GetProperty(PropertyTypeCheck.MissingElementPairsKey) is { } pairs
                         && plan.GeneratesAny(pairs.Split('|')))
+                    {
                         continue;
+                    }
+
                     if (diagnostic.GetProperty(PropertyTypeCheck.CyclePropertyKey) is { } property)
                     {
                         cycles ??= new MappingCycles(Generated(), plan);
                         if (cycles.FindCycle(descriptor, property) is { } chain)
+                        {
                             builder.Add(diagnostic.WithMessageArg(chain));
+                        }
+
                         continue;
                     }
                     builder.Add(diagnostic);
@@ -237,8 +262,10 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         foreach (var entry in plan.Entries)
         {
             if (entry.Emit)
+            {
                 builder.Add(new MappingRegistration(entry.SourceFullName, entry.DestFullName, entry.MethodName,
                     entry.HelperScope, methods.With(entry.MethodOverrides)));
+            }
         }
 
         return builder.ToImmutable();
@@ -249,8 +276,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         string? result = null;
         foreach (var entry in plan.Entries)
         {
-            if (!entry.Emit) continue;
-            if (entry.MethodAccessibility == "public") return "public";
+            if (!entry.Emit)
+            {
+                continue;
+            }
+
+            if (entry.MethodAccessibility == "public")
+            {
+                return "public";
+            }
+
             result = "internal";
         }
 
@@ -261,21 +296,39 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     private static bool UsesOverload(MappingPlan plan, GeneratedMethods methods, Func<GeneratedMethods, bool> overload)
     {
         foreach (var entry in plan.Entries)
-            if (entry.Emit && overload(methods.With(entry.MethodOverrides))) return true;
+        {
+            if (entry.Emit && overload(methods.With(entry.MethodOverrides)))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
     private static bool UsesConverterCache(MappingPlan plan)
     {
         foreach (var entry in plan.Entries)
-            if (entry.Emit && entry.UsesConverterCache) return true;
+        {
+            if (entry.Emit && entry.UsesConverterCache)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
     private static bool UsesNestedObjectCheck(MappingPlan plan)
     {
         foreach (var entry in plan.Entries)
-            if (entry.Emit && entry.UsesNestedObjectCheck) return true;
+        {
+            if (entry.Emit && entry.UsesNestedObjectCheck)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -293,12 +346,17 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             _ => default
         };
 
-        if (modifiers == default) return false;
+        if (modifiers == default)
+        {
+            return false;
+        }
 
         foreach (var modifier in modifiers)
         {
             if (modifier.IsKind(SyntaxKind.FileKeyword))
+            {
                 return false;
+            }
         }
 
         return true;
@@ -312,7 +370,10 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor, MappingPlan plan,
         GeneratedCodeOptions options, GeneratedMethods methods)
     {
-        if (descriptor.SourceTypeName.Length == 0 || plan.Find(descriptor.Origin) is not { Emit: true } entry) return;
+        if (descriptor.SourceTypeName.Length == 0 || plan.Find(descriptor.Origin) is not { Emit: true } entry)
+        {
+            return;
+        }
 
         spc.AddSource(entry.HintName,
             MapperCodeEmitter.Emit(descriptor, entry, plan, options, methods.With(entry.MethodOverrides)));

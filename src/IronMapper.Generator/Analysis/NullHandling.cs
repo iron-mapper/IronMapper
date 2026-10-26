@@ -32,8 +32,16 @@ internal static class NullHandling
     /// </summary>
     public static string? ForNestedObject(ITypeSymbol source, ITypeSymbol dest)
     {
-        if (source.IsValueType) return NotNull;
-        if (AcceptsNull(dest)) return Check;
+        if (source.IsValueType)
+        {
+            return NotNull;
+        }
+
+        if (AcceptsNull(dest))
+        {
+            return Check;
+        }
+
         return source.NullableAnnotation == NullableAnnotation.Annotated ? null : Throw;
     }
 

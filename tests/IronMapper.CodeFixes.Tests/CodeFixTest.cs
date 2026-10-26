@@ -32,7 +32,7 @@ internal sealed class CodeFixTest<TCodeFix> : CSharpCodeFixTest<EmptyDiagnosticA
         ReferenceAssemblies = new ReferenceAssemblies("net10.0");
         TestBehaviors = TestBehaviors.SkipGeneratedSourcesCheck;
 
-        foreach (var path in ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator))
+        foreach (string path in ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator))
         {
             TestState.AdditionalReferences.Add(MetadataReference.CreateFromFile(path));
             FixedState.AdditionalReferences.Add(MetadataReference.CreateFromFile(path));
@@ -52,7 +52,7 @@ internal sealed class CodeFixTest<TCodeFix> : CSharpCodeFixTest<EmptyDiagnosticA
     /// <summary>Sets an MSBuild property the generator reads (<c>build_property.*</c> in a global analyzer config).</summary>
     public void SetBuildProperty(string name, string value)
     {
-        var config = $"is_global = true{Environment.NewLine}build_property.{name} = {value}{Environment.NewLine}";
+        string config = $"is_global = true{Environment.NewLine}build_property.{name} = {value}{Environment.NewLine}";
         TestState.AnalyzerConfigFiles.Add(("/.globalconfig", config));
         FixedState.AnalyzerConfigFiles.Add(("/.globalconfig", config));
     }

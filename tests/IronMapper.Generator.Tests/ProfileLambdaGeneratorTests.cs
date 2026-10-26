@@ -27,7 +27,7 @@ public class ProfileLambdaGeneratorTests
     [InlineData("internal")]
     public void StaticProfileMethod_AccessibleFromGeneratedCode_IsCalledWithFullName(string modifier)
     {
-        var source = $$"""
+        string source = $$"""
             using System;
             using IronMapper.Configuration;
 
@@ -60,7 +60,7 @@ public class ProfileLambdaGeneratorTests
     [InlineData("protected")]
     public void StaticProfileMethod_NotAccessible_ReportsIM0011_AndOtherMappingsStillGenerate(string modifier)
     {
-        var source = $$"""
+        string source = $$"""
             using System;
             using IronMapper.Configuration;
 
@@ -88,14 +88,14 @@ public class ProfileLambdaGeneratorTests
         var diagnostic = Assert.Single(generatorDiagnostics);
         Assert.Equal("IM0011", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        var message = diagnostic.GetMessage();
+        string message = diagnostic.GetMessage();
         Assert.Contains("App.ShiftProfile", message);
         Assert.Contains("ToSeconds", message);
         Assert.Contains(modifier, message);
         Assert.Contains("internal", message);
 
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.DoesNotContain("MapToShiftDto", code);
         Assert.Contains("MapToShiftSummary", code);
     }
@@ -107,7 +107,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void TypeAndExtensionMethodFromProfileUsings_AreFullyQualified()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using App.Text;
 
@@ -147,7 +147,7 @@ public class ProfileLambdaGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("Slug = global::App.Text.SlugExtensions.ToSlug(source.Title)", code);
         Assert.Contains("Caption = global::App.Text.Formatter.Upper(source.Title)", code);
         Assert.Contains("Tag = global::App.Text.SlugExtensions.Wrap<int>(source.Id, \"#\")", code);
@@ -159,7 +159,7 @@ public class ProfileLambdaGeneratorTests
         // Extension methods after `?.` are not rewritten (their receiver only exists inside the
         // conditional access). `?.` is not allowed in MapFrom (an expression tree, CS8072), but it is
         // in Func-based lambdas such as When. An extension class in the global namespace is visible everywhere.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             public static class GlobalTextExtensions
@@ -195,7 +195,7 @@ public class ProfileLambdaGeneratorTests
     public void CallToOtherGeneratedMapping_NestedObjectWorkaround_Compiles()
     {
         // docs/advanced.md: nested objects are mapped explicitly via a generated MapTo* method.
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -232,7 +232,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void StaticMembersOfFrameworkTypes_WithoutFullName_AreQualified()
     {
-        var source = """
+        string source = """
             using System;
             using System.Linq;
             using IronMapper.Configuration;
@@ -260,7 +260,7 @@ public class ProfileLambdaGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("global::System.Math.Round(source.Value, 2)", code);
         Assert.Contains("global::System.TimeSpan.FromSeconds(source.Seconds)", code);
         Assert.Contains("global::System.Math.Sqrt(source.Seconds)", code);
@@ -274,7 +274,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void ConstantAndEnumFromAnotherNamespace_AreQualified()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using App.Domain;
 
@@ -308,7 +308,7 @@ public class ProfileLambdaGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("source.Count > global::App.Domain.Limits.Max ? global::App.Domain.Level.High : global::App.Domain.Level.Low", code);
         Assert.Contains("global::App.Domain.Limits.Max + global::App.StockProfile.Spare", code);
     }
@@ -320,7 +320,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void ParameterNameMatchingMemberNameAndStringLiteral_OnlyParameterIsRenamed()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -343,7 +343,7 @@ public class ProfileLambdaGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("Text = source.s + \"s\"", code);
         Assert.Contains("Note = $\"s={source.s}\"", code);
     }
@@ -355,7 +355,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void InstanceFieldOfProfile_ReportsIM0012_AndOtherMappingsStillGenerate()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -385,7 +385,7 @@ public class ProfileLambdaGeneratorTests
         Assert.Contains("_offset", diagnostic.GetMessage());
         Assert.Contains("App.ItemProfile", diagnostic.GetMessage());
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.DoesNotContain("MapToItemDto", code);
         Assert.Contains("MapToItemCopy", code);
     }
@@ -393,7 +393,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void NameofProfileInstanceMember_IsEmittedAsLiteral_WithoutDiagnostic()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -423,7 +423,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void InstanceMethodOfProfile_ReportsIM0012()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -454,7 +454,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void LocalVariableOfConstructor_ReportsIM0012()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;
@@ -489,7 +489,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void WhenConvertUsingHooksAndTransformers_AreRewrittenToo()
     {
-        var source = """
+        string source = """
             using System;
             using IronMapper.Configuration;
             using App.Domain;
@@ -527,7 +527,7 @@ public class ProfileLambdaGeneratorTests
 
         Assert.Empty(generatorDiagnostics);
         AssertCompiles(errors);
-        var code = Join(generated);
+        string code = Join(generated);
         Assert.Contains("source.State == global::App.Domain.State.Active", code);
         Assert.Contains("destination.Stamp = global::System.DateTime.MinValue;", code);
         Assert.Contains("var name = global::App.DocProfile.Normalize(source.Name);", code);
@@ -538,7 +538,7 @@ public class ProfileLambdaGeneratorTests
     [Fact]
     public void TransformerUsingPrivateMember_ReportsIM0011()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App;

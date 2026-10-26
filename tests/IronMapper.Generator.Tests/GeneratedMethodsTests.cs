@@ -58,11 +58,19 @@ public class GeneratedMethodsTests
 
     public static IEnumerable<object[]> Combinations()
     {
-        foreach (var how in new[] { "msbuild", "attribute", "profile" })
-        foreach (var inPlace in new[] { true, false })
-        foreach (var list in new[] { true, false })
-        foreach (var array in new[] { true, false })
-            yield return new object[] { how, inPlace, list, array };
+        foreach (string? how in new[] { "msbuild", "attribute", "profile" })
+        {
+            foreach (bool inPlace in new[] { true, false })
+            {
+                foreach (bool list in new[] { true, false })
+                {
+                    foreach (bool array in new[] { true, false })
+                    {
+                        yield return new object[] { how, inPlace, list, array };
+                    }
+                }
+            }
+        }
     }
 
     [Theory]
@@ -70,7 +78,7 @@ public class GeneratedMethodsTests
     public void EveryCombination_OnlyEnabledPublicMethods_RegistryStillMapsEverything(string how, bool inPlace, bool list, bool array)
     {
         var properties = new Dictionary<string, string>();
-        var profile = "";
+        string profile = "";
         switch (how)
         {
             case "msbuild":
@@ -120,7 +128,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void AssemblyOff_PerMappingOn_ReenablesOnlyThatMapping()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
 
@@ -146,7 +154,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void AssemblyOn_PerMappingOff_TurnsOffOnlyThatMapping()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App
@@ -168,7 +176,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void NestedCollections_WorkWithoutListAndArrayOfTheElementMapping()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using System.Linq;
             using IronMapper.Attributes;
@@ -215,7 +223,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void QualifiedNames_SameAsWithEveryOverload()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App
@@ -240,7 +248,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void GenerateMethods_AppliesToTheMappingNotToItsReverse()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App
@@ -264,7 +272,7 @@ public class GeneratedMethodsTests
     [Fact]
     public void GenerateMethods_ConstantsAreRead_NonConstantIsIM0016AndKeepsTheAssemblyValue()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
 
             namespace App
@@ -303,7 +311,10 @@ public class GeneratedMethodsTests
     public void GeneratedCode_Always_ExcludeFromCodeCoverage_WithTheProperty(string? value, bool excluded)
     {
         var properties = new Dictionary<string, string>();
-        if (value is not null) properties["IronMapperExcludeFromCodeCoverage"] = value;
+        if (value is not null)
+        {
+            properties["IronMapperExcludeFromCodeCoverage"] = value;
+        }
 
         var result = Run(new[] { Types.Replace("public class User {", "[IronMapper.Attributes.MapTo(typeof(UserDto))] public class User {") }, properties);
 
@@ -325,7 +336,10 @@ public class GeneratedMethodsTests
     public void GeneratedCodeAttribute_OnByDefault_OffWithTheProperty(string? value, bool marked)
     {
         var properties = new Dictionary<string, string>();
-        if (value is not null) properties["IronMapperGeneratedCodeAttribute"] = value;
+        if (value is not null)
+        {
+            properties["IronMapperGeneratedCodeAttribute"] = value;
+        }
 
         var result = Run(new[] { Types.Replace("public class User {", "[IronMapper.Attributes.MapTo(typeof(UserDto))] public class User {") }, properties);
 
@@ -395,10 +409,10 @@ public class GeneratedMethodsTests
 
     private static string GeneratorVersion()
     {
-        var version = typeof(IronMapperGenerator).Assembly
+        string version = typeof(IronMapperGenerator).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
-        var plus = version.IndexOf('+');
-        return plus < 0 ? version : version.Substring(0, plus);
+        int plus = version.IndexOf('+');
+        return plus < 0 ? version : version[..plus];
     }
 
     private sealed record Result(
@@ -428,7 +442,9 @@ public class GeneratedMethodsTests
                         || (d.Severity == DiagnosticSeverity.Warning && d.Location.SourceTree?.FilePath.EndsWith(".g.cs") == true))
             .ToList();
         if (errors.Count > 0)
+        {
             return new Result(errors, generatorDiagnostics, generated, new HashSet<string>(), Array.Empty<Attribute>(), null);
+        }
 
         using var stream = new MemoryStream();
         var emit = output.Emit(stream);
@@ -444,7 +460,7 @@ public class GeneratedMethodsTests
                 .Select(m => $"{m.Name}/{m.GetParameters().Length}").ToHashSet();
             var attributes = mappers.GetCustomAttributes(inherit: false).Cast<Attribute>().ToList();
             var program = assembly.GetTypes().SingleOrDefault(t => t.Name == "Program");
-            var run = (string?)program?.GetMethod("Run")!.Invoke(null, null);
+            string? run = (string?)program?.GetMethod("Run")!.Invoke(null, null);
             return new Result(errors, generatorDiagnostics, generated, methods, attributes, run);
         }
         finally

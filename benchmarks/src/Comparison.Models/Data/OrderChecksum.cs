@@ -16,7 +16,7 @@ public static class OrderChecksum
 
     public static ulong Of(OrderEntity order)
     {
-        var hash = OffsetBasis;
+        ulong hash = OffsetBasis;
         hash = Add(hash, order.Id, order.Number, order.CreatedAt.Ticks, order.Total);
         hash = Add(hash, order.Customer.Id, order.Customer.Name, order.Customer.Email);
         var a = order.Customer.Address;
@@ -31,7 +31,7 @@ public static class OrderChecksum
 
     public static ulong Of(OrderDto order)
     {
-        var hash = OffsetBasis;
+        ulong hash = OffsetBasis;
         hash = Add(hash, order.Id, order.Number, order.CreatedAt.Ticks, order.Total);
         hash = Add(hash, order.Customer.Id, order.Customer.Name, order.Customer.Email);
         var a = order.Customer.Address;
@@ -46,11 +46,14 @@ public static class OrderChecksum
 
     private static ulong Add(ulong hash, params object[] values)
     {
-        foreach (var value in values)
+        foreach (object value in values)
         {
-            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
-            foreach (var c in text)
+            string text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            foreach (char c in text)
+            {
                 hash = (hash ^ c) * Prime;
+            }
+
             hash = (hash ^ '|') * Prime;
         }
         return hash;

@@ -41,9 +41,19 @@ internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IRea
     {
         var left = AsImmutableArray();
         var right = other.AsImmutableArray();
-        if (left.Length != right.Length) return false;
-        for (var i = 0; i < left.Length; i++)
-            if (!EqualityComparer<T>.Default.Equals(left[i], right[i])) return false;
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < left.Length; i++)
+        {
+            if (!EqualityComparer<T>.Default.Equals(left[i], right[i]))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -53,9 +63,12 @@ internal readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IRea
     /// <inheritdoc/>
     public override int GetHashCode()
     {
-        var hash = 17;
+        int hash = 17;
         foreach (var item in AsImmutableArray())
+        {
             hash = hash * 31 + (item is null ? 0 : EqualityComparer<T>.Default.GetHashCode(item));
+        }
+
         return hash;
     }
 

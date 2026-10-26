@@ -73,7 +73,7 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
     private static bool IsFalse(AnalyzerConfigOptions options, string property) => Is(options, property, "false");
 
     private static bool Is(AnalyzerConfigOptions options, string property, string expected)
-        => options.TryGetValue("build_property." + property, out var value)
+        => options.TryGetValue("build_property." + property, out string? value)
            && string.Equals(value?.Trim(), expected, StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc/>

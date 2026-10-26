@@ -47,7 +47,7 @@ public abstract class MappingProfile : IMappingProfile
     /// <param name="transformer">A function that receives the source value and returns the transformed value.</param>
     protected void AddTransformer<TValue>(Func<TValue, TValue> transformer)
     {
-        var methodName = $"TransformValue_{typeof(TValue).Name}";
+        string methodName = $"TransformValue_{typeof(TValue).Name}";
         _transformers.Add(new ValueTransformerDescriptor(typeof(TValue), methodName, transformer));
     }
 

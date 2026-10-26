@@ -64,7 +64,7 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     /// <summary>Reads the options from <paramref name="compilation"/>.</summary>
     public static GeneratedCodeOptions From(Compilation compilation)
     {
-        var useThrowIfNull = false;
+        bool useThrowIfNull = false;
         var argumentNull = compilation.GetTypeByMetadataName("System.ArgumentNullException");
         if (argumentNull is not null)
         {
@@ -81,12 +81,12 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
         }
 
         var doesNotReturn = compilation.GetTypeByMetadataName("System.Diagnostics.CodeAnalysis.DoesNotReturnAttribute");
-        var hasDoesNotReturn = doesNotReturn is not null && compilation.IsSymbolAccessibleWithin(doesNotReturn, compilation.Assembly);
+        bool hasDoesNotReturn = doesNotReturn is not null && compilation.IsSymbolAccessibleWithin(doesNotReturn, compilation.Assembly);
 
-        var supportsModuleInitializers = compilation is not CSharpCompilation csharp
+        bool supportsModuleInitializers = compilation is not CSharpCompilation csharp
                                          || csharp.LanguageVersion >= LanguageVersion.CSharp9;
 
-        var hasModuleInitializerAttribute = false;
+        bool hasModuleInitializerAttribute = false;
         foreach (var attribute in compilation.GetTypesByMetadataName("System.Runtime.CompilerServices.ModuleInitializerAttribute"))
         {
             if (compilation.IsSymbolAccessibleWithin(attribute, compilation.Assembly))

@@ -85,8 +85,10 @@ public class CollectionEdgeCaseTests
 
         var dtos = items.Select(e => e.MapToItemDto()).ToList();
 
-        for (var i = 0; i < 100; i++)
+        for (int i = 0; i < 100; i++)
+        {
             Assert.Equal(i, dtos[i].Id);
+        }
     }
 
     [Fact]

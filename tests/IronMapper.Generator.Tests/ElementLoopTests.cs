@@ -13,7 +13,7 @@ public class ElementLoopTests
     [Fact]
     public void StructsGenericsNestedInternalTypesAndCovariantArrays_MapLikeBefore()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using System.Collections.ObjectModel;
             using System.Linq;

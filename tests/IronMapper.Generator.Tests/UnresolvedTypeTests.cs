@@ -97,7 +97,7 @@ public class UnresolvedTypeTests
     [InlineData("MapFrom", "typeof(Box<int>[])", "[MapFrom(typeof(App.Box<int>[]))] on 'App.Annotated' was not generated: only classes, structs and records can be mapped")]
     public void TypeThatCompilesButCannotBeMapped_IM0003_OtherMappingsGenerated(string attribute, string type, string message)
     {
-        var source = $$"""
+        string source = $$"""
             namespace App
             {
                 public class Box<T> { public int Id { get; set; } }
@@ -121,7 +121,7 @@ public class UnresolvedTypeTests
     [Fact]
     public void MapTo_SecondAttributeWithUnknownType_FirstStillGenerated()
     {
-        var source = """
+        string source = """
             namespace App
             {
                 [IronMapper.Attributes.MapTo(typeof(SourceDto))]

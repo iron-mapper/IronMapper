@@ -42,15 +42,17 @@ public sealed class PerItemColumn : IColumn
     {
         var report = summary[benchmarkCase];
         if (report is null || benchmarkCase.Parameters[CountParameter] is not int count || count <= 0)
+        {
             return "NA";
+        }
 
         if (_isTime)
         {
-            var mean = report.ResultStatistics?.Mean;
+            double? mean = report.ResultStatistics?.Mean;
             return mean is null ? "NA" : (mean.Value / count).ToString("N1", CultureInfo.InvariantCulture);
         }
 
-        var bytes = report.GcStats.GetBytesAllocatedPerOperation(benchmarkCase);
+        long? bytes = report.GcStats.GetBytesAllocatedPerOperation(benchmarkCase);
         return bytes is null ? "NA" : ((double)bytes.Value / count).ToString("N1", CultureInfo.InvariantCulture);
     }
 

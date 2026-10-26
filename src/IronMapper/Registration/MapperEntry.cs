@@ -58,20 +58,36 @@ internal sealed class MapperEntry<TSource, TDest> : MapperEntry
 
     private static List<TDest> ToList(IEnumerable<TSource>? source, Func<TSource, TDest> map)
     {
-        if (source is null) return new List<TDest>();
+        if (source is null)
+        {
+            return new List<TDest>();
+        }
+
         var result = source is ICollection<TSource> collection ? new List<TDest>(collection.Count) : new List<TDest>();
-        foreach (var item in source) result.Add(map(item));
+        foreach (var item in source)
+        {
+            result.Add(map(item));
+        }
+
         return result;
     }
 
     private static TDest[] ToArray(IEnumerable<TSource>? source, Func<TSource, TDest> map)
     {
-        if (source is null) return Array.Empty<TDest>();
+        if (source is null)
+        {
+            return Array.Empty<TDest>();
+        }
+
         if (source is ICollection<TSource> collection)
         {
             var result = new TDest[collection.Count];
-            var i = 0;
-            foreach (var item in collection) result[i++] = map(item);
+            int i = 0;
+            foreach (var item in collection)
+            {
+                result[i++] = map(item);
+            }
+
             return result;
         }
 

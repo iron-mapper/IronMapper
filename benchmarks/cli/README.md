@@ -81,8 +81,9 @@ cd benchmarks/cli
 dotnet test Comparison.Cli.Tests
 ```
 
-CI runs them on ubuntu and windows in pull requests that change `benchmarks/**` (`.github/workflows/bench-cli.yml`,
-not a required check). The parsers and monitors are tested on recorded output in `Comparison.Cli.Tests/Fixtures/`;
+CI runs them on ubuntu and windows in pull requests that change `benchmarks/**` or the root `.editorconfig`,
+`global.json`, `Directory.*` files (`.github/workflows/bench-cli.yml`, not a required check; the CLI builds with
+`EnforceCodeStyleInBuild`, so a stricter rule in the root `.editorconfig` can break it). The parsers and monitors are tested on recorded output in `Comparison.Cli.Tests/Fixtures/`;
 `ProcessTests` start real `pwsh` processes (decoding, arguments, killing the tree), so `pwsh` must be on `PATH`.
 
 | Test class | Covers |
@@ -93,6 +94,7 @@ not a required check). The parsers and monitors are tested on recorded output in
 | `ArtifactTests` | `assemblies.json` → status (`Get-RunStatus`), run folders, `summary.md`/`RESULTS.md`, `BenchmarkCatalog` against `$runtimeClasses` of `run-all.ps1` |
 | `ResultsViewTests` | the `results` views, rendered to a string |
 | `ProcessTests` | quoting, `ScriptCommand.Display`, UTF-8 end to end, Ctrl+C, `SleepGuard` |
+| `BenchCommandTests` | `bench.ps1` with unquoted lists; the printed `./bench.ps1 ...` line run in pwsh and bash (on Windows Git Bash, not the WSL launcher; skipped without bash) |
 
 ### Re-recording fixtures
 
@@ -166,6 +168,14 @@ A script parameter that the CLI should pass (example: `-Foo` of `run-quick.ps1`)
 
 Lists go to the script as one comma-separated argument: `pwsh -File` passes `a,b` as one string, and the scripts split
 it (#44). On Windows `cmd` cannot carry `"` or `%` in an argument; `ScriptProcess.CmdQuote` refuses them.
+
+A list in an example or a printed command goes in single quotes: `./bench.ps1 quick --filter 'Nested,InPlace'`
+(`WithExample` in `Program.cs`, the docs). Without them pwsh hands a script an unquoted `Nested,InPlace` as an array;
+`bench.ps1` joins such an argument back with commas, so the unquoted form works too
+(`BenchCommandTests.UnquotedLists_ReachTheCli_AsOneArgument`, with `dotnet` replaced by a function). The printed
+commands are quoted by `ScriptCommand.Quote` for pwsh and POSIX shells alike: single quotes, double quotes for a value
+with an apostrophe, `\` never left bare (`BenchCommandTests.PrintedCommand_GivesTheSameArguments_InPwshAndBash` runs the
+printed line in both).
 
 ## Adding a script
 

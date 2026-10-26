@@ -177,20 +177,32 @@ public class GeneratorCachingTests
     private void AssertSourceOutputsCached(GeneratorRunResult result)
     {
         var notCached = new List<string>();
-        foreach (var name in SourceSteps)
+        foreach (string name in SourceSteps)
         {
-            if (!result.TrackedSteps.TryGetValue(name, out var runs)) continue;
+            if (!result.TrackedSteps.TryGetValue(name, out var runs))
+            {
+                continue;
+            }
+
             foreach (var (_, reason) in runs.SelectMany(r => r.Outputs))
             {
                 _output.WriteLine($"{name}: {reason}");
-                if (!CachedReasons.Contains(reason)) notCached.Add($"{name}: {reason}");
+                if (!CachedReasons.Contains(reason))
+                {
+                    notCached.Add($"{name}: {reason}");
+                }
             }
         }
 
         var sourceOutputs = result.TrackedOutputSteps.SelectMany(s => s.Value).Where(step => !IsDiagnosticsOutput(step)).ToList();
         Assert.NotEmpty(sourceOutputs);
         foreach (var (_, reason) in sourceOutputs.SelectMany(r => r.Outputs))
-            if (!CachedReasons.Contains(reason)) notCached.Add($"SourceOutput: {reason}");
+        {
+            if (!CachedReasons.Contains(reason))
+            {
+                notCached.Add($"SourceOutput: {reason}");
+            }
+        }
 
         Assert.True(notCached.Count == 0, "Steps not cached:\n" + string.Join("\n", notCached.Distinct()));
     }
@@ -202,9 +214,20 @@ public class GeneratorCachingTests
         while (pending.Count > 0)
         {
             var current = pending.Pop();
-            if (current.Name == TrackingNames.Diagnostics) return true;
-            if (current.Name is not null && current != step) continue; // another named step: a different branch
-            foreach (var (input, _) in current.Inputs) pending.Push(input);
+            if (current.Name == TrackingNames.Diagnostics)
+            {
+                return true;
+            }
+
+            if (current.Name is not null && current != step)
+            {
+                continue; // another named step: a different branch
+            }
+
+            foreach (var (input, _) in current.Inputs)
+            {
+                pending.Push(input);
+            }
         }
 
         return false;
@@ -233,13 +256,20 @@ public class GeneratorCachingTests
     private void AssertCached(GeneratorRunResult result, IEnumerable<string> stepNames)
     {
         var notCached = new List<string>();
-        foreach (var name in stepNames)
+        foreach (string name in stepNames)
         {
-            if (!result.TrackedSteps.TryGetValue(name, out var runs)) continue; // e.g. no [MapFrom] in the input
+            if (!result.TrackedSteps.TryGetValue(name, out var runs))
+            {
+                continue; // e.g. no [MapFrom] in the input
+            }
+
             foreach (var (_, reason) in runs.SelectMany(r => r.Outputs))
             {
                 _output.WriteLine($"{name}: {reason}");
-                if (!CachedReasons.Contains(reason)) notCached.Add($"{name}: {reason}");
+                if (!CachedReasons.Contains(reason))
+                {
+                    notCached.Add($"{name}: {reason}");
+                }
             }
         }
 
@@ -248,7 +278,12 @@ public class GeneratorCachingTests
         var sourceOutputs = result.TrackedOutputSteps.SelectMany(s => s.Value).Where(step => !IsDiagnosticsOutput(step)).ToList();
         Assert.NotEmpty(sourceOutputs);
         foreach (var (_, reason) in sourceOutputs.SelectMany(r => r.Outputs))
-            if (!CachedReasons.Contains(reason)) notCached.Add($"SourceOutput: {reason}");
+        {
+            if (!CachedReasons.Contains(reason))
+            {
+                notCached.Add($"SourceOutput: {reason}");
+            }
+        }
 
         Assert.True(result.TrackedSteps.ContainsKey(TrackingNames.Plan), "Plan step is not tracked.");
         Assert.True(notCached.Count == 0, "Steps not cached:\n" + string.Join("\n", notCached.Distinct()));

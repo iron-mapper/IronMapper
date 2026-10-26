@@ -22,14 +22,22 @@ for (int i = 0; i < args.Length; i++)
     switch (args[i])
     {
         case "--input":
-            var spec = Next();
+            string spec = Next();
             int eq = spec.IndexOf('=');
-            if (eq <= 0) throw new ArgumentException($"--input expects Label=path, got '{spec}'");
+            if (eq <= 0)
+            {
+                throw new ArgumentException($"--input expects Label=path, got '{spec}'");
+            }
+
             inputs.Add((spec[..eq], MstatFile.Load(spec[(eq + 1)..])));
             break;
         case "--diff":
-            var pair = Next().Split(',');
-            if (pair.Length != 2) throw new ArgumentException("--diff expects A,B");
+            string[] pair = Next().Split(',');
+            if (pair.Length != 2)
+            {
+                throw new ArgumentException("--diff expects A,B");
+            }
+
             (diffA, diffB) = (pair[0], pair[1]);
             break;
         case "--top": top = int.Parse(Next(), CultureInfo.InvariantCulture); break;
@@ -51,11 +59,20 @@ if (inputs.Count == 0)
     return 1;
 }
 if (diffA is not null && (!inputs.Exists(x => x.Label == diffA) || !inputs.Exists(x => x.Label == diffB)))
+{
     throw new ArgumentException($"--diff labels must be among the inputs: {diffA}, {diffB}");
+}
 
-var md = BuildReport();
-if (outPath is null) Console.Write(md);
-else File.WriteAllText(outPath, md, new UTF8Encoding(false));
+string md = BuildReport();
+if (outPath is null)
+{
+    Console.Write(md);
+}
+else
+{
+    File.WriteAllText(outPath, md, new UTF8Encoding(false));
+}
+
 return 0;
 
 string BuildReport()
@@ -111,7 +128,10 @@ string BuildReport()
         {
             var map = new Dictionary<string, long>();
             foreach (var e in file.Entries.Where(filter))
+            {
                 map[keyOf(e)] = map.GetValueOrDefault(keyOf(e)) + e.Size;
+            }
+
             result[label] = map;
         }
         return result;
@@ -127,13 +147,21 @@ string BuildReport()
             : others.Select(o => Math.Abs(Get(o, key) - Get(reference, key))).DefaultIfEmpty(0).Max();
 
         var rows = keys.Select(k => (Key: k, Sort: SortValue(k)));
-        if (sortByDiff) rows = rows.Where(r => r.Sort != 0).OrderByDescending(r => r.Sort).ThenBy(r => r.Key, StringComparer.Ordinal);
+        if (sortByDiff)
+        {
+            rows = rows.Where(r => r.Sort != 0).OrderByDescending(r => r.Sort).ThenBy(r => r.Key, StringComparer.Ordinal);
+        }
+
         var list = rows.ToList();
 
         var header = new List<string> { keyTitle };
         header.AddRange(labels);
         header.AddRange(others.Select(o => $"{o} − {reference}"));
-        if (diffA is not null) header.Add($"{diffA} − {diffB}");
+        if (diffA is not null)
+        {
+            header.Add($"{diffA} − {diffB}");
+        }
+
         s.Append("| ").Append(string.Join(" | ", header)).Append(" |\n");
         s.Append("|---").Append(string.Concat(Enumerable.Repeat("|---:", header.Count - 1))).Append("|\n");
 
@@ -142,18 +170,37 @@ string BuildReport()
             var cells = new List<string> { Escape(key) };
             cells.AddRange(labels.Select(l => Bytes(Get(l, key))));
             cells.AddRange(others.Select(o => Delta(Get(o, key) - Get(reference, key))));
-            if (diffA is not null) cells.Add(Delta(Get(diffA, key) - Get(diffB!, key)));
+            if (diffA is not null)
+            {
+                cells.Add(Delta(Get(diffA, key) - Get(diffB!, key)));
+            }
+
             s.Append("| ").Append(string.Join(" | ", cells)).Append(" |\n");
         }
-        if (list.Count > limit) s.Append($"\n_{list.Count - limit} more rows with smaller differences are not shown._\n");
+        if (list.Count > limit)
+        {
+            s.Append($"\n_{list.Count - limit} more rows with smaller differences are not shown._\n");
+        }
 
-        if (!showTotal) return;
+        if (!showTotal)
+        {
+            return;
+        }
+
         var totals = new List<string> { "**Total**" };
         totals.AddRange(labels.Select(l => $"**{Bytes(data[l].Values.Sum())}**"));
         totals.AddRange(others.Select(o => $"**{Delta(data[o].Values.Sum() - data[reference].Values.Sum())}**"));
-        if (diffA is not null) totals.Add($"**{Delta(data[diffA].Values.Sum() - data[diffB!].Values.Sum())}**");
-        if (list.Count > limit) s.Append('\n').Append("| ").Append(string.Join(" | ", header)).Append(" |\n")
+        if (diffA is not null)
+        {
+            totals.Add($"**{Delta(data[diffA].Values.Sum() - data[diffB!].Values.Sum())}**");
+        }
+
+        if (list.Count > limit)
+        {
+            s.Append('\n').Append("| ").Append(string.Join(" | ", header)).Append(" |\n")
             .Append("|---").Append(string.Concat(Enumerable.Repeat("|---:", header.Count - 1))).Append("|\n");
+        }
+
         s.Append("| ").Append(string.Join(" | ", totals)).Append(" |\n");
     }
 }
@@ -166,8 +213,13 @@ static void Dump(MstatFile file, int top)
 {
     Console.WriteLine($"{file.Path}: mstat version {file.Version}");
     foreach (var g in file.Entries.GroupBy(e => e.Section))
+    {
         Console.WriteLine($"  {g.Key}: {g.Count()} records, {g.Sum(e => e.Size):N0} bytes");
+    }
+
     Console.WriteLine("Largest entries:");
     foreach (var e in file.Entries.OrderByDescending(e => e.Size).Take(top))
+    {
         Console.WriteLine($"  {e.Size,9:N0}  {e.Section,-10} [{e.Owner.Assembly}] {e.Owner.FullName} {e.Member}");
+    }
 }

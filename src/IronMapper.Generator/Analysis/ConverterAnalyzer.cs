@@ -78,10 +78,10 @@ internal sealed class ConverterAnalyzer
             return null;
         }
 
-        var problem = FindCreationProblem(converter);
+        string? problem = FindCreationProblem(converter);
         if (problem is not null)
         {
-            var name = converter.ToDisplayString();
+            string name = converter.ToDisplayString();
             (_diagnostics ??= new List<DiagnosticInfo>()).Add(new DiagnosticInfo(
                 DiagnosticDescriptors.ConverterCannotBeCreated, _sourceDisplay, _destDisplay, name, usage, problem)
                 .WithLocation(location));
@@ -94,22 +94,55 @@ internal sealed class ConverterAnalyzer
     /// <summary>Why <c>new T()</c> in the generated class would not compile, or <see langword="null"/> when it does.</summary>
     private string? FindCreationProblem(ITypeSymbol converter)
     {
-        if (converter is not INamedTypeSymbol named) return "it is not a class or struct";
-        if (named.IsUnboundGenericType) return "it is an open generic type";
-        if (named.TypeKind == TypeKind.Interface) return "it is an interface";
-        if (named.IsStatic) return "it is static";
-        if (named.IsAbstract) return "it is abstract";
+        if (converter is not INamedTypeSymbol named)
+        {
+            return "it is not a class or struct";
+        }
+
+        if (named.IsUnboundGenericType)
+        {
+            return "it is an open generic type";
+        }
+
+        if (named.TypeKind == TypeKind.Interface)
+        {
+            return "it is an interface";
+        }
+
+        if (named.IsStatic)
+        {
+            return "it is static";
+        }
+
+        if (named.IsAbstract)
+        {
+            return "it is abstract";
+        }
+
         if (!_compilation.IsSymbolAccessibleWithin(named, _compilation.Assembly))
+        {
             return $"it is not accessible from the generated class in namespace IronMapper.Generated ({SymbolHelpers.ToKeyword(named.DeclaredAccessibility)})";
+        }
 
         // A struct always has a parameterless constructor.
-        if (named.IsValueType) return null;
+        if (named.IsValueType)
+        {
+            return null;
+        }
 
         IMethodSymbol? inaccessible = null;
         foreach (var ctor in named.InstanceConstructors)
         {
-            if (!CanBeCalledWithoutArguments(ctor)) continue;
-            if (_compilation.IsSymbolAccessibleWithin(ctor, _compilation.Assembly)) return null;
+            if (!CanBeCalledWithoutArguments(ctor))
+            {
+                continue;
+            }
+
+            if (_compilation.IsSymbolAccessibleWithin(ctor, _compilation.Assembly))
+            {
+                return null;
+            }
+
             inaccessible ??= ctor;
         }
 
@@ -121,7 +154,13 @@ internal sealed class ConverterAnalyzer
     private static bool CanBeCalledWithoutArguments(IMethodSymbol ctor)
     {
         foreach (var parameter in ctor.Parameters)
-            if (!parameter.IsOptional && !parameter.IsParams) return false;
+        {
+            if (!parameter.IsOptional && !parameter.IsParams)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -131,19 +170,34 @@ internal sealed class ConverterAnalyzer
     /// </summary>
     private static bool IsCacheable(ITypeSymbol converter, CancellationToken ct)
     {
-        if (converter is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } named) return false;
+        if (converter is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false } named)
+        {
+            return false;
+        }
 
-        var hasPublicParameterlessCtor = false;
+        bool hasPublicParameterlessCtor = false;
         foreach (var ctor in named.InstanceConstructors)
-            if (ctor.Parameters.Length == 0 && ctor.DeclaredAccessibility == Accessibility.Public) hasPublicParameterlessCtor = true;
-        if (!hasPublicParameterlessCtor) return false;
+        {
+            if (ctor.Parameters.Length == 0 && ctor.DeclaredAccessibility == Accessibility.Public)
+            {
+                hasPublicParameterlessCtor = true;
+            }
+        }
+
+        if (!hasPublicParameterlessCtor)
+        {
+            return false;
+        }
 
         for (var type = named; type is not null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
         {
             ct.ThrowIfCancellationRequested();
 
             // Declared in a referenced assembly: private fields and constructor bodies are not visible.
-            if (type.DeclaringSyntaxReferences.IsEmpty) return false;
+            if (type.DeclaringSyntaxReferences.IsEmpty)
+            {
+                return false;
+            }
 
             foreach (var member in type.GetMembers())
             {
@@ -156,7 +210,11 @@ internal sealed class ConverterAnalyzer
                     case IMethodSymbol { MethodKind: MethodKind.Destructor }:
                         return false;
                     case IMethodSymbol { MethodKind: MethodKind.Constructor } ctor when !ctor.IsImplicitlyDeclared:
-                        if (!HasNoCode(ctor, ct)) return false;
+                        if (!HasNoCode(ctor, ct))
+                        {
+                            return false;
+                        }
+
                         break;
                 }
             }
@@ -171,7 +229,10 @@ internal sealed class ConverterAnalyzer
     /// </summary>
     private static bool HasNoCode(IMethodSymbol ctor, CancellationToken ct)
     {
-        if (ctor.DeclaringSyntaxReferences.IsEmpty) return false;
+        if (ctor.DeclaringSyntaxReferences.IsEmpty)
+        {
+            return false;
+        }
 
         foreach (var reference in ctor.DeclaringSyntaxReferences)
         {
@@ -181,16 +242,28 @@ internal sealed class ConverterAnalyzer
                     if (declaration.ExpressionBody is not null
                         || declaration.Body is not { Statements.Count: 0 }
                         || declaration.Initializer is { ArgumentList.Arguments.Count: > 0 })
+                    {
                         return false;
+                    }
+
                     break;
 
                 // Primary constructor: parameters may be captured into hidden fields.
                 case TypeDeclarationSyntax type:
-                    if (type.ParameterList is { Parameters.Count: > 0 }) return false;
+                    if (type.ParameterList is { Parameters.Count: > 0 })
+                    {
+                        return false;
+                    }
+
                     if (type.BaseList is not null)
                     {
                         foreach (var baseType in type.BaseList.Types)
-                            if (baseType is PrimaryConstructorBaseTypeSyntax { ArgumentList.Arguments.Count: > 0 }) return false;
+                        {
+                            if (baseType is PrimaryConstructorBaseTypeSyntax { ArgumentList.Arguments.Count: > 0 })
+                            {
+                                return false;
+                            }
+                        }
                     }
                     break;
 

@@ -30,7 +30,7 @@ public class NameCollisionTests
     [Fact]
     public void SamePair_AttributeAndProfile_ProfileWins_ReportsIM0007_OtherMappingsGenerated()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Generated;
@@ -77,7 +77,7 @@ public class NameCollisionTests
     [Fact]
     public void SamePair_MapToAndMapFrom_GeneratedOnce_ReportsIM0007()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
 
             namespace App;
@@ -100,7 +100,7 @@ public class NameCollisionTests
     [Fact]
     public void OneSource_GlobalAndNamespacedDestinations_GlobalQualifier()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -127,7 +127,7 @@ public class NameCollisionTests
     [Fact]
     public void SamePair_TwoProfiles_FirstProfileByFullNameWins_ReportsIM0007()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -169,7 +169,7 @@ public class NameCollisionTests
     [Fact]
     public void SamePair_ExplicitCreateMapBeatsReverseMap()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -208,7 +208,7 @@ public class NameCollisionTests
     [Fact]
     public void OneSource_TwoDestinationsWithSameShortName_QualifiedByNamespace_ReportsIM0013()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Generated;
@@ -256,7 +256,7 @@ public class NameCollisionTests
     [Fact]
     public void OneSource_NestedDestinationsWithSameShortName_QualifiedByContainingType()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -296,7 +296,7 @@ public class NameCollisionTests
     [Fact]
     public void OneSource_GenericDestinationsWithSameName_QualifiedByTypeArguments()
     {
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -335,7 +335,7 @@ public class NameCollisionTests
     public void UnresolvableCollision_ReportsIM0014_SkipsOnlyThoseMappings()
     {
         // Qualified names MapToN1Dto/MapToN2Dto are already taken by mappings to X.N1Dto and X.N2Dto.
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Generated;
 
@@ -369,7 +369,7 @@ public class NameCollisionTests
     [Fact]
     public void CollectionElementMapping_UsesQualifiedElementMethodName()
     {
-        var source = """
+        string source = """
             using System.Collections.Generic;
             using IronMapper.Attributes;
             using IronMapper.Generated;
@@ -409,7 +409,7 @@ public class NameCollisionTests
     [Fact]
     public void NestedTypesWithSameShortNames_InDifferentOuterClasses_CompileWithUnchangedNames()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Generated;
@@ -473,7 +473,7 @@ public class NameCollisionTests
     public void DifferentPairsWithSameShortNames_InDifferentNamespaces_KeepNames_HelpersAreUnique()
     {
         // 1.1.2: same hint name (CS8785, no code at all) and TransformValue_String_Item_ItemDto twice (CS0111).
-        var source = """
+        string source = """
             using IronMapper.Configuration;
             using IronMapper.Generated;
 
@@ -530,7 +530,7 @@ public class NameCollisionTests
     [Fact]
     public void NestedConverterTypes_ConvertUsing_UseConverter_MapConverter_Compile()
     {
-        var source = """
+        string source = """
             using IronMapper.Attributes;
             using IronMapper.Configuration;
             using IronMapper.Generated;

@@ -11,7 +11,9 @@ public class ProcessTests
     [InlineData("*.NestedBenchmark.*,*.InPlaceBenchmark.*", "'*.NestedBenchmark.*,*.InPlaceBenchmark.*'")]
     [InlineData("../artifacts/quick/20261024-113550", "../artifacts/quick/20261024-113550")]
     [InlineData("results/my run", "'results/my run'")]
-    [InlineData("it's", "'it''s'")]
+    [InlineData(@"..\artifacts\x", @"'..\artifacts\x'")]
+    [InlineData("it's", "\"it's\"")]
+    [InlineData("it's $x", "'it''s $x'")]
     public void Arguments_AreQuotedForCopying(string arg, string shown) => Assert.Equal(shown, ScriptCommand.Quote(arg));
 
     [Fact]

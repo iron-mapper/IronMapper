@@ -103,15 +103,15 @@ public class ProfileUnmappedPropertyTests
     [Fact]
     public void PropertyTrue_GeneratedCodeUnchanged()
     {
-        var off = RunSources(Profile, reportUnmapped: null);
-        var on = RunSources(Profile, reportUnmapped: "true");
+        string[] off = RunSources(Profile, reportUnmapped: null);
+        string[] on = RunSources(Profile, reportUnmapped: "true");
         Assert.Equal(off, on);
     }
 
     [Fact]
     public void EditorConfigSeverityError_MakesIM0001AnError_ForProfilesAndAttributes()
     {
-        var source = Profile + """
+        string source = Profile + """
 
             [MapTo(typeof(TagDto))] public class Tag { public int Id { get; set; } }
             public class TagDto { public int Id { get; set; } public int Extra { get; set; } }
@@ -167,7 +167,9 @@ public class ProfileUnmappedPropertyTests
         compilation = csharp;
         var globalOptions = new Dictionary<string, string>();
         if (reportUnmapped is not null)
+        {
             globalOptions["build_property.IronMapperReportUnmappedInProfiles"] = reportUnmapped;
+        }
 
         return CSharpGeneratorDriver.Create(
             new[] { new IronMapperGenerator().AsSourceGenerator() },

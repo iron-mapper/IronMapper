@@ -100,12 +100,16 @@ internal static class GeneratorTestHelper
                             && generatedTrees.Contains(d.Location.SourceTree)))
             .ToList();
         if (compilationErrors.Count > 0)
+        {
             return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors, null);
+        }
 
         using var stream = new MemoryStream();
         var emit = outputCompilation.Emit(stream);
         if (!emit.Success)
+        {
             throw new InvalidOperationException("Emit failed:\n" + string.Join("\n", emit.Diagnostics));
+        }
 
         var context = new System.Runtime.Loader.AssemblyLoadContext($"run-{Guid.NewGuid():N}", isCollectible: true);
         try
@@ -113,7 +117,7 @@ internal static class GeneratorTestHelper
             stream.Position = 0;
             var assembly = context.LoadFromStream(stream);
             var program = assembly.GetTypes().Single(t => t.Name == "Program");
-            var result = (string)program.GetMethod("Run")!.Invoke(null, null)!;
+            string result = (string)program.GetMethod("Run")!.Invoke(null, null)!;
             return (generatedSources, runResult.Diagnostics.ToList(), compilationErrors, result);
         }
         finally
@@ -159,9 +163,11 @@ internal static class GeneratorTestHelper
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);
         if (!result.Success)
+        {
             throw new InvalidOperationException("Emit failed:\n" + string.Join("\n", result.Diagnostics));
+        }
 
-        var image = stream.ToArray();
+        byte[] image = stream.ToArray();
         return (MetadataReference.CreateFromImage(image), image);
     }
 
@@ -190,9 +196,11 @@ internal static class GeneratorTestHelper
 
     private static IEnumerable<MetadataReference> GetFrameworkReferences()
     {
-        var trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
+        string? trustedPlatformAssemblies = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
         if (string.IsNullOrEmpty(trustedPlatformAssemblies))
+        {
             return Array.Empty<MetadataReference>();
+        }
 
         return trustedPlatformAssemblies
             .Split(Path.PathSeparator)
