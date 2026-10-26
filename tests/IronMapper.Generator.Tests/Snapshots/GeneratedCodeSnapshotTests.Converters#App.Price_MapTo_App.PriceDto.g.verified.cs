@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Price"/> to a new <see cref="global::App.PriceDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Price"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.PriceDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.PriceDto MapToPriceDto(this global::App.Price source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -23,6 +24,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Price"/> into an existing <see cref="global::App.PriceDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Price"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.PriceDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToPriceDto(this global::App.Price source, global::App.PriceDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));

@@ -68,6 +68,15 @@
   its `…Core` (one more call per in-place mapping than in 2.0.0; InPlace scenario).
   The Nested scenario of the benchmark suite maps the nested objects automatically (local sources or a package 2.1 or
   later; `ForMember(... MapFrom(...))` before). The published numbers stay those of 2.0.0.
+- Quick A/B only (`run-quick.ps1` against 2.0.0, one session; no benchmark run for 2.1.0, the published numbers stay
+  those of 2.0.0): the public `MapToX(source)` and `MapToX(source, destination)`, and the private `MapInto…`
+  of a turned-off in-place overload, are marked `[MethodImpl(MethodImplOptions.AggressiveInlining)]`. They only check
+  the arguments and call `…Core`, so the checks move to the call site and one call remains. The .NET 10 JIT already
+  inlined them; the .NET 8 JIT did not (a call and a jump to `…Core` on the hot path of a top-level mapping; seen with
+  `DisassemblyDiagnoser` in the InPlace, Flat and Nested scenarios). `…Core` is not marked. Generated code: one attribute
+  line per method, in every snapshot. On .NET 8 the extra call is gone: InPlace ×0.92 of `Manual` (×1.01 before this
+  change, 2.0.0 ×0.93); Flat, Nested and Collection are not slower. On .NET 10 the machine code is the same and the
+  differences are within the noise of the session. NativeAOT: the same size on .NET 10, 512 bytes smaller on .NET 8.
 
 ### Build
 

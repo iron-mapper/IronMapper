@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Item"/> to a new <see cref="global::App.ItemDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Item"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.ItemDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.ItemDto MapToItemDto(this global::App.Item source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -26,6 +27,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Item"/> into an existing <see cref="global::App.ItemDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Item"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.ItemDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToItemDto(this global::App.Item source, global::App.ItemDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));

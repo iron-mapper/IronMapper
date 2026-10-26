@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.OrderLine"/> to a new <see cref="global::App.OrderLineDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.OrderLine"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.OrderLineDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.OrderLineDto MapToOrderLineDto(this global::App.OrderLine source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -27,6 +28,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.OrderLine"/> into an existing <see cref="global::App.OrderLineDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.OrderLine"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.OrderLineDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToOrderLineDto(this global::App.OrderLine source, global::App.OrderLineDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));

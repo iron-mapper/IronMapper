@@ -101,7 +101,11 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `IronMapperGeneratedCodeAttribute=false`) and, with `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` —
   once, for all partial parts. Snapshot tests scrub the
   version. Tests: `GeneratedMethodsTests`, `tests/IronMapper.Integration.Tests/TurnedOffOverloadsTests.cs`.
-- **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. `MapToXList`/`MapToXArray` are
+- **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. The public `MapToX(source)`,
+  `MapToX(source, destination)` and the private `MapInto{scope}` carry `[MethodImpl(AggressiveInlining)]` (constant
+  `AggressiveInlining`): they only check the arguments and call `…Core`, and the .NET 8 JIT did not inline them (a call
+  plus a jump on the hot path; .NET 10 did). `…Core` never gets it: its size is the mapping's, so the JIT decides
+  (`IRONMAPPER_PLAN.md`, п.5.2, "AggressiveInlining на публичных методах"). `MapToXList`/`MapToXArray` are
   one-line calls of the generic `MapElementsToList`/`MapElementsToArray<TSource, TDest, TMapper>` declared once in
   `GeneratedMappers.g.cs` (`EmitElementLoops`, only when a mapping has the overload), with a private
   `readonly struct ElementMapper{scope} : IElementMapper<S, D>` per mapping whose `Map` calls `MapToX` (the private
