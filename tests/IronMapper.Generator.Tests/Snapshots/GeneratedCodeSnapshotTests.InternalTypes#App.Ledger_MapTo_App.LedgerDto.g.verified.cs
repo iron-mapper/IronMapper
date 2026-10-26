@@ -9,6 +9,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Ledger"/> to a new <see cref="global::App.LedgerDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Ledger"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.LedgerDto"/> populated from <paramref name="source"/>.</returns>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         internal static global::App.LedgerDto MapToLedgerDto(this global::App.Ledger source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -26,6 +27,7 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Ledger"/> into an existing <see cref="global::App.LedgerDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Ledger"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.LedgerDto"/> instance to populate. Init-only properties are not updated.</param>
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         internal static void MapToLedgerDto(this global::App.Ledger source, global::App.LedgerDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));

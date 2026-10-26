@@ -1,7 +1,7 @@
+using ConsumerText;
 using IronMapper.Attributes;
 using IronMapper.Configuration;
 using IronMapper.Generated;
-using ConsumerText;
 
 var user = new UserEntity { Id = 42, Name = "Alice", Email = "alice@example.com", Secret = "hidden" };
 UserDto dto = user.MapToUserDto();
@@ -27,12 +27,12 @@ var tagDto = new Tag { Label = "t" }.MapToTagDto();
 
 // Referenced libraries that also use IronMapper: InternalLib has only internal maps (its generated class is
 // internal and invisible here), PublicLib has public maps called from this assembly.
-var internalLib = InternalLib.InternalLibApi.Describe("s", 3);
+string internalLib = InternalLib.InternalLibApi.Describe("s", 3);
 var productDto = new PublicLib.Product { Name = "p" }.MapToProductDto();
 var priceDtos = new[] { new PublicLib.Price { Amount = 2.5m } }.MapToPriceDtoArray();
 var productTarget = new PublicLib.ProductDto();
 new PublicLib.Product { Name = "q" }.MapToProductDto(productTarget);
-var publicLibInternal = PublicLib.PublicLibApi.Reveal("r");
+string publicLibInternal = PublicLib.PublicLibApi.Reveal("r");
 // One class per assembly, GeneratedMappers_{assembly name with . as _}.
 var internalLibClass = typeof(InternalLib.InternalLibApi).Assembly.GetType(
     "IronMapper.Generated.GeneratedMappers_IronMapper_PackageConsumer_InternalLib");
@@ -49,36 +49,138 @@ new PublicLib.Member { Name = "i" }.MapToPublicMemberDto(publicMemberTarget);
 var teamDto = new PublicLib.Team { Members = { new PublicLib.Member { Name = "t" } } }.MapToTeamDto();
 
 var failures = new List<string>();
-if (dto.Id != 42) failures.Add($"Id: expected 42, got {dto.Id}");
-if (dto.FullName != "Alice") failures.Add($"FullName: expected 'Alice', got '{dto.FullName}'");
-if (dto.Email != "alice@example.com") failures.Add($"Email: expected 'alice@example.com', got '{dto.Email}'");
-if (dto.Secret != string.Empty) failures.Add($"Secret: expected to be ignored, got '{dto.Secret}'");
-if (orderDto.FullAddress != "Main St, Springfield") failures.Add($"FullAddress: expected 'Main St, Springfield', got '{orderDto.FullAddress}'");
-if (ledgerDto.Code != "L-7") failures.Add($"Internal [MapTo]: expected 'L-7', got '{ledgerDto.Code}'");
-if (entryDto.Amount != 3.5m) failures.Add($"Internal profile map: expected 3.5, got {entryDto.Amount}");
-if (sessionDto.GraceSeconds != 120) failures.Add($"Profile static helper: expected 120, got {sessionDto.GraceSeconds}");
-if (sessionDto.Title != "INTRO!") failures.Add($"Extension method from profile usings: expected 'INTRO!', got '{sessionDto.Title}'");
-if (shopItem.Name != "as1") failures.Add($"Shop.Item: expected 'as1', got '{shopItem.Name}'");
-if (stockItem.Name != "ct2") failures.Add($"Stock.Item: expected 'ct2', got '{stockItem.Name}'");
-if (tagDto.Label != "T") failures.Add($"Nested [MapConverter]: expected 'T', got '{tagDto.Label}'");
-if (internalLib != "s:3") failures.Add($"InternalLib: expected 's:3', got '{internalLib}'");
-if (productDto.Name != "p") failures.Add($"PublicLib [MapTo] from consumer: expected 'p', got '{productDto.Name}'");
-if (priceDtos.Length != 1 || priceDtos[0].Amount != 2.5m) failures.Add("PublicLib profile array map from consumer: expected [2.5]");
-if (productTarget.Name != "q") failures.Add($"PublicLib in-place map from consumer: expected 'q', got '{productTarget.Name}'");
-if (publicLibInternal != "r") failures.Add($"PublicLib internal map: expected 'r', got '{publicLibInternal}'");
-if (internalLibClass is null || internalLibClass.IsPublic) failures.Add("InternalLib: GeneratedMappers must exist and be internal (only internal maps)");
-if (publicLibClass is null || !publicLibClass.IsPublic) failures.Add("PublicLib: GeneratedMappers must exist and be public");
-if (adminMember is not PublicLib.Admin.MemberDto { Name: "m" }) failures.Add($"PublicLib MapToAdminMemberDto: expected 'm', got '{adminMember.Name}'");
-if (publicMembers.Count != 1 || publicMembers[0].Name != "l") failures.Add("PublicLib MapToPublicMemberDtoList: expected ['l']");
-if (adminMembers.Length != 1 || adminMembers[0].Name != "a") failures.Add("PublicLib MapToAdminMemberDtoArray: expected ['a']");
-if (publicMemberTarget.Name != "i") failures.Add($"PublicLib in-place MapToPublicMemberDto: expected 'i', got '{publicMemberTarget.Name}'");
-if (GlobalUsingCalls.Describe() != "gpm") failures.Add($"Calls without an explicit using: expected 'gpm', got '{GlobalUsingCalls.Describe()}'");
-if (teamDto.Members.Count != 1 || teamDto.Members[0].Name != "t") failures.Add("PublicLib nested collection of qualified element map: expected ['t']");
+if (dto.Id != 42)
+{
+    failures.Add($"Id: expected 42, got {dto.Id}");
+}
+
+if (dto.FullName != "Alice")
+{
+    failures.Add($"FullName: expected 'Alice', got '{dto.FullName}'");
+}
+
+if (dto.Email != "alice@example.com")
+{
+    failures.Add($"Email: expected 'alice@example.com', got '{dto.Email}'");
+}
+
+if (dto.Secret != string.Empty)
+{
+    failures.Add($"Secret: expected to be ignored, got '{dto.Secret}'");
+}
+
+if (orderDto.FullAddress != "Main St, Springfield")
+{
+    failures.Add($"FullAddress: expected 'Main St, Springfield', got '{orderDto.FullAddress}'");
+}
+
+if (ledgerDto.Code != "L-7")
+{
+    failures.Add($"Internal [MapTo]: expected 'L-7', got '{ledgerDto.Code}'");
+}
+
+if (entryDto.Amount != 3.5m)
+{
+    failures.Add($"Internal profile map: expected 3.5, got {entryDto.Amount}");
+}
+
+if (sessionDto.GraceSeconds != 120)
+{
+    failures.Add($"Profile static helper: expected 120, got {sessionDto.GraceSeconds}");
+}
+
+if (sessionDto.Title != "INTRO!")
+{
+    failures.Add($"Extension method from profile usings: expected 'INTRO!', got '{sessionDto.Title}'");
+}
+
+if (shopItem.Name != "as1")
+{
+    failures.Add($"Shop.Item: expected 'as1', got '{shopItem.Name}'");
+}
+
+if (stockItem.Name != "ct2")
+{
+    failures.Add($"Stock.Item: expected 'ct2', got '{stockItem.Name}'");
+}
+
+if (tagDto.Label != "T")
+{
+    failures.Add($"Nested [MapConverter]: expected 'T', got '{tagDto.Label}'");
+}
+
+if (internalLib != "s:3")
+{
+    failures.Add($"InternalLib: expected 's:3', got '{internalLib}'");
+}
+
+if (productDto.Name != "p")
+{
+    failures.Add($"PublicLib [MapTo] from consumer: expected 'p', got '{productDto.Name}'");
+}
+
+if (priceDtos.Length != 1 || priceDtos[0].Amount != 2.5m)
+{
+    failures.Add("PublicLib profile array map from consumer: expected [2.5]");
+}
+
+if (productTarget.Name != "q")
+{
+    failures.Add($"PublicLib in-place map from consumer: expected 'q', got '{productTarget.Name}'");
+}
+
+if (publicLibInternal != "r")
+{
+    failures.Add($"PublicLib internal map: expected 'r', got '{publicLibInternal}'");
+}
+
+if (internalLibClass is null || internalLibClass.IsPublic)
+{
+    failures.Add("InternalLib: GeneratedMappers must exist and be internal (only internal maps)");
+}
+
+if (publicLibClass is null || !publicLibClass.IsPublic)
+{
+    failures.Add("PublicLib: GeneratedMappers must exist and be public");
+}
+
+if (adminMember is not PublicLib.Admin.MemberDto { Name: "m" })
+{
+    failures.Add($"PublicLib MapToAdminMemberDto: expected 'm', got '{adminMember.Name}'");
+}
+
+if (publicMembers.Count != 1 || publicMembers[0].Name != "l")
+{
+    failures.Add("PublicLib MapToPublicMemberDtoList: expected ['l']");
+}
+
+if (adminMembers.Length != 1 || adminMembers[0].Name != "a")
+{
+    failures.Add("PublicLib MapToAdminMemberDtoArray: expected ['a']");
+}
+
+if (publicMemberTarget.Name != "i")
+{
+    failures.Add($"PublicLib in-place MapToPublicMemberDto: expected 'i', got '{publicMemberTarget.Name}'");
+}
+
+if (GlobalUsingCalls.Describe() != "gpm")
+{
+    failures.Add($"Calls without an explicit using: expected 'gpm', got '{GlobalUsingCalls.Describe()}'");
+}
+
+if (teamDto.Members.Count != 1 || teamDto.Members[0].Name != "t")
+{
+    failures.Add("PublicLib nested collection of qualified element map: expected ['t']");
+}
 
 if (failures.Count > 0)
 {
-    foreach (var failure in failures)
+    foreach (string failure in failures)
+    {
         Console.Error.WriteLine($"FAIL {failure}");
+    }
+
     return 1;
 }
 

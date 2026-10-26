@@ -15,6 +15,12 @@
     <IsPackable>false</IsPackable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Not the repository code style (root Directory.Build.props): the sources stand for a user's code and are also built
+      with LangVersion 9 and 8 (no file-scoped namespace, no target-typed new). The IDE0005 variants turn it on with
+      -p:EnforceCodeStyleInBuild=true and an .editorconfig of their own.
+    -->
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <IronMapperVersion Condition="'$(IronMapperVersion)' == ''">$(Version)</IronMapperVersion>
     <IronMapperPackage Condition="'$(IronMapperPackage)' == ''">IronMapper</IronMapperPackage>
     <ConsumerSource Condition="'$(ConsumerSource)' == ''">Sources/NoUsing.cs</ConsumerSource>

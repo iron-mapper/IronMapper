@@ -49,6 +49,15 @@ internal static class MapperCodeEmitter
     public const string ArrayHelperName = "MapElementsToArray";
 
     /// <summary>
+    /// On the public <c>MapToX</c> overloads and the private <c>MapInto</c>: they only check the arguments and call
+    /// <c>…Core</c>, so the checks move to the call site and one call remains. The .NET 10 JIT inlines them by itself;
+    /// the .NET 8 JIT did not (a call plus a jump to <c>…Core</c> on the hot path). Never on <c>…Core</c>: its size is the
+    /// mapping's, and the JIT decides.
+    /// </summary>
+    private const string AggressiveInlining =
+        "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
+
+    /// <summary>
     /// Generates the source text for a single mapping. The method name, the helper-name scope and the hint name
     /// come from <paramref name="entry"/> (see <see cref="Analysis.MappingPlanner"/>).
     /// </summary>
@@ -89,6 +98,7 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> to a new <see cref=\"{EscapeXml(destFullName)}\"/>.</summary>");
         sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> instance to map.</param>");
         sb.AppendLine($"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
+        sb.AppendLine($"        {AggressiveInlining}");
         sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
         sb.AppendLine("        {");
         sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
@@ -181,10 +191,12 @@ internal static class MapperCodeEmitter
             sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
             sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
             sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
+            sb.AppendLine($"        {AggressiveInlining}");
             sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
         }
         else
         {
+            sb.AppendLine($"        {AggressiveInlining}");
             sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
         }
         sb.AppendLine("        {");
