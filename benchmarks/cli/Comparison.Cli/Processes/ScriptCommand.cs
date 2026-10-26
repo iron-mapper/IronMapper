@@ -29,11 +29,19 @@ internal sealed partial record ScriptCommand(string ScriptPath, IReadOnlyList<st
 
     /// <summary>
     /// Quotes an argument for pwsh and POSIX shells: plain words stay as they are, anything else (globs, commas, spaces)
-    /// goes in single quotes.
+    /// goes in single quotes, which mean the same in both. An apostrophe has no such form inside single quotes, so an
+    /// argument with one goes in double quotes when nothing in it is special there; otherwise it is quoted for pwsh.
     /// </summary>
-    public static string Quote(string arg) =>
-        PlainArgument().IsMatch(arg) ? arg : "'" + arg.Replace("'", "''") + "'";
+    public static string Quote(string arg)
+    {
+        if (PlainArgument().IsMatch(arg))
+            return arg;
+        if (!arg.Contains('\''))
+            return "'" + arg + "'";
+        return arg.IndexOfAny(['"', '$', '`', '\\', '!']) < 0 ? "\"" + arg + "\"" : "'" + arg.Replace("'", "''") + "'";
+    }
 
-    [GeneratedRegex(@"^[A-Za-z0-9_./:\\=+-]+$")]
+    // No '\': unquoted, a POSIX shell takes it as an escape (..\artifacts\x would arrive as ..artifactsx).
+    [GeneratedRegex(@"^[A-Za-z0-9_./:=+-]+$")]
     private static partial Regex PlainArgument();
 }

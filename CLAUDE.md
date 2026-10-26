@@ -319,6 +319,7 @@ UseLocalIronMapper=true dotnet run -c Release -f net10.0 --project src/Compariso
 pwsh ./scripts/run-quick.ps1          # A/B: published 2.0.0 vs ../src (Nested, InPlace; net10.0, net8.0) -> artifacts/quick/
 pwsh ./scripts/run-all.ps1            # full run -> results/RESULTS.md; -Quick for a shorter local run
 ./bench.ps1                           # CLI: menu; or ./bench.ps1 quick --dry / full --check-only / results
+./bench.ps1 quick --filter 'Nested,InPlace' --frameworks 'net10.0,net8.0'   # lists in single quotes (pwsh and bash)
 ```
 
 ---
