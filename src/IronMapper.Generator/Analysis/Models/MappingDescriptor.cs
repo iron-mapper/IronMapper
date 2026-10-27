@@ -23,6 +23,24 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <summary>Per-property mapping instructions.</summary>
     public EquatableArray<PropertyMappingDescriptor> PropertyMappings { get; }
 
+    /// <summary>
+    /// The destination is created by a constructor with parameters (<c>new D(a: …, b: …) { … }</c>): it has no accessible
+    /// parameterless constructor (<see cref="ConstructorSelection"/>). <see cref="ConstructorArguments"/> are the
+    /// arguments, in parameter order, without the parameters that take their default value; <see cref="PropertyMappings"/>
+    /// are the properties set by the initializer after the constructor (not those of the parameters). No in-place update
+    /// is generated for such a mapping (item 2.15 of the plan).
+    /// </summary>
+    public bool UsesConstructor { get; }
+
+    /// <summary>
+    /// Arguments of the constructor (<see cref="UsesConstructor"/>), passed by name: <see cref="PropertyMappingDescriptor.DestPropertyName"/>
+    /// is the parameter name. Empty when the destination is created with an object initializer.
+    /// </summary>
+    public EquatableArray<PropertyMappingDescriptor> ConstructorArguments { get; }
+
+    /// <summary>The constructor arguments, then the properties: every value the generated code maps.</summary>
+    public IEnumerable<PropertyMappingDescriptor> AllValueMappings => ConstructorArguments.Concat(PropertyMappings);
+
     /// <summary>Diagnostics to report when this mapping is emitted.</summary>
     public EquatableArray<DiagnosticInfo> Diagnostics { get; }
 
@@ -144,7 +162,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 return true;
             }
 
-            foreach (var property in PropertyMappings)
+            foreach (var property in AllValueMappings)
             {
                 if (property.ConverterIsCached)
                 {
@@ -160,13 +178,15 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// The in-place <c>…Core</c> of this mapping writes every property that a new object gets, so the in-place overload
     /// of a mapping that has this pair as a nested object may update an existing nested object. <see langword="false"/>
     /// with <c>ConvertUsing</c> (the converter makes the object) or a mapped <c>init</c>-only property (the in-place
-    /// overload skips it, item 2.15 of the plan): such a nested object is assigned a new instance, as before.
+    /// overload skips it, item 2.15 of the plan): such a nested object is assigned a new instance, as before. Also
+    /// <see langword="false"/> for a destination created by a constructor (<see cref="UsesConstructor"/>), which has no
+    /// in-place <c>…Core</c>.
     /// </summary>
     public bool CanUpdateInPlace
     {
         get
         {
-            if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
+            if (UsesConstructor || WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
             {
                 return false;
             }
@@ -212,6 +232,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="wholeObjectConverterIsCached">Whether one instance of <paramref name="wholeObjectConverterType"/> is reused.</param>
     /// <param name="originLocation">Where the mapping is defined (see <see cref="OriginLocation"/>).</param>
     /// <param name="methodOverrides">Overloads set for this mapping (see <see cref="MethodOverrides"/>).</param>
+    /// <param name="usesConstructor">The destination is created by a constructor (see <see cref="UsesConstructor"/>).</param>
+    /// <param name="constructorArguments">The constructor arguments (see <see cref="ConstructorArguments"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -237,8 +259,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         string destTypeArgsFull = "",
         bool wholeObjectConverterIsCached = false,
         LocationInfo? originLocation = null,
-        GeneratedMethodOverrides methodOverrides = default)
+        GeneratedMethodOverrides methodOverrides = default,
+        bool usesConstructor = false,
+        EquatableArray<PropertyMappingDescriptor> constructorArguments = default)
     {
+        UsesConstructor = usesConstructor;
+        ConstructorArguments = constructorArguments;
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
         DestTypeName = destTypeName;
@@ -279,7 +305,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
                 naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation,
-                MethodOverrides);
+                MethodOverrides, UsesConstructor, ConstructorArguments);
 
     /// <summary>A copy with the overloads set for this mapping (see <see cref="MethodOverrides"/>).</summary>
     public MappingDescriptor WithMethodOverrides(GeneratedMethodOverrides overrides)
@@ -289,7 +315,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
-                DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides);
+                DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides, UsesConstructor, ConstructorArguments);
 
     /// <summary>
     /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
@@ -303,7 +329,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 EquatableArray<DiagnosticInfo>.Empty, HasCustomConverter, WhenConditionBody, WholeObjectConverterType,
                 WholeObjectLambdaBody, BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName,
                 DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
-                DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides);
+                DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides,
+                usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -339,13 +366,15 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestTypeArgsShort != other.DestTypeArgsShort
             || DestTypeArgsFull != other.DestTypeArgsFull
             || !Nullable.Equals(OriginLocation, other.OriginLocation)
-            || !MethodOverrides.Equals(other.MethodOverrides))
+            || !MethodOverrides.Equals(other.MethodOverrides)
+            || UsesConstructor != other.UsesConstructor)
         {
             return false;
         }
 
         // Diagnostics count too: an edit that only adds or removes a diagnostic must reach the output.
         return PropertyMappings.Equals(other.PropertyMappings)
+            && ConstructorArguments.Equals(other.ConstructorArguments)
             && Diagnostics.Equals(other.Diagnostics)
             && ValueTransformers.Equals(other.ValueTransformers);
     }
@@ -380,6 +409,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + OriginLocation.GetHashCode();
         hash = hash * 31 + MethodOverrides.GetHashCode();
         hash = hash * 31 + PropertyMappings.GetHashCode();
+        hash = hash * 31 + UsesConstructor.GetHashCode();
+        hash = hash * 31 + ConstructorArguments.GetHashCode();
         hash = hash * 31 + Diagnostics.GetHashCode();
         hash = hash * 31 + ValueTransformers.GetHashCode();
         return hash;

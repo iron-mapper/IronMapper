@@ -152,6 +152,17 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   `ConverterCache<T>.Instance` — a private generic holder declared once in `GeneratedMappers.g.cs` when a generated
   mapping needs it (`MappingPlanEntry.UsesConverterCache`); any other converter is `new T()` per call. A converter the
   generated class cannot create → IM0015, mapping not generated. Runtime tests: `tests/IronMapper.Tests/ConverterCacheTests.cs`.
+- **Creating the destination** (`Analysis/ConstructorSelection.cs`, issue #24, from 2.1.0): an accessible parameterless
+  constructor or a struct → object initializer, as in 2.0.0. Otherwise a constructor with named arguments
+  (`MappingDescriptor.UsesConstructor`, `ConstructorArguments`: `PropertyMappingDescriptor`s whose `DestPropertyName` is
+  the parameter name; `AllValueMappings` = arguments + properties), the other properties in an initializer after it. The
+  analyzer of the mapping finds a parameter's value (`ParameterResolver`: name ignoring case, `[MapProperty]`, `ForMember`
+  of the property with the same name, `Ignore` = default value) with the same checks as a property (`PropertyTypeCheck`
+  takes a `DestinationMember`: property or parameter). Choice: the callable constructor with the most parameters from
+  the source, then the most parameters; tie IM0017, no value IM0009 (error), none accessible IM0018 — the mapping is not
+  generated. No in-place overload and no in-place `…Core` for such a mapping (the plan's entry turns `InPlace` off); the
+  private `MapInto{scope}` of the registration throws `MappingException`. No attribute in the destination type: domain
+  types must not depend on IronMapper. Tests: `ConstructorMappingTests` (generator and runtime), `ConstructorMapperTests`.
 - **Unresolved types** (`typeof(Missing)`, `CreateMap<_, Missing>`, a converter type): the compiler reports them at the
   user's code; the mapping is skipped without a diagnostic of its own (`SymbolHelpers.ContainsErrorType`), so the
   generated code adds no errors. IM0003 only for a type that compiles but cannot be mapped (`typeof(Box<>)`, arrays).

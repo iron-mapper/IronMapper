@@ -29,9 +29,10 @@ public static class EdgeCaseMappers
     ];
 
     /// <summary>
-    /// IronMapper cannot map to a positional record: the generated <c>new PointRecordDto { ... }</c> fails with
-    /// CS7036 (docs/advanced.md, "Record types"; confirmed with 1.1.3, no IronMapper diagnostic is reported).
-    /// The mapping is therefore not declared, otherwise the project does not build.
+    /// Up to 2.0.x IronMapper cannot map to a positional record: the generated <c>new PointRecordDto { ... }</c> fails with
+    /// CS7036 (confirmed with 1.1.3, no IronMapper diagnostic is reported). The mapping is therefore not declared for
+    /// those versions, otherwise the project does not build; from 2.1 the record is created by its constructor
+    /// (<c>IRONMAPPER_CONSTRUCTORS</c>).
     /// </summary>
     internal const string IronMapperPositionalRecord =
         "does not compile: CS7036 in the generated file (new T { ... } without constructor arguments)";
@@ -81,7 +82,12 @@ public sealed class IronMapperEdgeCaseProfile : MappingProfile
         CreateMap<TagsEntity, TagsDto>();
         // No ForMember: the fact is whether flattening happens by naming convention.
         CreateMap<OrderEntity, OrderFlatDto>();
+#if IRONMAPPER_CONSTRUCTORS
+        // From 2.1 the positional record is created by its constructor.
+        CreateMap<PointEntity, PointRecordDto>();
+#else
         // CreateMap<PointEntity, PointRecordDto>() does not compile, see EdgeCaseMappers.IronMapperPositionalRecord.
+#endif
 
 #if IRONMAPPER_NESTED_OBJECTS
         // From 2.1 the nullable nested object is mapped automatically, with a null check (null → null).
@@ -98,7 +104,11 @@ public sealed class IronMapperEdgeCaseMapper : IEdgeCaseMapper
 {
     public string Name => MapperNames.IronMapper;
     public TagsDto MapTags(TagsEntity src) => src.MapToTagsDto();
+#if IRONMAPPER_CONSTRUCTORS
+    public PointRecordDto MapPoint(PointEntity src) => src.MapToPointRecordDto();
+#else
     public PointRecordDto MapPoint(PointEntity src) => throw new NotSupportedException(EdgeCaseMappers.IronMapperPositionalRecord);
+#endif
     public OrderFlatDto MapFlattening(OrderEntity src) => src.MapToOrderFlatDto();
     public UserDto? MapNullableUser(UserEntity? src) => src!.MapToUserDto();
     public NullableOrderDto MapNullableOrder(NullableOrderEntity src) => src.MapToNullableOrderDto();
@@ -118,7 +128,11 @@ public sealed class IronMapperDiEdgeCaseMapper : IEdgeCaseMapper
     }
 
     public TagsDto MapTags(TagsEntity src) => _mapper.Map<TagsEntity, TagsDto>(src);
+#if IRONMAPPER_CONSTRUCTORS
+    public PointRecordDto MapPoint(PointEntity src) => _mapper.Map<PointEntity, PointRecordDto>(src);
+#else
     public PointRecordDto MapPoint(PointEntity src) => throw new NotSupportedException(EdgeCaseMappers.IronMapperPositionalRecord);
+#endif
     public OrderFlatDto MapFlattening(OrderEntity src) => _mapper.Map<OrderEntity, OrderFlatDto>(src);
     public UserDto? MapNullableUser(UserEntity? src) => _mapper.Map<UserEntity?, UserDto?>(src);
     public NullableOrderDto MapNullableOrder(NullableOrderEntity src) => _mapper.Map<NullableOrderEntity, NullableOrderDto>(src);

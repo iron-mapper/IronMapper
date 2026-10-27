@@ -231,11 +231,11 @@ public class DiagnosticsTests
     }
 
     // -----------------------------------------------------------------------
-    // IM0009 — Record constructor parameter not mapped
+    // IM0009 — Constructor parameter not mapped (an error from 2.1.0: the destination is created by its constructor)
     // -----------------------------------------------------------------------
 
     [Fact]
-    public void IM0009_RecordDestWithUnmappedParameter_EmitsWarning()
+    public void IM0009_RecordDestWithUnmappedParameter_IsAnError_MappingNotGenerated()
     {
         string source = """
             using IronMapper.Attributes;
@@ -249,12 +249,12 @@ public class DiagnosticsTests
             public record DestRecord(string Name, int MissingFromSource);
             """;
 
-        var (_, diagnostics) = GeneratorTestHelper.RunGenerator(source);
+        var (generated, diagnostics) = GeneratorTestHelper.RunGenerator(source);
 
-        var im0009 = diagnostics.Where(d => d.Id == "IM0009").ToList();
-        Assert.NotEmpty(im0009);
-        Assert.Contains(im0009, d => d.GetMessage().Contains("MissingFromSource"));
-        Assert.All(im0009, d => Assert.Equal(DiagnosticSeverity.Warning, d.Severity));
+        var im0009 = Assert.Single(diagnostics, d => d.Id == "IM0009");
+        Assert.Contains("MissingFromSource", im0009.GetMessage());
+        Assert.Equal(DiagnosticSeverity.Error, im0009.Severity);
+        Assert.DoesNotContain(generated, s => s.Contains("MapToDestRecord("));
     }
 
     [Fact]

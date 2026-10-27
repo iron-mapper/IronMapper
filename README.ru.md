@@ -257,8 +257,11 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
 
 ## Известные ограничения
 
-- **Позиционные record в качестве приёмника не компилируются** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): генератор всегда использует
-  инициализатор объекта. Record и классы со свойствами `init` работают.
+- **Приёмники, которые создаются конструктором** (позиционные record, классы без конструктора без параметров; с
+  2.1.0, [#24](https://github.com/iron-mapper/IronMapper/issues/24)), не получают in-place-перегрузку, и конструктор
+  нельзя выбрать явно. Приёмник только с приватным конструктором и статическим фабричным методом пока не маппится
+  (`IM0018`; используйте `ConvertUsing`). См.
+  [Конструкторы и позиционные record](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md#конструкторы-и-позиционные-record).
 - **Нет flattening по соглашению** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` не заполняется из `Customer.Address.City`.
   Используйте `MapFrom`.
 - **`IM0001` для маппингов из профилей по умолчанию выключена** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): несопоставленное свойство приёмника в `CreateMap`

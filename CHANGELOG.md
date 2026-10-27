@@ -4,6 +4,32 @@
 
 ### Added
 
+- **Constructors and positional records** ([#24](https://github.com/iron-mapper/IronMapper/issues/24)): a destination
+  without an accessible parameterless constructor (a positional record such as `record StateDto(string? Address,
+  DateTimeOffset? ExpiresAt)`, a class whose constructors all take parameters) is created by its constructor, with named
+  arguments, in attribute mappings, profiles and `ReverseMap()`. A parameter takes the source property of the same name
+  (ignoring case; `[MapProperty("param")]` and `[MapConverter]` on it in attribute mappings) with the conversions of a
+  property: implicit conversions (widening to nullable), collections (`T[]` → `IReadOnlyList<T>`, elements mapped one
+  by one), nested objects through the mapping of their pair with the same `null` checks; a parameter with a default
+  value and no source keeps the default value. In a profile, `ForMember` of the property with the same name configures
+  the parameter: `MapFrom` (a computed parameter), `UseConverter`, `Ignore()` (the default value). The destination
+  properties that the constructor does not set are filled by an object initializer after it. Of several constructors,
+  the one with the most parameters mapped from the source among those that can be called, then the one with the most
+  parameters; nothing in the destination type selects it (no IronMapper attribute in domain types). An exception thrown
+  by the constructor reaches the caller as it is. A destination with an accessible parameterless constructor, or a
+  struct, is created with an object initializer as before (the generated code of such mappings does not change). Up to
+  2.0.0 such a destination failed with `CS7036` inside the generated file, so no build that compiles with 2.0.0 changes.
+  **No in-place overload** is generated for a destination created by a constructor (what it should do with values that
+  only the constructor takes is not decided yet): `IMapper.Map(source, destination)` throws `MappingException` that says
+  so, and the in-place update of a parent object assigns a new instance of such a nested object. See
+  [Constructors and positional records](docs/advanced.md#constructors-and-positional-records).
+- **Diagnostics `IM0017` and `IM0018` (errors):** two constructors of the destination fit equally well (`IM0017`; the
+  order of declaration does not decide), or the destination has no public or internal constructor, such as a domain type
+  created by a static factory method (`IM0018`; until factories are supported, use `ConvertUsing`). The mapping is not
+  generated; up to 2.0.0 the build failed inside the generated file (`CS7036`, `CS0122`). See
+  [IM0017](docs/diagnostics.md#im0017--constructor-of-the-destination-is-ambiguous) and
+  [IM0018](docs/diagnostics.md#im0018--destination-has-no-accessible-constructor).
+
 - **Nested objects are mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)): a
   name-matched property whose types differ (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`) is mapped by
   the mapping of its type pair — of this project (also of a base type or an interface of the source type) or of a
@@ -50,6 +76,14 @@
   properties. See [IM0002](docs/diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping).
 
 ### Changed
+
+- **`IM0009` is an error and means "a constructor parameter gets no value"** (attribute mappings and profiles): for a
+  destination created by its constructor, a parameter of the constructor that comes closest has no source property of
+  the same name and no default value, a source value that cannot be converted, or `Ignore` without a default value; the
+  mapping is not generated. Up to 2.0.0 `IM0009` was a warning for records in attribute mappings only, while the
+  generated object initializer did not compile anyway without a parameterless constructor (`CS7036`); a record with a
+  parameterless constructor no longer gets `IM0009` for the parameters of its other constructors. See
+  [IM0009](docs/diagnostics.md#im0009--constructor-parameter-not-mapped).
 
 - **Generated code:** every `MapToX(source)` is split into the public method, which checks `source` for `null` as
   before, and a private `MapToXCore(source)` with the body (`{MethodName}Core{HelperScope}` when a mapping of the same

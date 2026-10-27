@@ -63,7 +63,7 @@ internal static class PropertyTypeCheck
     /// differ are mapped element by element and are checked by <see cref="CheckCollection"/> instead.
     /// </summary>
     public static DiagnosticInfo? CheckAssignment(Compilation compilation, ITypeSymbol sourceType, ITypeSymbol destType,
-        string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location)
+        string sourceDisplay, DestinationMember destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location)
     {
         if (IsAssignable(compilation, sourceType, destType))
         {
@@ -77,7 +77,7 @@ internal static class PropertyTypeCheck
         {
             // Only IncludeMembers gets here: name-matched nested objects are mapped by CheckNestedObject.
             reason = $"'{sourceDisplay}' is '{st}' and the destination is '{dt}': IncludeMembers does not map nested objects. "
-                     + $"Configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(...)), with o.UseConverter<T>() "
+                     + $"Configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)), with o.UseConverter<T>() "
                      + $"(an ITypeConverter<{st}, {dt}>), or with o.Ignore().";
         }
         else
@@ -87,7 +87,7 @@ internal static class PropertyTypeCheck
                      {
                          Origin.Attribute => $"Add [MapConverter(typeof(...))] (an ITypeConverter<{st}, {dt}>) to the source property, "
                                              + "map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].",
-                         Origin.Profile => $"Configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(...)) that converts the value, "
+                         Origin.Profile => $"Configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)) that converts the value, "
                                            + $"with o.UseConverter<T>() (an ITypeConverter<{st}, {dt}>), or with o.Ignore().",
                          _ => ReverseHint(destProp),
                      };
@@ -100,7 +100,7 @@ internal static class PropertyTypeCheck
     /// The IM0002 of a <c>MapFrom</c> expression whose type cannot be assigned to the destination property, or
     /// <see langword="null"/>. An expression without a type (<c>null</c>, <c>default</c>) is left to the compiler.
     /// </summary>
-    public static DiagnosticInfo? CheckMapFrom(Compilation compilation, ITypeSymbol? expressionType, IPropertySymbol destProp,
+    public static DiagnosticInfo? CheckMapFrom(Compilation compilation, ITypeSymbol? expressionType, DestinationMember destProp,
         INamedTypeSymbol destSymbol, LocationInfo? location)
     {
         if (expressionType is null || expressionType.TypeKind == TypeKind.Error
@@ -123,7 +123,7 @@ internal static class PropertyTypeCheck
     /// element type pairs (<see cref="MissingElementPairsKey"/>), and the plan decides.
     /// </summary>
     public static DiagnosticInfo? CheckCollection(Compilation compilation, CollectionMapping collection, ITypeSymbol sourceElement,
-        ITypeSymbol destElement, string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin,
+        ITypeSymbol destElement, string sourceDisplay, DestinationMember destProp, INamedTypeSymbol destSymbol, Origin origin,
         LocationInfo? location, out bool mappedElsewhere)
     {
         mappedElsewhere = IsMappedByExistingMethod(compilation, collection.ElementMethod, sourceElement, destElement);
@@ -160,7 +160,7 @@ internal static class PropertyTypeCheck
     /// (<see cref="IsUpdatedByExistingMethod"/>); without it (turned off there) a new object is assigned.
     /// </summary>
     public static NestedObjectMapping? CheckNestedObject(Compilation compilation, ITypeSymbol sourceType, ITypeSymbol destType,
-        string sourceDisplay, IPropertySymbol destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location,
+        string sourceDisplay, DestinationMember destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location,
         ImmutableArray<DiagnosticInfo>.Builder diagnostics)
     {
         if (IsAssignable(compilation, sourceType, destType) || !IsObject(sourceType, allowInterface: true) || !IsObject(destType))
@@ -180,7 +180,7 @@ internal static class PropertyTypeCheck
                 + origin switch
                 {
                     Origin.Attribute => ", or mark the destination property [Ignore].",
-                    Origin.Profile => $", or configure it with ForMember(d => d.{destProp.Name}, o => o.MapFrom(...)) or with o.Ignore().",
+                    Origin.Profile => $", or configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)) or with o.Ignore().",
                     _ => ". " + ReverseHint(destProp),
                 }, location));
             return new NestedObjectMapping(method, NullHandling.NotNull, default, skipped: true, updatesInPlace: false,
@@ -190,7 +190,7 @@ internal static class PropertyTypeCheck
         var source = sourceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
         var dest = destType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
         // A struct is copied by the getter: updating the copy would change nothing, so it is assigned.
-        bool readable = !destType.IsValueType && destProp.GetMethod is { } getter
+        bool readable = !destType.IsValueType && destProp.Property?.GetMethod is { } getter
                        && compilation.IsSymbolAccessibleWithin(getter, compilation.Assembly);
         if (IsMappedByExistingMethod(compilation, method, source, dest))
         {
@@ -218,7 +218,7 @@ internal static class PropertyTypeCheck
     /// IM0002 "no mapping from <paramref name="source"/> to <paramref name="dest"/>", reported only when the plan
     /// generates none of the pairs; with the properties of the code fix that adds the mapping.
     /// </summary>
-    private static DiagnosticInfo MissingPair(IPropertySymbol destProp, INamedTypeSymbol destSymbol, string reason,
+    private static DiagnosticInfo MissingPair(DestinationMember destProp, INamedTypeSymbol destSymbol, string reason,
         LocationInfo? location, ITypeSymbol source, ITypeSymbol dest, Origin origin)
         => Create(destProp, destSymbol, reason, location)
             .WithProperty(MissingElementPairsKey, string.Join("|", ElementPairKeys(source, dest)))
@@ -256,13 +256,13 @@ internal static class PropertyTypeCheck
         return builder.ToImmutable();
     }
 
-    private static DiagnosticInfo Create(IPropertySymbol destProp, INamedTypeSymbol destSymbol, string reason, LocationInfo? location)
+    private static DiagnosticInfo Create(DestinationMember destProp, INamedTypeSymbol destSymbol, string reason, LocationInfo? location)
         => new DiagnosticInfo(DiagnosticDescriptors.IncompatiblePropertyTypes, destProp.Name, destSymbol.ToDisplayString(), reason)
             .WithLocation(location)
             .WithProperty(MappingAnalyzer.PropertyNameKey, destProp.Name);
 
-    private static string ReverseHint(IPropertySymbol destProp)
-        => $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap and configure '{destProp.Name}' "
+    private static string ReverseHint(DestinationMember destProp)
+        => $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap and configure '{destProp.DisplayName}' "
            + "there (ForMember with MapFrom, UseConverter or Ignore), or remove ReverseMap().";
 
     /// <summary>
@@ -442,4 +442,42 @@ internal sealed class NestedObjectMapping
 
     /// <summary>See <see cref="PropertyMappingDescriptor.NestedSourceTypeFqn"/>.</summary>
     public string SourceTypeFqn { get; }
+}
+
+/// <summary>
+/// The destination member a value is written to: a property (<c>destination.X = value</c>, an initializer line) or a
+/// constructor parameter (<c>new D(x: value)</c>). The checks of <see cref="PropertyTypeCheck"/> take either.
+/// </summary>
+internal readonly struct DestinationMember
+{
+    private DestinationMember(string name, string displayName, ITypeSymbol type, IPropertySymbol? property)
+    {
+        Name = name;
+        DisplayName = displayName;
+        Type = type;
+        Property = property;
+    }
+
+    /// <summary>The property or parameter name: the diagnostic's first argument and the name in the generated code.</summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// The name in the hints of a message (<c>ForMember(d =&gt; d.{DisplayName}, …)</c>): the property, or for a parameter
+    /// the property of the same name, which <c>ForMember</c> configures (the parameter name when there is none).
+    /// </summary>
+    public string DisplayName { get; }
+
+    /// <summary>The type the value must convert to.</summary>
+    public ITypeSymbol Type { get; }
+
+    /// <summary>The property; <see langword="null"/> for a constructor parameter (no in-place update of it).</summary>
+    public IPropertySymbol? Property { get; }
+
+    /// <summary>A constructor parameter; <paramref name="sameNamedProperty"/> is the property of the same name, if any.</summary>
+    public static DestinationMember ForParameter(IParameterSymbol parameter, IPropertySymbol? sameNamedProperty)
+        => new(parameter.Name, sameNamedProperty?.Name ?? parameter.Name, parameter.Type, null);
+
+    /// <summary>A property.</summary>
+    public static DestinationMember ForProperty(IPropertySymbol property)
+        => new(property.Name, property.Name, property.Type, property);
 }
