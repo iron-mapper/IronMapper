@@ -903,7 +903,8 @@ internal static class MapperCodeEmitter
     /// </summary>
     internal static bool IsMappingMissing(PropertyMappingDescriptor prop, MappingPlan plan)
         => (UsesCollectionHelper(prop) || IsMappedNestedObject(prop))
-           && prop.MappingPairs.Length > 0 && !plan.GeneratesAny(prop.MappingPairs);
+           && prop.MappingPairs.Length + prop.LiftedPairs.Length > 0
+           && !plan.GeneratesAny(prop.MappingPairs) && !plan.GeneratesAny(prop.LiftedPairs);
 
     /// <summary>A nested object mapped by the mapping of its type pair (no <c>MapFrom</c> lambda or converter set for it).</summary>
     internal static bool IsMappedNestedObject(PropertyMappingDescriptor prop)
@@ -914,16 +915,28 @@ internal static class MapperCodeEmitter
     /// the null check of <see cref="PropertyMappingDescriptor.NullHandling"/> (<c>null</c> → <c>null</c>, or
     /// <see cref="NestedObjectIsNullName"/>), then the <c>…Core</c> method of the generated mapping of
     /// <see cref="PropertyMappingDescriptor.MappingPairs"/>, or the extension method <c>MapTo{Dest}</c> when a referenced
-    /// assembly maps the pair.
+    /// assembly maps the pair. A converted value (<see cref="Analysis.PropertyTypeCheck.CheckValueConversion"/>) takes the
+    /// mapping of <see cref="PropertyMappingDescriptor.LiftedPairs"/> when no mapping of its own pair is generated, and a
+    /// result that may be <see langword="null"/> is cast to <see cref="PropertyMappingDescriptor.NestedResultCast"/>.
     /// </summary>
     private static string MapNestedObject(MappingDescriptor descriptor, PropertyMappingDescriptor prop, MappingPlan plan)
     {
         string value = $"source.{prop.SourcePropertyName}";
         var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
-        switch (prop.NullHandling)
+        string? handling = prop.NullHandling;
+        if (entry is null && prop.LiftedPairs.Length > 0 && plan.FindFirstGenerated(prop.LiftedPairs) is { } lifted)
+        {
+            entry = lifted;
+            handling = Analysis.NullHandling.Lifted;
+        }
+
+        string cast = prop.NestedResultCast is null ? string.Empty : $"({prop.NestedResultCast})";
+        switch (handling)
         {
             case Analysis.NullHandling.Check:
-                return $"{value} is null ? null : {MapNested(prop, entry, value)}";
+                return $"{value} is null ? null : {cast}{MapNested(prop, entry, value)}";
+            case Analysis.NullHandling.Lifted:
+                return $"{value}.HasValue ? {cast}{MapNested(prop, entry, value + ".Value")} : null";
             case Analysis.NullHandling.Throw:
                 string checkedValue = $"{value} ?? {NestedObjectIsNull(descriptor, prop)}";
                 return MapNested(prop, entry, entry is null ? $"({checkedValue})" : checkedValue);

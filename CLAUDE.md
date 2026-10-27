@@ -142,7 +142,7 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   (`ArgumentNullException` for a `null` element, documented in 2.0.0). IM0004 (warning): each automatically mapped nested
   object has a candidate diagnostic (`CycleProperty`); `CollectDiagnostics` reports it only when the property closes a
   cycle of generated mappings (`Analysis/MappingCycles.cs`: edges are nested objects and collection elements mapped
-  automatically; none from a `ConvertUsing` mapping), with the chain as the last message argument. Tests:
+  automatically; none from a `ConvertUsing` mapping, so a pair converter closes no cycle), with the chain as the last message argument. Tests:
   `NestedObjectTests`, `CyclicMappingTests`, `tests/IronMapper.Tests/NestedObjectTests.cs` (in-place `ReferenceEquals`
   over two levels, the exception message; also `#pragma` with `TreatWarningsAsErrors`),
   `tests/IronMapper.Integration.Tests/NestedObjectMapperTests.cs` (`IMapper`, in-place overloads turned off).
@@ -174,6 +174,21 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   expression and matches nothing; the in-place overload ignores it (no in-place without a parameterless constructor).
   `ForCtorParam` names that no parameter has: IM0019. Tests: `FactoryMappingTests` (generator and runtime), snapshot
   `Factories`, `ConstructorMapperTests`.
+- **Value conversions through pair mappings** (`PropertyTypeCheck.CheckValueConversion`, from 2.1.0, plan п.3.5): a
+  name-matched property or parameter whose types cannot be assigned and are not both nested objects (`IsObject`) nor
+  collections — `Guid` → `UserId` — is converted by the mapping of its pair, typically
+  `CreateMap<Guid, UserId>().ConvertUsing(UserId.From)`. Reuses the nested-object fields of `PropertyMappingDescriptor`
+  (`NestedMapMethod`, `MappingPairs`, `NullHandling`) plus `IsValueConversion`, `LiftedPairs` (the pairs of the
+  underlying types of a `Nullable<T>` source, `NullHandling.Lifted`: `x.HasValue ? (T?)MapToTCore(x.Value) : null`) and
+  `NestedResultCast` (a `Nullable<T>` destination: the cast keeps C# 8 compiling). Null handling:
+  `NullHandling.ForValueConversion` (value type as is; reference type checked only for a destination that accepts
+  `null`; annotated source to a non-nullable destination → no conversion, the IM0002 of `CheckAssignment`). Without a
+  generated pair the IM0002 of `CheckAssignment` (same message as 2.0.0, `IfNoMappingFor` = direct ∪ lifted pairs, no
+  code-fix properties) and the property is not generated / the argument is `default!`. `ConstructorSelection.Choose`
+  prefers constructors that need no such conversion (two passes), so another file's pair mapping never changes the
+  choice. Never updated in place. `ConvertUsing` also takes a static method group (`FactoryAnalyzer.ConvertUsing`,
+  `return D.From(source);`); anything else the generated code cannot call is IM0022. `ReverseMap(Func<TDest, TSource>)` (an extension in `MappingExpressionExtensions`) gives the reverse mapping that converter, read the same way. Tests: `PairConverterTests`
+  (generator and runtime), `PairConverterMapperTests`, snapshot `PairConverters`.
 - **Unresolved types** (`typeof(Missing)`, `CreateMap<_, Missing>`, a converter type): the compiler reports them at the
   user's code; the mapping is skipped without a diagnostic of its own (`SymbolHelpers.ContainsErrorType`), so the
   generated code adds no errors. IM0003 only for a type that compiles but cannot be mapped (`typeof(Box<>)`, arrays).

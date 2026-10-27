@@ -456,6 +456,40 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task PairConverters() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public readonly record struct MemberId
+        {
+            private MemberId(System.Guid value) => Value = value;
+            public System.Guid Value { get; }
+            public static MemberId From(System.Guid value) => new(value);
+        }
+
+        public class TeamRow
+        {
+            public System.Guid Owner { get; set; }
+            public System.Guid? Deputy { get; set; }
+            public System.Guid[] Members { get; set; } = System.Array.Empty<System.Guid>();
+        }
+
+        public record Team(MemberId Owner, MemberId? Deputy, IReadOnlyList<MemberId> Members);
+
+        public class TeamProfile : MappingProfile
+        {
+            public TeamProfile()
+            {
+                CreateMap<System.Guid, MemberId>().ConvertUsing(MemberId.From);
+                CreateMap<MemberId, System.Guid>().ConvertUsing(v => v.Value);
+                CreateMap<TeamRow, Team>();
+            }
+        }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

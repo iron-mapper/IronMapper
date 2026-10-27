@@ -158,6 +158,55 @@ public class IncrementalDiagnosticsTests
         Assert.Contains(sources, s => s.Contains("MapToTagDto(this"));
     }
 
+    // A value converted by the mapping of its pair (Guid → Ref), declared in another file than the mapping that uses it.
+    private const string MappingWithValueObject = """
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public readonly record struct Ref
+        {
+            private Ref(System.Guid value) => Value = value;
+            public System.Guid Value { get; }
+            public static Ref From(System.Guid value) => new(value);
+        }
+        public class Link { public System.Guid Target { get; set; } public string Name { get; set; } = ""; }
+        public class LinkDto { public Ref Target { get; set; } public string Name { get; set; } = ""; }
+        public class LinkProfile : MappingProfile { public LinkProfile() { CreateMap<Link, LinkDto>(); } }
+        """;
+
+    private const string NoPairMapping = """
+        namespace App;
+
+        public static class Nothing { }
+        """;
+
+    private const string PairMapping = """
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public class RefProfile : MappingProfile { public RefProfile() { CreateMap<System.Guid, Ref>().ConvertUsing(Ref.From); } }
+        """;
+
+    [Fact]
+    public void PairMapping_AddedInAnotherFile_IM0002Disappears_PropertyConverted()
+    {
+        string[] sources = AssertSameAsFreshRun(new[] { MappingWithValueObject, NoPairMapping }, 1, PairMapping, out string[]? ids);
+
+        Assert.Empty(ids);
+        Assert.Contains(sources, s => s.Contains("Target = MapToRefCore(source.Target),"));
+    }
+
+    [Fact]
+    public void PairMapping_RemovedInAnotherFile_IM0002Appears_PropertyNotGenerated()
+    {
+        string[] sources = AssertSameAsFreshRun(new[] { MappingWithValueObject, PairMapping }, 1, NoPairMapping, out string[]? ids);
+
+        Assert.Equal(new[] { "IM0002" }, ids);
+        Assert.DoesNotContain(sources, s => s.Contains("Target ="));
+    }
+
     /// <summary>
     /// Runs the driver on <paramref name="before"/>, then on <paramref name="after"/>, and asserts that the
     /// diagnostics and generated sources of the second run equal those of a fresh driver on <paramref name="after"/>.

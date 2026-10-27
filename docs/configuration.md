@@ -507,14 +507,27 @@ CreateMap<OrderEntity, OrderDto>()
 
 ---
 
-### `ConvertUsing(src => ...)`
+### `ConvertUsing(src => ...)`, `ConvertUsing(D.From)`
 
-Lambda-based whole-object conversion. The expression body is emitted verbatim by the generator. Not applied by the in-place overload. Covered by a generator test of the emitted code only.
+Lambda-based whole-object conversion. The expression body is emitted verbatim by the generator. From 2.1.0 a static
+method group is accepted too and called with the source (up to 2.0.0 it was silently ignored); an argument the generated
+code cannot call is [`IM0022`](diagnostics.md#im0022--converter-of-convertusing-cannot-be-used). Not applied by the
+in-place overload.
 
 ```csharp
 CreateMap<Point, PointDto>()
     .ConvertUsing(src => new PointDto { X = src.X, Y = src.Y });
+
+// From 2.1.0 a mapping of a value pair converts every property, parameter and collection element of that pair:
+CreateMap<Guid, UserId>().ConvertUsing(UserId.From);
+CreateMap<UserId, Guid>().ConvertUsing(v => v.Value);
+
+// The same in one line: ReverseMap with a converter declares the reverse mapping.
+CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value);
 ```
+
+See [Value conversions](advanced.md#value-conversions-pair-mappings). Tests: `PairConverterTests` (generator and
+runtime), `PairConverterMapperTests` (`IMapper`).
 
 ---
 

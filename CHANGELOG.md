@@ -45,6 +45,22 @@
   destination created by a constructor with parameters or a factory: this is final (updating only the other properties
   would silently keep the old values of what only the constructor takes). See
   [Factories](docs/advanced.md#factories-constructwith).
+- **Value conversions through the mappings of type pairs** (profiles and attribute mappings): with
+  `CreateMap<Guid, UserId>().ConvertUsing(UserId.From)` and `CreateMap<UserId, Guid>().ConvertUsing(v => v.Value)`, every
+  property, constructor or factory parameter and collection element whose types are that pair is converted by its
+  mapping (the private `MapToUserIdCore`, as for a nested object), also primitives and structs such as a
+  `readonly record struct` value object — no more `MapFrom(s => s.OwnerId.Value)` or `UserId.From` in each mapping.
+  `Nullable<T>` is lifted from the same pair (`Guid?` → `UserId?`, `null` → `null`; `Guid` → `UserId?`); an exact
+  mapping of the nullable pair wins; narrowing (`UserId?` → `Guid`) stays `IM0002`. The pair mapping may be in another
+  profile or in a referenced project; `MapFrom`, `UseConverter`, `Ignore` and `[MapConverter]` still take precedence;
+  nothing is found by convention. Without a pair mapping the property gets `IM0002` with the message of 2.0.0, so no
+  build that compiles with 2.0.0 changes. A constructor that needs such a conversion is chosen only when no other one
+  can be called. An exception of the converter reaches the caller as it is. See
+  [Value conversions](docs/advanced.md#value-conversions-pair-mappings).
+- **`ReverseMap(converter)`** declares both directions of a value pair in one line:
+  `CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value)` is the same as a second
+  `CreateMap<UserId, Guid>().ConvertUsing(v => v.Value)` (a lambda or a static method group; `Nullable<T>` is lifted in
+  the reverse direction too). `ReverseMap()` without an argument is unchanged.
 
 - **Nested objects are mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)): a
   name-matched property whose types differ (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`) is mapped by
@@ -98,7 +114,9 @@
   the same name and no default value, a source value that cannot be converted, or `Ignore` without a default value; the
   mapping is not generated. Up to 2.0.0 `IM0009` was a warning for records in attribute mappings only, while the
   generated object initializer did not compile anyway without a parameterless constructor (`CS7036`); a record with a
-  parameterless constructor no longer gets `IM0009` for the parameters of its other constructors. See
+  parameterless constructor no longer gets `IM0009` for the parameters of its other constructors. A parameter whose
+  value a mapping of the pair could convert (`Guid` → `UserId`) is `IM0002` without that mapping, as a property (the
+  argument is `default!`, so the generated file compiles). See
   [IM0009](docs/diagnostics.md#im0009--constructor-parameter-not-mapped).
 
 - **Generated code:** every `MapToX(source)` is split into the public method, which checks `source` for `null` as
@@ -109,6 +127,16 @@
   checks both arguments and calls the private `MapToXCore(source, destination)`. A mapping that checks a nested object
   uses one throw helper of the generated class, `NestedObjectIsNull<T>` (not inlined). The behavior of existing
   mappings does not change; the snapshots of all scenarios change by the split.
+
+### Fixed
+
+- **`ConvertUsing` with a static method group** (`ConvertUsing(UserId.From)`) was silently ignored up to 2.0.0: the
+  mapping was generated property by property, without the converter. Now the method is called. **The result at run time
+  changes:** check such mappings when you upgrade. See [Upgrading to 2.1](docs/upgrading-to-2.1.md).
+- **`ConvertUsing` with an instance method, a local function, a private method or a delegate in a variable** is now the
+  build error `IM0022` at the argument, instead of a silently wrong mapping (the converter could not be called anyway).
+  Fix: pass a static method or a lambda. See
+  [IM0022](docs/diagnostics.md#im0022--converter-of-convertusing-cannot-be-used).
 
 ### Performance
 

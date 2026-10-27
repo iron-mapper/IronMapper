@@ -507,14 +507,27 @@ CreateMap<OrderEntity, OrderDto>()
 
 ---
 
-### `ConvertUsing(src => ...)`
+### `ConvertUsing(src => ...)`, `ConvertUsing(D.From)`
 
-Lambda-based конвертация всего объекта. Тело выражения генератор вставляет дословно. Не применяется в in-place перегрузке. Покрыто только тестом сгенерированного кода.
+Lambda-based конвертация всего объекта. Тело выражения генератор вставляет дословно. С 2.1.0 принимается и группа
+методов статического метода — она вызывается с source (до 2.0.0 включительно молча игнорировалась); аргумент, который
+сгенерированный код не может вызвать, — [`IM0022`](diagnostics.ru.md#im0022--converter-convertusing-нельзя-использовать).
+Не применяется в in-place перегрузке.
 
 ```csharp
 CreateMap<Point, PointDto>()
     .ConvertUsing(src => new PointDto { X = src.X, Y = src.Y });
+
+// С 2.1.0 карта пары значений преобразует каждое свойство, параметр и элемент коллекции этой пары:
+CreateMap<Guid, UserId>().ConvertUsing(UserId.From);
+CreateMap<UserId, Guid>().ConvertUsing(v => v.Value);
+
+// То же одной строкой: ReverseMap с converter объявляет обратную карту.
+CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value);
 ```
+
+См. [Преобразование значений](advanced.ru.md#преобразование-значений-карты-пар). Тесты: `PairConverterTests` (генератор и
+runtime), `PairConverterMapperTests` (`IMapper`).
 
 ---
 

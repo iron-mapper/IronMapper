@@ -129,6 +129,27 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// </summary>
     public string? NestedSourceTypeFqn { get; }
 
+    /// <summary>
+    /// A value converted by the mapping of its type pair (<see cref="PropertyTypeCheck.CheckValueConversion"/>): the pairs of
+    /// the underlying types of a <c>Nullable&lt;T&gt;</c> source, used (<see cref="Analysis.NullHandling.Lifted"/>) when none of
+    /// <see cref="MappingPairs"/> is generated. Empty for other properties.
+    /// </summary>
+    public EquatableArray<string> LiftedPairs { get; }
+
+    /// <summary>
+    /// The type a converted value is cast to when it may be <see langword="null"/> (<c>global::App.UserId?</c> for a
+    /// <c>Nullable&lt;T&gt;</c> destination: <c>x is null ? null : (T?)…</c> compiles with C# 8 too); <see langword="null"/>
+    /// otherwise.
+    /// </summary>
+    public string? NestedResultCast { get; }
+
+    /// <summary>
+    /// The value (<see cref="NestedMapMethod"/>) is converted by the mapping of its type pair, not mapped as a nested object
+    /// (<see cref="PropertyTypeCheck.CheckValueConversion"/>): never updated in place; a constructor that needs such a
+    /// conversion is chosen only when no other can be called (<see cref="ConstructorSelection"/>).
+    /// </summary>
+    public bool IsValueConversion { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
@@ -163,6 +184,9 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         NullHandling = nested?.NullHandling;
         NestedUpdatesInPlace = nested?.UpdatesInPlace ?? false;
         NestedSourceTypeFqn = nested?.SourceTypeFqn;
+        LiftedPairs = nested is null ? EquatableArray<string>.Empty : nested.LiftedPairs;
+        NestedResultCast = nested?.ResultCast;
+        IsValueConversion = nested?.IsValueConversion ?? false;
         SourcePropertyName = sourcePropertyName;
         DestPropertyName = destPropertyName;
         IsIgnored = isIgnored;
@@ -214,7 +238,10 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && NestedMapMethod == other.NestedMapMethod
             && NullHandling == other.NullHandling
             && NestedUpdatesInPlace == other.NestedUpdatesInPlace
-            && NestedSourceTypeFqn == other.NestedSourceTypeFqn;
+            && NestedSourceTypeFqn == other.NestedSourceTypeFqn
+            && LiftedPairs.Equals(other.LiftedPairs)
+            && NestedResultCast == other.NestedResultCast
+            && IsValueConversion == other.IsValueConversion;
     }
 
     /// <inheritdoc/>
@@ -245,6 +272,9 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + (NullHandling?.GetHashCode() ?? 0);
         hash = hash * 31 + NestedUpdatesInPlace.GetHashCode();
         hash = hash * 31 + (NestedSourceTypeFqn?.GetHashCode() ?? 0);
+        hash = hash * 31 + LiftedPairs.GetHashCode();
+        hash = hash * 31 + (NestedResultCast?.GetHashCode() ?? 0);
+        hash = hash * 31 + IsValueConversion.GetHashCode();
         return hash;
     }
 }

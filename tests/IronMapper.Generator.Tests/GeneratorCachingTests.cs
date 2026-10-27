@@ -78,10 +78,22 @@ public class GeneratorCachingTests
             public static Site Restore(string street) => new(street);
         }
         public record Pin(string Label);
+        // Converted by the mappings of the pair (ConvertUsing with a method group and with a lambda), lifted for Guid?.
+        public readonly record struct Ref
+        {
+            private Ref(System.Guid value) => Value = value;
+            public System.Guid Value { get; }
+            public static Ref From(System.Guid value) => new(value);
+        }
+        public class Link { public System.Guid Target { get; set; } public System.Guid? Source { get; set; } }
+        public record LinkDto(Ref Target, Ref? Source);
         public class OrderProfile : MappingProfile
         {
             public OrderProfile()
             {
+                CreateMap<System.Guid, Ref>().ConvertUsing(Ref.From);
+                CreateMap<Ref, System.Guid>().ConvertUsing(r => r.Value);
+                CreateMap<Link, LinkDto>();
                 CreateMap<Order, Site>().ConstructWith(Site.Restore);
                 CreateMap<Order, Pin>()
                     .ConstructWith((string label) => new Pin(label.Trim()))
