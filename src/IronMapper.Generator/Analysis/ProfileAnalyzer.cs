@@ -215,6 +215,7 @@ internal static class ProfileAnalyzer
         string? beforeMapBody = null;
         string? afterMapBody = null;
         bool reverseMap = false;
+        string? reverseConverterBody = null;
         // GenerateMethods(...): overloads of this mapping; a non-constant argument is IM0016 and keeps the assembly value.
         var methodOverrides = default(GeneratedMethodOverrides);
         var optionDiagnostics = new List<DiagnosticInfo>();
@@ -291,9 +292,11 @@ internal static class ProfileAnalyzer
                     }
                     else if (inv.ArgumentList.Arguments.Count == 1)
                     {
-                        // ConvertUsing(src => ...) — extract lambda body.
-                        wholeObjectLambdaBody = LambdaBodyRewriter.RewriteBody(
-                            inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
+                        // ConvertUsing(src => ...) — extract lambda body; ConvertUsing(D.From) — call the static method.
+                        var converter = inv.ArgumentList.Arguments[0].Expression;
+                        wholeObjectLambdaBody = converter is LambdaExpressionSyntax
+                            ? LambdaBodyRewriter.RewriteBody(converter, model, SourceParameter, profileName, lambdaDiagnostics, ct)
+                            : FactoryAnalyzer.ConvertUsing(converter, model, sourceSymbol, destSymbol, "ConvertUsing", lambdaDiagnostics, ct);
                     }
                     break;
 
@@ -318,6 +321,14 @@ internal static class ProfileAnalyzer
                 case "ReverseMap":
                     reverseMap = true;
                     reverseMapLocation = LocationInfo.From(memberAccess.Name.GetLocation());
+                    // ReverseMap(v => v.Value): the reverse mapping is converted, as CreateMap<TDest, TSource>().ConvertUsing(...).
+                    if (inv.ArgumentList.Arguments.Count == 1)
+                    {
+                        var back = inv.ArgumentList.Arguments[0].Expression;
+                        reverseConverterBody = back is LambdaExpressionSyntax
+                            ? LambdaBodyRewriter.RewriteBody(back, model, SourceParameter, profileName, lambdaDiagnostics, ct)
+                            : FactoryAnalyzer.ConvertUsing(back, model, destSymbol, sourceSymbol, "ReverseMap", lambdaDiagnostics, ct);
+                    }
                     break;
             }
         }
@@ -396,7 +407,7 @@ internal static class ProfileAnalyzer
                 ImmutableArray<string>.Empty,
                 whenCondition: null,
                 wholeObjectConverter: null,
-                wholeObjectLambdaBody: null,
+                wholeObjectLambdaBody: reverseConverterBody,
                 beforeMapBody: null,
                 afterMapBody: null,
                 transformers, profileName, reverseMapLocation ?? createMapLocation,
@@ -895,7 +906,9 @@ internal static class ProfileAnalyzer
                     }
                 }
                 else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, target.Type, sourceDisplay,
-                             target, destSymbol, checkOrigin, origin, into)) is not null)
+                              target, destSymbol, checkOrigin, origin, into)
+                          ?? PropertyTypeCheck.CheckValueConversion(compilation, namedProp.Type, target.Type, sourceDisplay,
+                              target, destSymbol, checkOrigin, origin, into)) is not null)
                 {
                     skipped = nested.Skipped;
                     mappingPairs = nested.Pairs;

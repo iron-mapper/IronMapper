@@ -273,7 +273,9 @@ app.MapGet("/users", (IMapper mapper) => mapper.Map<List<UserDto>>(LoadUsers()))
   Mapperly, Mapster и AutoMapper в этом случае возвращают `null`.
 - **Преобразования типов свойств** работают только там, где C# преобразует неявно (`int` → `long`, `int` → `int?`, …).
   `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` дают ошибку `IM0002` в вашем коде (начиная с
-  2.1.0; до 2.0.0 включительно — ошибку C# в сгенерированном файле); используйте `MapFrom` или конвертер.
+  2.1.0; до 2.0.0 включительно — ошибку C# в сгенерированном файле); используйте `MapFrom`, конвертер или (с 2.1.0)
+  карту пары `CreateMap<Guid, UserId>().ConvertUsing(UserId.From)`, которая преобразует каждое свойство и параметр
+  этой пары ([Преобразование значений](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.ru.md#преобразование-значений-карты-пар)).
 - **`ProjectTo` / проекция `IQueryable`** не поддерживается ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Кроме того: до 1.1.4 включительно у диагностик нет места в исходном коде (начиная с 2.0.0 они указывают на строку); в `IMapper` нельзя передать контекст в вызов
@@ -337,6 +339,7 @@ protected-вложенные типы маппить нельзя (`IM0010`); о
 - [Миграция с AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.ru.md)
 - [Диагностики компилятора](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.ru.md)
 - [Обновление до 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.ru.md)
+- [Обновление до 2.1](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.1.ru.md) (не выпущена: исправления `ConvertUsing`)
 - [Бенчмарки](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md) (на английском)
 - [Список изменений](https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md) (на английском)
 

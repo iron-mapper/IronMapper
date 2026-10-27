@@ -70,6 +70,23 @@ public static class MappingExpressionExtensions
         => expression;
 
     /// <summary>
+    /// Also registers the reverse mapping from <typeparamref name="TDest"/> to <typeparamref name="TSource"/>, converted
+    /// by <paramref name="converter"/>: the short form of a second <c>CreateMap&lt;TDest, TSource&gt;().ConvertUsing(converter)</c>,
+    /// for a pair of values such as <c>CreateMap&lt;Guid, UserId&gt;().ConvertUsing(UserId.From).ReverseMap(v =&gt; v.Value)</c>.
+    /// Both mappings then convert every property, parameter and collection element of their pair. The generator reads the
+    /// argument at compile time: a lambda or a static method group written here.
+    /// </summary>
+    /// <param name="expression">The mapping.</param>
+    /// <param name="converter">Converts a <typeparamref name="TDest"/> back to a <typeparamref name="TSource"/>.</param>
+    /// <typeparam name="TSource">The source type.</typeparam>
+    /// <typeparam name="TDest">The destination type.</typeparam>
+    /// <returns><paramref name="expression"/>, for further chaining.</returns>
+    public static IMappingExpression<TSource, TDest> ReverseMap<TSource, TDest>(
+        this IMappingExpression<TSource, TDest> expression,
+        Func<TDest, TSource> converter)
+        => expression;
+
+    /// <summary>
     /// Configures the parameter <paramref name="parameterName"/> of the constructor that creates the destination, or of
     /// the factory of <c>ConstructWith</c>: <c>MapFrom</c>, <c>UseConverter</c> or <c>Ignore()</c> (the default value). For
     /// a parameter without a destination property of the same name, which <c>ForMember</c> cannot select. The name is

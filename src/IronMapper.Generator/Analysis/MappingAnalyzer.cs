@@ -293,7 +293,9 @@ internal static class MappingAnalyzer
                     }
                 }
                 else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, target.Type,
-                             sourceDisplay, target, destSymbol, PropertyTypeCheck.Origin.Attribute, location, into)) is not null)
+                              sourceDisplay, target, destSymbol, PropertyTypeCheck.Origin.Attribute, location, into)
+                          ?? PropertyTypeCheck.CheckValueConversion(compilation, sourceProp.Type, target.Type,
+                              sourceDisplay, target, destSymbol, PropertyTypeCheck.Origin.Attribute, location, into)) is not null)
                 {
                     isIgnored = nested.Skipped;
                     mappingPairs = nested.Pairs;

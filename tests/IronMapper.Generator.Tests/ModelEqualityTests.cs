@@ -16,6 +16,30 @@ public class ModelEqualityTests
     // PropertyMappingDescriptor
     // -----------------------------------------------------------------------
 
+    [Theory]
+    [InlineData("lifted")]
+    [InlineData("cast")]
+    [InlineData("conversion")]
+    public void PropertyMappingDescriptor_DifferentValueConversion_ReturnsFalse(string field)
+    {
+        static PropertyMappingDescriptor Create(string? lifted, string? cast, bool conversion)
+            => new("Id", "Id", false, null, false, nested: new Analysis.NestedObjectMapping("MapToRef", "NotNull",
+                ImmutableArray.Create("a->b"), skipped: false, updatesInPlace: false, "global::A",
+                lifted is null ? default : ImmutableArray.Create(lifted), cast, conversion));
+
+        var a = Create("c->d", "global::B?", conversion: true);
+        var b = field switch
+        {
+            "lifted" => Create("c->e", "global::B?", conversion: true),
+            "cast" => Create("c->d", null, conversion: true),
+            _ => Create("c->d", "global::B?", conversion: false),
+        };
+
+        Assert.False(a.Equals(b));
+        Assert.True(a.Equals(Create("c->d", "global::B?", conversion: true)));
+        Assert.Equal(a.GetHashCode(), Create("c->d", "global::B?", conversion: true).GetHashCode());
+    }
+
     [Fact]
     public void PropertyMappingDescriptor_EqualToSelf_ReturnsTrue()
     {

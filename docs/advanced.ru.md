@@ -361,7 +361,9 @@ CreateMap<TeamRow, Team>()
   свойство source без учёта регистра, `ForCtorParam`, `ForMember` одноимённого свойства destination, вложенные объекты
   (в том числе созданные фабрикой: `CreateMap<SettingsRow, Settings>().ConstructWith(Settings.Create)`), коллекции,
   значение по умолчанию необязательного параметра. Параметр без значения —
-  [`IM0009`](diagnostics.ru.md#im0009--параметр-конструктора-не-сопоставлен).
+  [`IM0009`](diagnostics.ru.md#im0009--параметр-конструктора-не-сопоставлен). С картой пары
+  `CreateMap<Guid, MemberId>().ConvertUsing(MemberId.From)` `ForMember` выше не нужен: каждое значение `Guid` → `MemberId`
+  преобразуется ею ([Преобразование значений](#преобразование-значений-карты-пар)).
 - **После вызова** присваиваются свойства destination с публичным `set`, которые не задал ни один параметр.
   `init`-свойство после вызова задать нельзя: если у source есть для него значение, генератор выдаёт
   [`IM0021`](diagnostics.ru.md#im0021--init-свойство-нельзя-задать-после-фабрики) (предупреждение) и не маппит его.
@@ -406,6 +408,83 @@ CreateMap<AuthorRow, Author>()
 его не использует, как в AutoMapper, и обновляет существующий объект; для destination без доступного конструктора без
 параметров in-place-перегрузки нет. Для нового кода лучше `ConstructWith`: он сопоставляет параметры и сообщает о
 параметре без значения при сборке.
+
+---
+
+## Преобразование значений (карты пар)
+
+С 2.1.0 карта пары типов преобразует и **значения**, а не только вложенные объекты: свойство, параметр конструктора или
+фабрики, элемент коллекции, тип которого в source и destination разный и не присваивается, передаётся в карту своей
+пары. Обычный случай — value object вокруг примитива, объявленный один раз для каждого направления:
+
+```csharp
+public readonly record struct UserId
+{
+    private UserId(Guid value) => Value = value;
+    public Guid Value { get; }
+    public static UserId From(Guid value)
+        => value == Guid.Empty ? throw new ArgumentException("The id is empty.", nameof(value)) : new(value);
+}
+
+public class IdProfile : MappingProfile
+{
+    public IdProfile()
+    {
+        CreateMap<Guid, UserId>().ConvertUsing(UserId.From);   // группа методов: статический метод
+        CreateMap<UserId, Guid>().ConvertUsing(v => v.Value);  // лямбда
+    }
+}
+
+public class ProjectProfile : MappingProfile
+{
+    public ProjectProfile()
+    {
+        // Project.Restore(Guid id, string name, UserId ownerId, UserId? deputyId, IReadOnlyList<UserId> memberIds)
+        CreateMap<ProjectRow, Project>().ConstructWith(Project.Restore);
+        CreateMap<Project, ProjectDto>();   // UserId OwnerId → Guid OwnerId, без MapFrom(s => s.OwnerId.Value)
+    }
+}
+
+// сгенерировано (сокращённо):
+// return Project.Restore(
+//     id: source.Id,
+//     name: source.Name,
+//     ownerId: MapToUserIdCore(source.OwnerId),                                                       // Guid → UserId
+//     deputyId: source.DeputyId.HasValue ? (UserId?)MapToUserIdCore(source.DeputyId.Value) : null,   // Guid? → UserId?
+//     memberIds: MapCollection_MemberIds_ProjectRow_Project(source.MemberIds));                      // Guid[] → IReadOnlyList<UserId>
+```
+
+- **Оба направления одной строкой:** `CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value)` —
+  то же, что два вызова выше (`ReverseMap` принимает лямбду или группу методов статического метода; `Nullable<T>`
+  поднимается и в обратную сторону). `ReverseMap()` без аргумента по-прежнему маппит обратное направление по именам.
+- **Где действует:** свойства, сопоставленные по имени, и параметры конструктора, позиционного record и фабрики
+  `ConstructWith` (тоже по имени), в маппингах атрибутов и в профилях; элементы коллекций (`Guid[]` →
+  `IReadOnlyList<UserId>`, через публичный `MapToUserId`, как другие элементы). Карта пары может быть в любом профиле
+  проекта или в проекте-зависимости (тогда вызывается его публичный `guid.MapToUserId()`). Явная настройка важнее:
+  `MapFrom`, `UseConverter`, `Ignore()`, `[MapConverter]`, `[Ignore]`. Значения `IncludeMembers` не преобразуются.
+- **Nullable value-типы поднимаются:** `Guid?` → `UserId?` использует карту `Guid` → `UserId` (`null` → `null`), и
+  `Guid` → `UserId?` — тоже. Карта ровно nullable-пары (`CreateMap<Guid?, UserId?>()…`) важнее поднятой. Сужение
+  (`UserId?` → `Guid`, `Guid?` → `UserId`) не преобразуется:
+  [`IM0002`](diagnostics.ru.md#im0002--несовместимые-типы-свойств-или-нет-маппинга), объявите destination nullable
+  или настройте значение. Ссылочный тип (`CreateMap<string, Email>().ConvertUsing(Email.Parse)`): `string?` → `Email?`
+  маппит `null` в `null`, `string` → `Email` передаёт значение как есть, `string?` → `Email` — `IM0002`.
+- **Карты пары нет:** `IM0002`, как раньше, с тем же сообщением; свойство не генерируется, параметр получает `default!`
+  (сборка всё равно падает с ошибкой). Code fix нет: на `Guid` нельзя добавить `[MapTo]`, а маппинг по свойствам значение
+  не преобразует. По соглашению ничего не ищется (`From` и `Value` не ищутся): каждая пара объявляется.
+- **Выбор конструктора:** конструктор, которому нужно такое преобразование, выбирается, только если никакой другой
+  вызвать нельзя, — карта пары, добавленная в другом файле, не меняет выбранный конструктор.
+- **`ConvertUsing` принимает лямбду или группу методов статического метода** (`ConvertUsing(UserId.From)`; работает и в
+  C# 8, параметр — `Func<TSource, TDest>`). До 2.0.0 включительно группа методов молча игнорировалась, и маппинг
+  генерировался по свойствам. Метод экземпляра, приватный метод или делегат в переменной —
+  [`IM0022`](diagnostics.ru.md#im0022--converter-convertusing-нельзя-использовать).
+- **Исключения** конвертера (`UserId.From` не принимает `Guid.Empty`) доходят до вызывающего кода как есть, и через
+  `IMapper` тоже.
+- Карта пары — обычный маппинг: работают `guid.MapToUserId()`, `guids.MapToUserIdList()` и
+  `mapper.Map<Guid, UserId>(guid)`. Её in-place-перегрузка `guid.MapToUserId(existing)` ничего не делает (in-place
+  `ConvertUsing` не использует, а destination — значение); если она мешает, выключите её:
+  `.ConvertUsing(UserId.From).GenerateMethods(inPlace: false)`.
+- Сгенерированный код передаёт значение в закрытый `…Core` пары (без проверки на `null`, как у вложенных объектов);
+  делегатов на горячем пути нет.
 
 ---
 

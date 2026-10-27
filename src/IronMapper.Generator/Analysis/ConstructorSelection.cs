@@ -163,11 +163,20 @@ internal static class ConstructorSelection
                 var values = constructor.Parameters.Select(p => resolve(p, SameNamed(p), commit: false)).ToList();
                 int mapped = values.Count(v => v.Kind == ParameterValueKind.Mapped);
                 int missing = constructor.Parameters.Where((p, i) => !HasValue(p, values[i])).Count();
-                return (constructor, index, mapped, missing);
+                bool converts = values.Any(v => v.Mapping is { } m && NeedsPairConversion(m));
+                return (constructor, index, mapped, missing, converts);
             })
             .ToList();
 
-        var callable = rated.Where(r => r.missing == 0).ToList();
+        // A value converted by the mapping of its pair (Guid → UserId) depends on the other mappings of the compilation,
+        // which the analysis of one mapping does not know: the constructors that need no such conversion are chosen from
+        // first, the others only when none of those can be called. A pair mapping added elsewhere never changes a choice.
+        var callable = rated.Where(r => r.missing == 0 && !r.converts).ToList();
+        if (callable.Count == 0)
+        {
+            callable = rated.Where(r => r.missing == 0).ToList();
+        }
+
         if (callable.Count > 0)
         {
             int bestMapped = callable.Max(r => r.mapped);
@@ -223,6 +232,10 @@ internal static class ConstructorSelection
 
         return Build(factory, resolve, SameNamed, isConstructor: false);
     }
+
+    // A value converted by a mapping of this compilation (PropertyTypeCheck.CheckValueConversion), not yet known to exist.
+    private static bool NeedsPairConversion(PropertyMappingDescriptor mapping)
+        => mapping.IsValueConversion && mapping.MappingPairs.Length + mapping.LiftedPairs.Length > 0;
 
     /// <summary>
     /// A constructor or factory parameter the generated code can pass a value to: no <c>ref</c>, <c>out</c> or

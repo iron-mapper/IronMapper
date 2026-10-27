@@ -359,7 +359,9 @@ CreateMap<TeamRow, Team>()
   property with the same name ignoring case, `ForCtorParam`, `ForMember` of the destination property with the same name,
   nested objects (also created by a factory: `CreateMap<SettingsRow, Settings>().ConstructWith(Settings.Create)`),
   collections, the default value of an optional parameter. A parameter without a value is
-  [`IM0009`](diagnostics.md#im0009--constructor-parameter-not-mapped).
+  [`IM0009`](diagnostics.md#im0009--constructor-parameter-not-mapped). With a mapping of the pair
+  `CreateMap<Guid, MemberId>().ConvertUsing(MemberId.From)` the `ForMember` above is not needed: every `Guid` → `MemberId`
+  value is converted by it ([Value conversions](#value-conversions-pair-mappings)).
 - **After the call**, the destination properties with a public `set` that no parameter sets are assigned. An `init`
   property cannot be set after a call: when the source has a value for it, the generator reports
   [`IM0021`](diagnostics.md#im0021--init-property-cannot-be-set-after-the-factory) (warning) and leaves it out.
@@ -404,6 +406,85 @@ properties with a public `set` are mapped as usual and assigned after it; `init`
 The in-place overload ignores it, as in AutoMapper, and updates the existing object; for a destination without an
 accessible parameterless constructor there is no in-place overload. Prefer `ConstructWith` for new code: it matches the
 parameters and reports a parameter without a value at build time.
+
+---
+
+## Value conversions (pair mappings)
+
+From 2.1.0 the mapping of a type pair also converts **values**, not only nested objects: a property, a constructor or
+factory parameter, or a collection element whose source and destination types cannot be assigned is passed to the
+mapping of its pair. The usual case is a value object around a primitive, declared once per direction:
+
+```csharp
+public readonly record struct UserId
+{
+    private UserId(Guid value) => Value = value;
+    public Guid Value { get; }
+    public static UserId From(Guid value)
+        => value == Guid.Empty ? throw new ArgumentException("The id is empty.", nameof(value)) : new(value);
+}
+
+public class IdProfile : MappingProfile
+{
+    public IdProfile()
+    {
+        CreateMap<Guid, UserId>().ConvertUsing(UserId.From);   // a static method group
+        CreateMap<UserId, Guid>().ConvertUsing(v => v.Value);  // a lambda
+    }
+}
+
+public class ProjectProfile : MappingProfile
+{
+    public ProjectProfile()
+    {
+        // Project.Restore(Guid id, string name, UserId ownerId, UserId? deputyId, IReadOnlyList<UserId> memberIds)
+        CreateMap<ProjectRow, Project>().ConstructWith(Project.Restore);
+        CreateMap<Project, ProjectDto>();   // UserId OwnerId → Guid OwnerId, no MapFrom(s => s.OwnerId.Value)
+    }
+}
+
+// generated (abridged):
+// return Project.Restore(
+//     id: source.Id,
+//     name: source.Name,
+//     ownerId: MapToUserIdCore(source.OwnerId),                                                       // Guid → UserId
+//     deputyId: source.DeputyId.HasValue ? (UserId?)MapToUserIdCore(source.DeputyId.Value) : null,   // Guid? → UserId?
+//     memberIds: MapCollection_MemberIds_ProjectRow_Project(source.MemberIds));                      // Guid[] → IReadOnlyList<UserId>
+```
+
+- **Both directions in one line:** `CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value)` is the
+  same as the two calls above (`ReverseMap` takes a lambda or a static method group; `Nullable<T>` is lifted in the
+  reverse direction too). `ReverseMap()` without an argument still maps the reverse direction by name.
+- **Where it applies:** properties matched by name and the parameters of a constructor, a positional record or a factory
+  of `ConstructWith` (also matched by name), in attribute mappings and in profiles; collection elements
+  (`Guid[]` → `IReadOnlyList<UserId>`, through the public `MapToUserId`, as other elements). The pair mapping may be in
+  any profile of the project, or in a referenced project (its public `guid.MapToUserId()` is called). An explicit
+  setting wins: `MapFrom`, `UseConverter`, `Ignore()`, `[MapConverter]`, `[Ignore]`. Values of `IncludeMembers` are not
+  converted.
+- **Nullable value types are lifted:** `Guid?` → `UserId?` uses the mapping `Guid` → `UserId` (`null` → `null`), and
+  `Guid` → `UserId?` uses it too. A mapping of exactly the nullable pair (`CreateMap<Guid?, UserId?>()…`) wins over the
+  lifted one. Narrowing (`UserId?` → `Guid`, `Guid?` → `UserId`) is not converted:
+  [`IM0002`](diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping), declare the destination nullable
+  or configure the value. A reference type (`CreateMap<string, Email>().ConvertUsing(Email.Parse)`): `string?` →
+  `Email?` maps `null` to `null`, `string` → `Email` passes the value as it is, `string?` → `Email` is `IM0002`.
+- **No pair mapping:** `IM0002` as before, with the same message; the property is not generated, a parameter gets
+  `default!` (the build fails with the error anyway). No code fix: `[MapTo]` cannot be added to `Guid`, and a
+  property-by-property mapping would not convert the value. Nothing is found by convention (no search for `From` or
+  `Value`): every pair is declared.
+- **Choice of the constructor:** a constructor that needs such a conversion is chosen only when no other constructor
+  can be called, so a pair mapping added in another file never changes which constructor is used.
+- **`ConvertUsing` takes a lambda or a static method group** (`ConvertUsing(UserId.From)`; works with C# 8 too, the
+  parameter is a `Func<TSource, TDest>`). Up to 2.0.0 a method group was silently ignored and the mapping generated
+  property by property. An instance method, a private method or a delegate in a variable is
+  [`IM0022`](diagnostics.md#im0022--converter-of-convertusing-cannot-be-used).
+- **Exceptions** of the converter (`UserId.From` rejecting `Guid.Empty`) reach the caller as they are, also through
+  `IMapper`.
+- A pair mapping is an ordinary mapping: `guid.MapToUserId()`, `guids.MapToUserIdList()` and
+  `mapper.Map<Guid, UserId>(guid)` work. Its in-place overload `guid.MapToUserId(existing)` does nothing (the in-place
+  overload does not use `ConvertUsing`, and the destination is a value); turn it off with
+  `.ConvertUsing(UserId.From).GenerateMethods(inPlace: false)` if it is in the way.
+- The generated code passes the value to the private `…Core` of the pair (no null check, as for nested objects); there
+  is no delegate in the hot path.
 
 ---
 

@@ -269,7 +269,9 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
   Mapperly, Mapster and AutoMapper return `null` there.
 - **Property type conversions** work only where C# converts implicitly (`int` → `long`, `int` → `int?`, …).
   `int?` → `int`, `long` → `int`, enum ↔ enum/`string`, `Guid` ↔ `string` fail with error `IM0002` at your code (from
-  2.1.0; up to 2.0.0 with a C# error in the generated file); use `MapFrom` or a converter.
+  2.1.0; up to 2.0.0 with a C# error in the generated file); use `MapFrom`, a converter, or (from 2.1.0) a mapping of
+  the pair, `CreateMap<Guid, UserId>().ConvertUsing(UserId.From)`, which converts every property and parameter of that
+  pair ([Value conversions](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md#value-conversions-pair-mappings)).
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Also: up to 1.1.4 diagnostics have no source location (from 2.0.0 they point to the line); `IMapper` has no per-call context
@@ -331,6 +333,7 @@ profiles on by default, the "mapper class" mode. The working plan (in Russian) i
 - [Migrating from AutoMapper](https://github.com/iron-mapper/IronMapper/blob/main/docs/migration-from-automapper.md)
 - [Compiler diagnostics](https://github.com/iron-mapper/IronMapper/blob/main/docs/diagnostics.md)
 - [Upgrading to 2.0](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.0.md)
+- [Upgrading to 2.1](https://github.com/iron-mapper/IronMapper/blob/main/docs/upgrading-to-2.1.md) (unreleased: `ConvertUsing` fixes)
 - [Benchmarks](https://github.com/iron-mapper/IronMapper/blob/main/benchmarks/README.md)
 - [Changelog](https://github.com/iron-mapper/IronMapper/blob/main/CHANGELOG.md)
 

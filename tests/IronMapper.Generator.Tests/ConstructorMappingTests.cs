@@ -553,7 +553,7 @@ public class ConstructorMappingTests
     }
 
     [Fact]
-    public void IncompatibleParameterType_IM0009WithTheReasonOfIM0002()
+    public void IncompatibleParameterType_WithoutPairMapping_IM0002AsForAProperty()
     {
         string source = """
             using IronMapper.Attributes;
@@ -565,12 +565,15 @@ public class ConstructorMappingTests
             public record Project(System.Guid Id);
             """;
 
-        var (_, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
+        var (generated, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
+        // A mapping string → Guid (CreateMap<string, Guid>().ConvertUsing(...)) would convert it: without one, IM0002 with
+        // the reason of an assignment, and default! as the argument, so the generated file compiles.
         AssertNoErrors(errors);
-        Assert.Empty(Of("IM0002", diagnostics));
-        Assert.Contains("parameter 'Id' of the constructor gets no value: 'ProjectRow.Id' is 'string', which cannot be assigned to 'System.Guid'.",
-            Assert.Single(Of("IM0009", diagnostics)).GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Empty(Of("IM0009", diagnostics));
+        Assert.StartsWith("Property 'Id' of 'App.Project' is not mapped: 'ProjectRow.Id' is 'string', which cannot be assigned to 'System.Guid'.",
+            Assert.Single(Of("IM0002", diagnostics)).GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Contains(generated, s => s.Contains("Id: default!"));
     }
 
     [Fact]

@@ -194,6 +194,20 @@ internal static class DiagnosticDescriptors
         description: "An init property can be set only in an object initializer of new. After the factory of ConstructWith the generated code assigns the properties with a public set; the value that the source has for an init property is not mapped.");
 
     /// <summary>
+    /// IM0022 — The argument of <c>ConvertUsing(…)</c> cannot be used: not a lambda or a static method group written in the
+    /// call (a delegate in a variable, an instance method, a method the generated code cannot call); the mapping is not
+    /// generated. Up to 2.0.0 such an argument was silently ignored and the mapping was generated property by property.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidConverter = new(
+        id: "IM0022",
+        title: "Converter of ConvertUsing cannot be used",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: {2}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "ConvertUsing takes a lambda (s => …) or a static method group (ConvertUsing(UserId.From)), read at compile time: the generated method calls it with the source. A delegate in a variable or an instance method cannot be called by the generated class; the method must be public or internal. The message says what is wrong. Other mappings in the project are still generated.");
+
+    /// <summary>
     /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,
     /// so the generated class (<c>GeneratedMappers_{AssemblyName}</c>) cannot reference it. The mapping is not generated.
     /// </summary>

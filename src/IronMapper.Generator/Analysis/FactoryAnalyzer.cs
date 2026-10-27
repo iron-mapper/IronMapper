@@ -161,6 +161,77 @@ internal static class FactoryAnalyzer
         return null;
     }
 
+    /// <summary>
+    /// The call of <c>ConvertUsing(<paramref name="argument"/>)</c> written as a method group (<c>ConvertUsing(UserId.From)</c>):
+    /// <c>global::App.UserId.From(source)</c>, or <see langword="null"/> with IM0022 in <paramref name="problems"/> when the
+    /// generated class cannot call it (an instance method, a local function, a delegate in a variable, a private method).
+    /// The compiler has checked the parameter and the return type (<c>Func&lt;TSource, TDest&gt;</c>). A lambda is rewritten by
+    /// <see cref="LambdaBodyRewriter"/> instead. <paramref name="callName"/> names the method in messages: <c>ConvertUsing</c>,
+    /// or <c>ReverseMap</c> with the converter of the reverse mapping (<paramref name="source"/> and <paramref name="dest"/>
+    /// are then those of the reverse mapping).
+    /// </summary>
+    public static string? ConvertUsing(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
+        INamedTypeSymbol dest, string callName, List<DiagnosticInfo> problems, CancellationToken ct)
+    {
+        var compilation = model.Compilation;
+
+        void Invalid(string reason)
+            => problems.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidConverter, source.ToDisplayString(), dest.ToDisplayString(),
+                    reason)
+                .WithLocation(LocationInfo.From(argument)));
+
+        var target = argument.Parent is ArgumentSyntax argumentSyntax && model.GetOperation(argumentSyntax, ct) is IArgumentOperation passed
+            ? passed.Value
+            : model.GetOperation(argument, ct);
+        while (target is IConversionOperation or IDelegateCreationOperation)
+        {
+            target = target is IConversionOperation conversion ? conversion.Operand : ((IDelegateCreationOperation)target).Target;
+        }
+
+        if (target is not IMethodReferenceOperation reference)
+        {
+            // An error in the argument is the compiler's (it reports it there).
+            if (target is null || target.Type is IErrorTypeSymbol || model.GetSymbolInfo(argument, ct).CandidateReason != CandidateReason.None)
+            {
+                return null;
+            }
+
+            Invalid($"{callName} takes a lambda, such as {callName}(s => …), or a static method group, such as {callName}({dest.Name}.From), written in the call; '{argument}' is neither, so the generated method cannot call it.");
+            return null;
+        }
+
+        var method = reference.Method;
+        string display = $"{method.ContainingType.Name}.{method.Name}";
+        if (method.MethodKind == MethodKind.LocalFunction)
+        {
+            Invalid($"'{method.Name}' is a local function, which the generated class cannot call. Declare it as a static method of a type, or pass a lambda.");
+            return null;
+        }
+
+        if (!method.IsStatic || reference.Instance is not null)
+        {
+            Invalid($"'{display}' is an instance method, which the generated class cannot call. Pass a static method, or a lambda that does not capture an instance.");
+            return null;
+        }
+
+        if (!compilation.IsSymbolAccessibleWithin(method, compilation.Assembly))
+        {
+            var hidden = method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal
+                ? (ISymbol?)FirstInaccessibleType(method.ContainingType, compilation) ?? method
+                : method;
+            Invalid($"'{display}' cannot be called by the generated class: '{hidden.ToDisplayString()}' is {SymbolHelpers.ToKeyword(hidden.DeclaredAccessibility)}. Make it public or internal.");
+            return null;
+        }
+
+        string call = $"{SymbolHelpers.GetFullyQualifiedName(method.ContainingType)}.{method.Name}";
+        if (method.IsGenericMethod)
+        {
+            call += $"<{string.Join(", ", method.TypeArguments.Select(SymbolHelpers.GetFullyQualifiedName))}>";
+        }
+
+        return $"{call}(source)";
+    }
+
     private static string UntypedLambda(INamedTypeSymbol dest)
         => $"the parameters of the lambda need types, such as ConstructWith((string name, int age) => new {dest.Name}(name, age)): the parameters are matched to the source by name, and the delegate type comes from their types.";
 

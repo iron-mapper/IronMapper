@@ -211,6 +211,93 @@ internal static class PropertyTypeCheck
             sourceTypeFqn: SymbolHelpers.GetFullyQualifiedName(source));
     }
 
+    /// <summary>
+    /// A value converted by the mapping of its type pair (item 3.5 of the plan, 2.1.0): the types cannot be assigned, are
+    /// not collections and not both nested objects (<see cref="CheckNestedObject"/>) — a primitive, a struct, a value
+    /// object, such as <c>Guid</c> → <c>UserId</c> with <c>CreateMap&lt;Guid, UserId&gt;().ConvertUsing(UserId.From)</c>. Returns
+    /// <see langword="null"/> when the value is not converted (assignable, or a nullable reference source and a destination
+    /// that does not accept <see langword="null"/>: <see cref="CheckAssignment"/> reports it). Otherwise the value is passed
+    /// to the <c>…Core</c> of a generated mapping of the pair (<see cref="NestedObjectMapping.Pairs"/>), or of the underlying
+    /// types of a <c>Nullable&lt;T&gt;</c> (<see cref="NestedObjectMapping.LiftedPairs"/>: <c>Guid?</c> → <c>UserId?</c> by the
+    /// mapping of <c>Guid</c> → <c>UserId</c>, <see langword="null"/> → <see langword="null"/>), or to a referenced
+    /// assembly's mapping. Without any of them the IM0002 of <see cref="CheckAssignment"/>, with the same message as
+    /// before, is reported (and the value not generated) only when the plan generates none of the pairs; no code fix: a
+    /// <c>[MapTo]</c> on <c>Guid</c> cannot be added, and a property-by-property mapping would not convert the value.
+    /// Never updated in place: a converted value is a new value.
+    /// </summary>
+    public static NestedObjectMapping? CheckValueConversion(Compilation compilation, ITypeSymbol sourceType, ITypeSymbol destType,
+        string sourceDisplay, DestinationMember destProp, INamedTypeSymbol destSymbol, Origin origin, LocationInfo? location,
+        ImmutableArray<DiagnosticInfo>.Builder diagnostics)
+    {
+        if (IsAssignable(compilation, sourceType, destType)
+            || (IsObject(sourceType, allowInterface: true) && IsObject(destType))
+            || SymbolHelpers.DetectCollectionMapping(sourceType, destType) is not null)
+        {
+            return null;
+        }
+
+        string? nullHandling = NullHandling.ForValueConversion(sourceType, destType);
+        if (nullHandling is null)
+        {
+            return null;
+        }
+
+        var source = sourceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var dest = destType.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        // Guid? and UserId?: the underlying types. A Nullable<T> destination takes the T of a mapping too.
+        var sourceValue = NullHandling.IsNullableValueType(source) ? ((INamedTypeSymbol)source).TypeArguments[0] : null;
+        var destValue = NullHandling.IsNullableValueType(dest) ? ((INamedTypeSymbol)dest).TypeArguments[0] : null;
+        bool destAcceptsNull = destValue is not null || NullHandling.AcceptsNull(destType);
+        string? cast = destValue is null ? null : SymbolHelpers.GetFullyQualifiedName(dest);
+        string method = $"MapTo{(destValue ?? dest).Name}";
+
+        var pairs = ImmutableArray.CreateBuilder<string>();
+        pairs.AddRange(ConversionPairKeys(source, dest));
+        if (destValue is not null)
+        {
+            pairs.AddRange(ConversionPairKeys(source, destValue));
+        }
+
+        var lifted = ImmutableArray.CreateBuilder<string>();
+        if (sourceValue is not null && destAcceptsNull)
+        {
+            lifted.AddRange(ConversionPairKeys(sourceValue, dest));
+            if (destValue is not null)
+            {
+                lifted.AddRange(ConversionPairKeys(sourceValue, destValue));
+            }
+        }
+
+        string fqn = SymbolHelpers.GetFullyQualifiedName(source);
+        if (IsMappedByExistingMethod(compilation, method, source, dest))
+        {
+            return new NestedObjectMapping(method, nullHandling, default, skipped: false, updatesInPlace: false, fqn, resultCast: cast,
+                isValueConversion: true);
+        }
+
+        if (lifted.Count > 0 && IsMappedByExistingMethod(compilation, method, sourceValue!, dest))
+        {
+            return new NestedObjectMapping(method, NullHandling.Lifted, default, skipped: false, updatesInPlace: false, fqn,
+                resultCast: cast, isValueConversion: true);
+        }
+
+        // The message of an assignment: as before when no mapping of the pair exists.
+        if (CheckAssignment(compilation, sourceType, destType, sourceDisplay, destProp, destSymbol, origin, location) is { } missing)
+        {
+            diagnostics.Add(missing.WithProperty(MissingElementPairsKey, string.Join("|", pairs.Concat(lifted))));
+        }
+
+        return new NestedObjectMapping(method, nullHandling, pairs.ToImmutable(), skipped: false, updatesInPlace: false, fqn,
+            lifted.ToImmutable(), cast, isValueConversion: true);
+    }
+
+    // The pairs of a converted value: of a value type exactly (the call takes no base type of a struct); of a reference type
+    // also of its base types and interfaces, as for an element.
+    private static ImmutableArray<string> ConversionPairKeys(ITypeSymbol source, ITypeSymbol dest)
+        => source.IsValueType
+            ? ImmutableArray.Create($"{SymbolHelpers.GetFullyQualifiedName(source)}->{SymbolHelpers.GetFullyQualifiedName(dest)}")
+            : ElementPairKeys(source, dest);
+
     private static string AddMappingHint(string source, string dest)
         => $"Add [MapTo(typeof({dest}))] to '{source}', [MapFrom(typeof({source}))] to '{dest}', or CreateMap<{source}, {dest}>() in a profile.";
 
@@ -412,8 +499,11 @@ internal static class PropertyTypeCheck
 internal sealed class NestedObjectMapping
 {
     public NestedObjectMapping(string method, string nullHandling, ImmutableArray<string> pairs, bool skipped, bool updatesInPlace,
-        string sourceTypeFqn)
+        string sourceTypeFqn, ImmutableArray<string> liftedPairs = default, string? resultCast = null, bool isValueConversion = false)
     {
+        IsValueConversion = isValueConversion;
+        LiftedPairs = liftedPairs.IsDefault ? ImmutableArray<string>.Empty : liftedPairs;
+        ResultCast = resultCast;
         SourceTypeFqn = sourceTypeFqn;
         UpdatesInPlace = updatesInPlace;
         Method = method;
@@ -442,6 +532,15 @@ internal sealed class NestedObjectMapping
 
     /// <summary>See <see cref="PropertyMappingDescriptor.NestedSourceTypeFqn"/>.</summary>
     public string SourceTypeFqn { get; }
+
+    /// <summary>See <see cref="PropertyMappingDescriptor.LiftedPairs"/>.</summary>
+    public ImmutableArray<string> LiftedPairs { get; }
+
+    /// <summary>See <see cref="PropertyMappingDescriptor.NestedResultCast"/>.</summary>
+    public string? ResultCast { get; }
+
+    /// <summary>See <see cref="PropertyMappingDescriptor.IsValueConversion"/>.</summary>
+    public bool IsValueConversion { get; }
 }
 
 /// <summary>

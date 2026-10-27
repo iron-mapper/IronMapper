@@ -525,6 +525,39 @@ public class FactoryMappingTests
     [Fact]
     public void ConstructWith_FactoryParameterWithoutSource_IM0009NamesTheFactory()
     {
+        string source = """
+            using IronMapper.Configuration;
+
+            namespace App;
+
+            public class TagRow { public string Name { get; set; } = ""; }
+
+            public sealed class Tag
+            {
+                private Tag(string name, int weight) { Name = name; Weight = weight; }
+                public string Name { get; }
+                public int Weight { get; }
+                public static Tag Create(string name, int weight) => new(name, weight);
+            }
+
+            public class TagProfile : MappingProfile
+            {
+                public TagProfile() { CreateMap<TagRow, Tag>().ConstructWith(Tag.Create); }
+            }
+            """;
+
+        var (generated, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
+
+        AssertNoErrors(errors);
+        var im0009 = Assert.Single(Of("IM0009", diagnostics));
+        Assert.StartsWith("Mapping to 'App.Tag' was not generated: parameter 'weight' of factory 'Tag.Create' gets no value: 'TagRow' has no property named 'weight'",
+            Message(im0009));
+        Assert.DoesNotContain(generated, s => s.Contains("MapToTag("));
+    }
+
+    [Fact]
+    public void ConstructWith_ValueObjectParameterWithoutPairMapping_IM0002AsForAProperty()
+    {
         string source = Team + """
 
             public class TeamProfile : MappingProfile
@@ -533,18 +566,18 @@ public class FactoryMappingTests
             }
             """;
 
-        var (generated, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
+        var (_, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
+        // Owner exists in the source, but it is a Guid and the parameter a MemberId, and no mapping converts Guid to
+        // MemberId: IM0002 with the reason of an assignment; the argument is default! so the generated file compiles.
         AssertNoErrors(errors);
-        var im0009 = Assert.Single(Of("IM0009", diagnostics));
-        // Owner exists in the source, but it is a Guid and the parameter a MemberId.
-        Assert.StartsWith("Mapping to 'App.Team' was not generated: parameter 'owner' of factory 'Team.Restore' gets no value: 'TeamRow.Owner' is 'System.Guid'",
-            Message(im0009));
-        Assert.DoesNotContain(generated, s => s.Contains("MapToTeam("));
+        Assert.Empty(Of("IM0009", diagnostics));
+        Assert.StartsWith("Property 'owner' of 'App.Team' is not mapped: 'TeamRow.Owner' is 'System.Guid', which cannot be assigned to 'App.MemberId'. Configure it with ForMember(d => d.Owner, o => o.MapFrom(...)) that converts the value",
+            Message(Assert.Single(Of("IM0002", diagnostics))));
     }
 
     [Fact]
-    public void ParameterWithoutPropertyOfTheSameName_IncompatibleSource_IM0009HintsForCtorParam()
+    public void ParameterWithoutPropertyOfTheSameName_IncompatibleSource_IM0002HintsForCtorParam()
     {
         string source = """
             using IronMapper.Configuration;
@@ -569,8 +602,9 @@ public class FactoryMappingTests
         var (_, diagnostics, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
         AssertNoErrors(errors);
+        // string → Guid needs a conversion; without a mapping of the pair, IM0002 (the argument is default!).
         Assert.Contains("Configure it with ForCtorParam(\"code\", o => o.MapFrom(...)) that converts the value",
-            Message(Assert.Single(Of("IM0009", diagnostics))));
+            Message(Assert.Single(Of("IM0002", diagnostics))));
     }
 
     [Theory]

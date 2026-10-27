@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0021`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0022`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 2.1.0):
@@ -30,6 +30,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0021`. 
 | IM0019 | Error | `ForCtorParam` names no parameter | Yes — profiles (from 2.1.0) |
 | IM0020 | Error | Factory of `ConstructWith` cannot be used | Yes — profiles (from 2.1.0) |
 | IM0021 | Warning | Init property cannot be set after the factory | Yes — profiles (from 2.1.0) |
+| IM0022 | Error | Converter of `ConvertUsing` cannot be used | Yes — profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -108,7 +109,10 @@ to add, for example:
 - the types have no implicit conversion (`int?` → `int`, `long` → `int`, `string` → `Guid`, an enum → another enum,
   `List<string>` → `string[]`); checked like the compiler does (`Compilation.ClassifyConversion`), so everything that
   converts implicitly is accepted (`int` → `long`, `int` → `int?`, a derived type → its base type, user-defined
-  implicit operators, `dynamic`);
+  implicit operators, `dynamic`). From 2.1.0 a mapping of the pair converts such a value
+  (`CreateMap<string, Guid>().ConvertUsing(Guid.Parse)`, [Value conversions](advanced.md#value-conversions-pair-mappings));
+  the diagnostic is then reported only when no mapping of the pair is generated (for `Guid?` → `UserId?` also not the
+  one of `Guid` → `UserId`), with the same message;
 - a nested object of another type (`Address` → `AddressDto`) whose type pair has no mapping: none in the project (also
   through a base type or an interface of the source type), and no accessible `MapTo…` extension method of a referenced
   assembly or a hand-written one. With a mapping the nested object is mapped by it (from 2.1.0,
@@ -120,19 +124,23 @@ to add, for example:
   hand-written one that the generated call binds to;
 - a `MapFrom` expression of another type than the destination property.
 
+A constructor or factory parameter is checked the same way: a value that a pair mapping could convert is `IM0002`
+when there is none (from 2.1.0; before, `IM0009`), and the argument is `default!`, so the generated file compiles.
+
 Up to 2.0.0 these failed inside the generated file (`CS0029`, `CS0266`, `CS1061`). Now the property is not generated
 (the destination keeps its default value), the rest of the mapping is, and the build fails with `IM0002` at your code.
 A mapping with `ConvertUsing` is checked too: `ConvertUsing` replaces `MapToX(source)`, but the in-place overload still
 assigns the properties.
 
 **Fix:** convert the value (`[MapConverter]`, `opt.UseConverter<T>()`, a `MapFrom` that converts), add the missing
-mapping, or ignore the property (`[Ignore]`, `opt.Ignore()`). For `ReverseMap()`, declare the reverse mapping with
+mapping (for a value, a mapping of the pair: `CreateMap<Guid, UserId>().ConvertUsing(UserId.From)`), or ignore the property (`[Ignore]`, `opt.Ignore()`). For `ReverseMap()`, declare the reverse mapping with
 `CreateMap` and configure the property there.
 
 **Code fix** (a nested object or a collection element without a mapping): adds the mapping of the pair —
 `[MapTo(typeof(AddressDto))]` on the source type of an attribute mapping (`[MapFrom(typeof(Address))]` on the destination
 type when the source type is not in your code), `CreateMap<Address, AddressDto>();` after the statement of the
-`CreateMap`/`ReverseMap()` call in a profile. The other cases have no code fix.
+`CreateMap`/`ReverseMap()` call in a profile. The other cases have no code fix, a value without a pair mapping neither
+(`[MapTo]` cannot be added to `Guid`, and a property-by-property mapping would not convert it).
 
 ---
 
@@ -275,7 +283,9 @@ gets no value. Or the factory of `ConstructWith` has such a parameter
 
 - the source has no property with the parameter's name (ignoring case), and the parameter has no default value;
 - the source value cannot be passed (the reasons of [`IM0002`](#im0002--property-types-are-incompatible-or-have-no-mapping):
-  no implicit conversion, a nullable nested object for a non-nullable parameter); a default value does not help then;
+  a nullable nested object or value for a non-nullable parameter); a default value does not help then. A value of
+  another type that a pair mapping could convert counts as mapped (from 2.1.0): without the mapping it is `IM0002`. A
+  constructor that needs such a conversion is chosen only when no other one can be called;
 - the parameter is ignored (`Ignore()` of the property with the same name, `[Ignore]`) and has no default value.
 
 **Behavior:** the mapping is not generated; other mappings in the project are.
@@ -539,3 +549,29 @@ after the call the generated code assigns the properties with a public `set`.
 
 **Fix:** add a parameter for it to the factory (or set it in the lambda of `ConstructWith`), or ignore it with
 `ForMember(d => d.Property, o => o.Ignore())`.
+
+---
+
+## IM0022 — Converter of `ConvertUsing` cannot be used
+
+**Severity:** Error (from 2.1.0)
+
+**Points to:** the argument of `ConvertUsing` (or of `ReverseMap(converter)`, the converter of the reverse mapping).
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: {2}`; `{2}` says what is wrong and what to write.
+
+**Cause:** the generated method calls the converter with the source, so it must be a lambda (`ConvertUsing(s => …)`) or a
+static method group (`ConvertUsing(UserId.From)`) written in the call
+([Value conversions](advanced.md#value-conversions-pair-mappings)). Reported for:
+
+- an instance method or a local function (the generated class has no instance to call it on);
+- a private or protected method, or a method of a private type;
+- a delegate in a variable, a field or a property: it cannot be read at compile time.
+
+Up to 2.0.0 such an argument, and a static method group too, was silently ignored: the mapping was generated property
+by property, without the converter. A static method group is called from 2.1.0.
+
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** pass a public or internal static method, or a lambda that does not use locals or the profile instance:
+`ConvertUsing(v => Converters.ToUserId(v))`.
