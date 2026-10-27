@@ -713,41 +713,51 @@ internal static class ProfileAnalyzer
         // in-place overload (public or the private one for IMapper) still assigns the properties.
         var compilation = model.Compilation;
 
-        foreach (var destProp in destProps)
+        // The value of a destination member (a property or a constructor parameter): ForMember of the property of the
+        // same name (Ignore, UseConverter, MapFrom), the source property of the same name, IncludeMembers. Returns
+        // null when nothing maps it; `ignored` for Ignore(). IM0002 (a value the generated code cannot take) goes to
+        // `into` and sets `unusable` to its reason. Without `commit` (constructors being compared) no converter is
+        // recorded.
+        PropertyMappingDescriptor? MapMember(DestinationMember target, bool isInitOnly, bool isParameter,
+            ImmutableArray<DiagnosticInfo>.Builder into, bool commit, out bool ignored, out string? unusable)
         {
-            ct.ThrowIfCancellationRequested();
-
-            bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
-
-            if (configByDest.TryGetValue(destProp.Name, out var cfg))
+            ignored = false;
+            unusable = null;
+            if (configByDest.TryGetValue(target.DisplayName, out var cfg))
             {
                 // Priority 1: explicitly configured via ForMember.
+                ignored = cfg.isIgnore;
                 var converter = cfg.converter is null || cfg.isIgnore
                     ? null
-                    : converters.Add(cfg.converter.Value.Type, $"UseConverter for '{destProp.Name}' in MappingProfile '{profileName}'",
-                        cfg.converter.Value.Location, ct);
+                    : commit
+                        ? converters.Add(cfg.converter.Value.Type, $"UseConverter for '{target.DisplayName}' in MappingProfile '{profileName}'",
+                            cfg.converter.Value.Location, ct)
+                        : new ConverterUse(string.Empty, isCached: false);
                 bool skipped = false;
                 if (!cfg.isIgnore && converter is null && cfg.lambdaBody is not null && cfg.mapFrom is { } mapFrom
-                    && PropertyTypeCheck.CheckMapFrom(compilation, mapFrom.Type, destProp, destSymbol, mapFrom.Location ?? origin) is { } wrong)
+                    && PropertyTypeCheck.CheckMapFrom(compilation, mapFrom.Type, target, destSymbol, mapFrom.Location ?? origin) is { } wrong)
                 {
-                    diagnostics.Add(wrong);
+                    into.Add(wrong);
                     skipped = true;
+                    unusable = wrong.MessageArgs[2];
                 }
 
-                propertyMappings.Add(new PropertyMappingDescriptor(
-                    sourcePropertyName: destProp.Name, // fallback name
-                    destPropertyName: destProp.Name,
+                // UseConverter reads the source property of the same name; a parameter takes its name from the source.
+                string sourceName = isParameter && sourcePropsByName.TryGetValue(target.Name, out var named) ? named.Name : target.Name;
+                return new PropertyMappingDescriptor(
+                    sourcePropertyName: sourceName, // fallback name
+                    destPropertyName: target.Name,
                     isIgnored: cfg.isIgnore || skipped,
                     converterType: converter?.FullName,
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
                     isInitOnly: isInitOnly,
-                    converterIsCached: converter?.IsCached ?? false));
+                    converterIsCached: converter?.IsCached ?? false);
             }
             // Priority 2: direct name-match.
-            else if (sourcePropsByName.TryGetValue(destProp.Name, out var namedProp))
+            else if (sourcePropsByName.TryGetValue(target.Name, out var namedProp))
             {
-                var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, destProp.Type);
+                var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, target.Type);
                 string typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 bool skipped = false;
                 var mappingPairs = default(EquatableArray<string>);
@@ -755,28 +765,33 @@ internal static class ProfileAnalyzer
                 string sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
                 if (collection is not null)
                 {
-                    if (MappingAnalyzer.CheckCollection(compilation, collection, namedProp, destProp, sourceDisplay, destSymbol,
+                    if (MappingAnalyzer.CheckCollection(compilation, collection, namedProp, target, sourceDisplay, destSymbol,
                             checkOrigin, origin, out mappingPairs) is { } missing)
                     {
-                        diagnostics.Add(missing);
+                        into.Add(missing);
                     }
                 }
-                else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, destProp.Type, sourceDisplay,
-                             destProp, destSymbol, checkOrigin, origin, diagnostics)) is not null)
+                else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, target.Type, sourceDisplay,
+                             target, destSymbol, checkOrigin, origin, into)) is not null)
                 {
                     skipped = nested.Skipped;
                     mappingPairs = nested.Pairs;
+                    if (skipped)
+                    {
+                        unusable = into[into.Count - 1].MessageArgs[2];
+                    }
                 }
-                else if (PropertyTypeCheck.CheckAssignment(compilation, namedProp.Type, destProp.Type, sourceDisplay, destProp,
+                else if (PropertyTypeCheck.CheckAssignment(compilation, namedProp.Type, target.Type, sourceDisplay, target,
                              destSymbol, checkOrigin, origin) is { } incompatible)
                 {
-                    diagnostics.Add(incompatible);
+                    into.Add(incompatible);
                     skipped = true;
+                    unusable = incompatible.MessageArgs[2];
                 }
 
-                propertyMappings.Add(new PropertyMappingDescriptor(
+                return new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
-                    destPropertyName: destProp.Name,
+                    destPropertyName: target.Name,
                     isIgnored: skipped,
                     converterType: null,
                     needsNullCheck: namedProp.Type.IsReferenceType,
@@ -785,27 +800,85 @@ internal static class ProfileAnalyzer
                     sourcePropertyTypeFqn: typeFqn,
                     collection: collection,
                     mappingPairs: mappingPairs,
-                    nested: nested is { Skipped: false } ? nested : null));
+                    nested: nested is { Skipped: false } ? nested : null);
             }
             // Priority 3: IncludeMembers flattening.
-            else if (includedResolution.TryGetValue(destProp.Name, out var included))
+            else if (includedResolution.TryGetValue(target.Name, out var included))
             {
-                var incompatible = PropertyTypeCheck.CheckAssignment(compilation, included.property.Type, destProp.Type,
-                    included.display, destProp, destSymbol, checkOrigin, origin);
+                var incompatible = PropertyTypeCheck.CheckAssignment(compilation, included.property.Type, target.Type,
+                    included.display, target, destSymbol, checkOrigin, origin);
                 if (incompatible is not null)
                 {
-                    diagnostics.Add(incompatible.Value);
+                    into.Add(incompatible.Value);
+                    unusable = incompatible.Value.MessageArgs[2];
                 }
 
-                propertyMappings.Add(new PropertyMappingDescriptor(
-                    sourcePropertyName: destProp.Name,
-                    destPropertyName: destProp.Name,
+                return new PropertyMappingDescriptor(
+                    sourcePropertyName: target.Name,
+                    destPropertyName: target.Name,
                     isIgnored: incompatible is not null,
                     converterType: null,
                     needsNullCheck: false,
                     lambdaBody: included.lambdaBody,
                     isInitOnly: isInitOnly,
-                    includedMemberTypeFqn: included.typeFqn));
+                    includedMemberTypeFqn: included.typeFqn);
+            }
+
+            return null;
+        }
+
+        // A destination without an accessible parameterless constructor is created by a constructor (issue #24): a
+        // parameter is configured by ForMember of the property of the same name (ignoring case); Ignore() leaves its
+        // default value. ConvertUsing creates the object itself: no constructor is needed.
+        var construction = wholeObjectConverter is not null || wholeObjectLambdaBody is not null
+            ? ConstructorChoice.Initializer
+            : ConstructorSelection.Choose(compilation, sourceSymbol, destSymbol,
+                (parameter, sameNamed, commit) =>
+                {
+                    var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+                    var mapping = MapMember(DestinationMember.ForParameter(parameter, sameNamed), isInitOnly: false,
+                        isParameter: true, found, commit, out bool ignored, out string? unusable);
+                    if (mapping is null)
+                    {
+                        return ParameterValue.NoSource();
+                    }
+
+                    if (ignored)
+                    {
+                        return ParameterValue.Ignored($"Ignore() of '{sameNamed?.Name ?? parameter.Name}' in MappingProfile '{profileName}'");
+                    }
+
+                    return unusable is null ? ParameterValue.Mapped(mapping, found.ToImmutable()) : ParameterValue.Unusable(unusable);
+                },
+                origin, atParameter: false,
+                (parameter, sameNamed) => checkOrigin == PropertyTypeCheck.Origin.ReverseMap
+                    ? $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap<{sourceSymbol.Name}, {destSymbol.Name}>() and configure '{sameNamed?.Name ?? parameter.Name}' there, or remove ReverseMap()."
+                    : sameNamed is not null
+                        ? $"Configure it with ForMember(d => d.{sameNamed.Name}, o => o.MapFrom(...)), or add the property to '{sourceSymbol.Name}'."
+                        : $"'{destSymbol.Name}' has no property named '{parameter.Name}', so ForMember cannot configure the parameter: add the property to '{sourceSymbol.Name}', or create the object with ConvertUsing(s => new {destSymbol.Name}(...)).");
+        diagnostics.AddRange(construction.Diagnostics);
+
+        // No constructor can be called (IM0009, IM0017, IM0018): the mapping is not generated.
+        if (construction.Failed)
+        {
+            return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
+        }
+
+        foreach (var destProp in destProps)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Set by the constructor (a parameter of the same name, ignoring case).
+            if (construction.SetByConstructor.Contains(destProp.Name))
+            {
+                continue;
+            }
+
+            bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
+
+            if (MapMember(DestinationMember.ForProperty(destProp), isInitOnly, isParameter: false, diagnostics, commit: true, out _, out _) is { } mapping)
+            {
+                propertyMappings.Add(mapping);
             }
             // Priority 4: nothing maps the property. IM0001 at the CreateMap call; reported only with
             // <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles> (filtered in
@@ -852,7 +925,9 @@ internal static class ProfileAnalyzer
             sourceFullName: sourceFullName,
             destFullName: destFullName,
             methodAccessibility: methodAccessibility,
-            wholeObjectConverterIsCached: wholeObject?.IsCached ?? false);
+            wholeObjectConverterIsCached: wholeObject?.IsCached ?? false,
+            usesConstructor: construction.UsesConstructor,
+            constructorArguments: construction.Arguments);
     }
 
     // -----------------------------------------------------------------------

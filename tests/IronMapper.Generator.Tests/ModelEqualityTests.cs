@@ -189,6 +189,28 @@ public class ModelEqualityTests
         Assert.False(a.Equals(b));
     }
 
+    [Fact]
+    public void MappingDescriptor_ConstructorFields_TakePartInEqualityAndSurviveTheCopies()
+    {
+        var arguments = ImmutableArray.Create(Make("Id", "id"));
+        var a = new MappingDescriptor("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            ImmutableArray<DiagnosticInfo>.Empty, false, usesConstructor: true, constructorArguments: arguments);
+        var b = new MappingDescriptor("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            ImmutableArray<DiagnosticInfo>.Empty, false, usesConstructor: true, constructorArguments: ImmutableArray.Create(Make("Id", "Id")));
+        var initializer = MakeDescriptor("Src", "Dst");
+        var noArguments = new MappingDescriptor("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            ImmutableArray<DiagnosticInfo>.Empty, false, usesConstructor: true);
+
+        Assert.False(a.Equals(b));
+        Assert.False(noArguments.Equals(initializer));
+        Assert.NotEqual(noArguments.GetHashCode(), initializer.GetHashCode());
+        var copy = a.WithOrigin("o", "display", 0, new DestinationNaming("", "", ""), null)
+            .WithMethodOverrides(new GeneratedMethodOverrides(null, false, null))
+            .WithoutDiagnostics();
+        Assert.True(copy.UsesConstructor);
+        Assert.Equal(a.ConstructorArguments, copy.ConstructorArguments);
+    }
+
     // -----------------------------------------------------------------------
     // DiagnosticInfo
     // -----------------------------------------------------------------------

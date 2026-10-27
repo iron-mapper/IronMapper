@@ -261,13 +261,112 @@ internal static class MappingAnalyzer
             }
         }
 
-        // Build set of destination property names for IM0006 validation.
+        var converters = new ConverterAnalyzer(compilation, sourceSymbol, destSymbol);
+
+        // The value of a source property for a destination member (a property or a constructor parameter): a converter,
+        // a collection mapped element by element, a nested object mapped by the mapping of its pair, or the value as is.
+        // IM0002 (a value the generated code cannot take) goes to `into` and sets `unusable` to its reason. Without
+        // `commit` (constructors being compared) the converter is not recorded.
+        PropertyMappingDescriptor MapSourceProperty(IPropertySymbol sourceProp, DestinationMember target, bool isInitOnly,
+            LocationInfo? location, ImmutableArray<DiagnosticInfo>.Builder into, bool commit, out string? unusable)
+        {
+            unusable = null;
+            var collection = SymbolHelpers.DetectCollectionMapping(sourceProp.Type, target.Type);
+            bool isIgnored = HasIgnoreAttribute(sourceProp);
+            // An ignored property does not use its converter, so the converter is not checked.
+            var converter = isIgnored ? null
+                : commit ? GetConverter(sourceProp, converters, ct)
+                : HasConverter(sourceProp) ? new ConverterUse(string.Empty, isCached: false) : null;
+            // A nested object is mapped by the mapping of its type pair. IM0002: a value the generated assignment cannot
+            // take is not generated (as if ignored), instead of a CS0029/CS0266/CS1061 in the generated file.
+            var mappingPairs = default(EquatableArray<string>);
+            NestedObjectMapping? nested = null;
+            if (!isIgnored && converter is null)
+            {
+                string sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
+                if (collection is not null)
+                {
+                    if (CheckCollection(compilation, collection, sourceProp, target, sourceDisplay, destSymbol,
+                            PropertyTypeCheck.Origin.Attribute, location, out mappingPairs) is { } missing)
+                    {
+                        into.Add(missing);
+                    }
+                }
+                else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, target.Type,
+                             sourceDisplay, target, destSymbol, PropertyTypeCheck.Origin.Attribute, location, into)) is not null)
+                {
+                    isIgnored = nested.Skipped;
+                    mappingPairs = nested.Pairs;
+                    if (nested.Skipped)
+                    {
+                        unusable = into[into.Count - 1].MessageArgs[2];
+                    }
+                }
+                else if (PropertyTypeCheck.CheckAssignment(compilation, sourceProp.Type, target.Type, sourceDisplay, target,
+                             destSymbol, PropertyTypeCheck.Origin.Attribute, location) is { } incompatible)
+                {
+                    into.Add(incompatible);
+                    isIgnored = true;
+                    unusable = incompatible.MessageArgs[2];
+                }
+            }
+
+            return new PropertyMappingDescriptor(
+                sourcePropertyName: sourceProp.Name,
+                destPropertyName: target.Name,
+                isIgnored: isIgnored,
+                converterType: converter?.FullName,
+                needsNullCheck: sourceProp.Type.IsReferenceType,
+                lambdaBody: null,
+                isInitOnly: isInitOnly,
+                collection: collection,
+                converterIsCached: converter?.IsCached ?? false,
+                mappingPairs: mappingPairs,
+                nested: nested is { Skipped: false } ? nested : null);
+        }
+
+        // A destination without an accessible parameterless constructor is created by a constructor (issue #24): its
+        // parameters take the source properties as the destination properties do ([MapProperty], then the name ignoring
+        // case); [Ignore] on the destination property of the same name, or on the source property, leaves the default value.
+        var construction = ConstructorSelection.Choose(compilation, sourceSymbol, destSymbol,
+            (parameter, sameNamed, commit) =>
+            {
+                if (sameNamed is not null && HasIgnoreAttribute(sameNamed))
+                {
+                    return ParameterValue.Ignored($"[Ignore] on '{destSymbol.Name}.{sameNamed.Name}'");
+                }
+
+                if (!sourceByDestName.TryGetValue(parameter.Name, out var sourceProp)
+                    && !sourcePropsByName.TryGetValue(parameter.Name, out sourceProp))
+                {
+                    return ParameterValue.NoSource();
+                }
+
+                if (HasIgnoreAttribute(sourceProp))
+                {
+                    return ParameterValue.Ignored($"[Ignore] on '{sourceSymbol.Name}.{sourceProp.Name}'");
+                }
+
+                var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+                var mapping = MapSourceProperty(sourceProp, DestinationMember.ForParameter(parameter, sameNamed),
+                    isInitOnly: false, LocationInfo.From(parameter) ?? origin, found, commit, out string? unusable);
+                return unusable is null ? ParameterValue.Mapped(mapping, found.ToImmutable()) : ParameterValue.Unusable(unusable);
+            },
+            origin, atParameter: true,
+            (parameter, _) => $"Add the property to '{sourceSymbol.Name}', or put [MapProperty(\"{parameter.Name}\")] on the "
+                              + "source property that holds the value.");
+        diagnostics.AddRange(construction.Diagnostics);
+
+        // Build set of destination property names for IM0006 validation: the settable properties and the parameters of
+        // the constructor that creates the destination.
         var destPropNames = new System.Collections.Generic.HashSet<string>(
             System.StringComparer.OrdinalIgnoreCase);
         foreach (var p in destProps)
         {
             destPropNames.Add(p.Name);
         }
+
+        destPropNames.UnionWith(construction.SetByConstructor);
 
         // IM0006: validate that every [MapProperty] destination name actually exists. The code fix suggests one of
         // the destination properties, passed as a diagnostic property.
@@ -285,39 +384,18 @@ internal static class MappingAnalyzer
             }
         }
 
-        // IM0009: for record destinations, warn about primary constructor parameters
-        // that have no matching source property.
-        if (destSymbol.IsRecord)
+        // No constructor can be called (IM0009, IM0017, IM0018): the mapping is not generated.
+        if (construction.Failed)
         {
-            foreach (var ctor in destSymbol.Constructors)
-            {
-                ct.ThrowIfCancellationRequested();
-                if (ctor.IsImplicitlyDeclared)
-                {
-                    continue;
-                }
-
-                foreach (var param in ctor.Parameters)
-                {
-                    if (!sourcePropsByName.ContainsKey(param.Name))
-                    {
-                        diagnostics.Add(new DiagnosticInfo(
-                            DiagnosticDescriptors.RecordParameterNotMapped,
-                            param.Name,
-                            destSymbol.Name).WithLocation(LocationInfo.From(param) ?? origin));
-                    }
-                }
-            }
+            return CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
-
-        var converters = new ConverterAnalyzer(compilation, sourceSymbol, destSymbol);
 
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
 
-            // Destination property explicitly ignored via [Ignore] — skip silently.
-            if (HasIgnoreAttribute(destProp))
+            // Destination property explicitly ignored via [Ignore], or set by the constructor — skip silently.
+            if (HasIgnoreAttribute(destProp) || construction.SetByConstructor.Contains(destProp.Name))
             {
                 continue;
             }
@@ -329,52 +407,8 @@ internal static class MappingAnalyzer
             if (sourceByDestName.TryGetValue(destProp.Name, out var sourceProp)
                 || sourcePropsByName.TryGetValue(destProp.Name, out sourceProp))
             {
-                var collection = SymbolHelpers.DetectCollectionMapping(sourceProp.Type, destProp.Type);
-                bool isIgnored = HasIgnoreAttribute(sourceProp);
-                // An ignored property does not use its converter, so the converter is not checked.
-                var converter = isIgnored ? null : GetConverter(sourceProp, converters, ct);
-                // A nested object is mapped by the mapping of its type pair. IM0002: a value the generated assignment cannot
-                // take is not generated (as if ignored), instead of a CS0029/CS0266/CS1061 in the generated file.
-                var mappingPairs = default(EquatableArray<string>);
-                NestedObjectMapping? nested = null;
-                if (!isIgnored && converter is null)
-                {
-                    var location = LocationInfo.From(destProp) ?? origin;
-                    string sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
-                    if (collection is not null)
-                    {
-                        if (CheckCollection(compilation, collection, sourceProp, destProp, sourceDisplay, destSymbol,
-                                PropertyTypeCheck.Origin.Attribute, location, out mappingPairs) is { } missing)
-                        {
-                            diagnostics.Add(missing);
-                        }
-                    }
-                    else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, destProp.Type,
-                                 sourceDisplay, destProp, destSymbol, PropertyTypeCheck.Origin.Attribute, location, diagnostics)) is not null)
-                    {
-                        isIgnored = nested.Skipped;
-                        mappingPairs = nested.Pairs;
-                    }
-                    else if (PropertyTypeCheck.CheckAssignment(compilation, sourceProp.Type, destProp.Type, sourceDisplay, destProp,
-                                 destSymbol, PropertyTypeCheck.Origin.Attribute, location) is { } incompatible)
-                    {
-                        diagnostics.Add(incompatible);
-                        isIgnored = true;
-                    }
-                }
-
-                propertyMappings.Add(new PropertyMappingDescriptor(
-                    sourcePropertyName: sourceProp.Name,
-                    destPropertyName: destProp.Name,
-                    isIgnored: isIgnored,
-                    converterType: converter?.FullName,
-                    needsNullCheck: sourceProp.Type.IsReferenceType,
-                    lambdaBody: null,
-                    isInitOnly: isInitOnly,
-                    collection: collection,
-                    converterIsCached: converter?.IsCached ?? false,
-                    mappingPairs: mappingPairs,
-                    nested: nested is { Skipped: false } ? nested : null));
+                propertyMappings.Add(MapSourceProperty(sourceProp, DestinationMember.ForProperty(destProp), isInitOnly, LocationInfo.From(destProp) ?? origin,
+                    diagnostics, commit: true, out _));
                 continue;
             }
 
@@ -409,10 +443,12 @@ internal static class MappingAnalyzer
             destNamespace: SymbolHelpers.GetNamespace(destSymbol),
             propertyMappings: propertyMappings.ToImmutable(),
             diagnostics: diagnostics.ToImmutable(),
-            hasCustomConverter: propertyMappings.Count > 0 && HasAnyConverter(propertyMappings),
+            hasCustomConverter: HasAnyConverter(propertyMappings) || construction.Arguments.Any(a => a.ConverterType is not null),
             sourceFullName: sourceFullName,
             destFullName: destFullName,
-            methodAccessibility: methodAccessibility);
+            methodAccessibility: methodAccessibility,
+            usesConstructor: construction.UsesConstructor,
+            constructorArguments: construction.Arguments);
     }
 
     /// <summary>
@@ -502,13 +538,17 @@ internal static class MappingAnalyzer
         return null;
     }
 
+    /// <summary><c>[MapConverter]</c> on <paramref name="prop"/>, without checking the converter (constructors being compared).</summary>
+    private static bool HasConverter(IPropertySymbol prop)
+        => prop.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == MapConverterAttributeFqn && a.ConstructorArguments.Length > 0);
+
     /// <summary>
     /// IM0002 of a collection property mapped element by element (<see cref="PropertyTypeCheck.CheckCollection"/>): the
     /// diagnostic, reported only when the plan generates no mapping of the element types, and those pairs
     /// (<paramref name="mappingPairs"/>, empty when a referenced assembly maps the elements).
     /// </summary>
     internal static DiagnosticInfo? CheckCollection(Compilation compilation, CollectionMapping collection,
-        IPropertySymbol sourceProp, IPropertySymbol destProp, string sourceDisplay, INamedTypeSymbol destSymbol,
+        IPropertySymbol sourceProp, DestinationMember destProp, string sourceDisplay, INamedTypeSymbol destSymbol,
         PropertyTypeCheck.Origin origin, LocationInfo? location, out EquatableArray<string> mappingPairs)
     {
         mappingPairs = default;

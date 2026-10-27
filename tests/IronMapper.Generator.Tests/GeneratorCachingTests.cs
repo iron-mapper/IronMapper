@@ -61,8 +61,14 @@ public class GeneratorCachingTests
             public string Convert(string source) => source.ToUpperInvariant();
         }
 
+        // Created by constructors (issue #24): a positional record with a nested object and a default value.
+        [MapTo(typeof(PointDto))]
+        public class Point { public int X { get; set; } public Line Line { get; set; } = new(); }
+        public record PointDto(int X, LineDto Line, string Label = "");
+
         public class Order { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
         public class OrderDto { public string Address { get; set; } = ""; }
+        public record Place(string Street, string City);
         public class OrderProfile : MappingProfile
         {
             public OrderProfile()
@@ -70,6 +76,7 @@ public class GeneratorCachingTests
                 CreateMap<Order, OrderDto>()
                     .ForMember(d => d.Address, o => o.MapFrom(s => s.Street + ", " + s.City))
                     .AfterMap((s, d) => d.Address = d.Address.Trim());
+                CreateMap<Order, Place>().ForMember(d => d.City, o => o.MapFrom(s => s.City.Trim()));
             }
         }
         """;

@@ -450,6 +450,10 @@ public class OrderProfile : MappingProfile
 }
 ```
 
+For a destination created by a constructor (a positional record, no parameterless constructor; from 2.1.0), the
+`ForMember` calls below configure the constructor parameter with the same name as the property (ignoring case);
+`Ignore()` means its default value. See [Constructors and positional records](advanced.md#constructors-and-positional-records).
+
 ---
 
 ### `ForMember(dest => dest.Prop, opt => opt.MapFrom(...))`

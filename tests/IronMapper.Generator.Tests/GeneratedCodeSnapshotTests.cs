@@ -340,6 +340,47 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task Constructors() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Attributes;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        [MapTo(typeof(ChangeDto))]
+        public class Change
+        {
+            public System.Guid Id { get; set; }
+            public string NewAddress { get; set; } = "";
+            public System.DateTimeOffset RequestedAt { get; set; }
+            public System.Guid[] MovedIds { get; set; } = System.Array.Empty<System.Guid>();
+            public Owner Owner { get; set; } = new();
+            public string Note { get; set; } = "";
+        }
+
+        public record ChangeDto(System.Guid Id, string? NewAddress, System.DateTimeOffset? RequestedAt, IReadOnlyList<System.Guid> MovedIds,
+            OwnerDto Owner, string Source = "import")
+        {
+            public string Note { get; set; } = "";
+        }
+
+        [MapTo(typeof(OwnerDto))]
+        public class Owner { public string Name { get; set; } = ""; }
+        public record OwnerDto(string Name);
+
+        public class UserRow { public System.Guid Id { get; set; } public System.DateTimeOffset? BlockedAt { get; set; } }
+        public record Account(System.Guid Id, bool Blocked, string Theme = "system");
+
+        public class AccountProfile : MappingProfile
+        {
+            public AccountProfile()
+            {
+                CreateMap<UserRow, Account>().ForMember(d => d.Blocked, o => o.MapFrom(s => s.BlockedAt != null));
+            }
+        }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

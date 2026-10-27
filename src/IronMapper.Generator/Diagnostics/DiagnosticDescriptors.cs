@@ -112,16 +112,46 @@ internal static class DiagnosticDescriptors
         description: "Mapping destinations must be concrete, instantiable types. Map to a concrete class, or provide a custom ITypeConverter that creates the appropriate concrete instance.");
 
     /// <summary>
-    /// IM0009 — A record destination type has a primary constructor parameter with no matching source property.
+    /// IM0009 — The destination is created by a constructor (it has no accessible parameterless constructor), and a
+    /// parameter of the constructor that fits best gets no value: no source property of the same name (ignoring case),
+    /// the source value cannot be converted, or the parameter is ignored and has no default value. The mapping is not
+    /// generated. Until 2.0.0 this was a warning for records only, while the generated object initializer did not compile
+    /// (CS7036). The third argument says why and what to do (<see cref="Analysis.ConstructorSelection"/>).
     /// </summary>
-    public static readonly DiagnosticDescriptor RecordParameterNotMapped = new(
+    public static readonly DiagnosticDescriptor ConstructorParameterNotMapped = new(
         id: "IM0009",
-        title: "Record constructor parameter not mapped",
-        messageFormat: "Constructor parameter '{0}' in record '{1}' has no matching source property",
+        title: "Constructor parameter not mapped",
+        messageFormat: "Mapping to '{1}' was not generated: constructor parameter '{0}' gets no value: {2}",
         category: Category,
-        defaultSeverity: DiagnosticSeverity.Warning,
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Records are initialized via object initializer using their init-only properties. Ensure the source type has a property matching each primary constructor parameter name, or use [Ignore] on the record property to suppress this warning.");
+        description: "A destination without an accessible parameterless constructor is created by its constructor with the most parameters that can be mapped. A parameter takes the source property of the same name (ignoring case, or [MapProperty] on it), the MapFrom, UseConverter or Ignore of the property of the same name in ForMember, or its default value. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0017 — Several constructors of the destination fit equally well (the same number of parameters mapped from the
+    /// source and the same number of parameters); the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor AmbiguousConstructor = new(
+        id: "IM0017",
+        title: "Constructor of the destination is ambiguous",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new {4}(...)) in a profile.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Of the accessible constructors whose parameters all get a value, the generator takes the one with the most parameters mapped from the source, then the one with the most parameters. A tie is not resolved by the order of declaration, because reordering the code would silently change the mapping. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0018 — The destination has no constructor that the generated code can call (only private or protected ones, such
+    /// as a domain type created by a static factory); the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NoAccessibleConstructor = new(
+        id: "IM0018",
+        title: "Destination has no accessible constructor",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create the object with ConvertUsing(s => ...) in a profile, for example with its factory method.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The generated code creates the destination with a parameterless constructor and an object initializer, or with a constructor with parameters. A constructor with ref or out parameters is not used. Other mappings in the project are still generated.");
 
     /// <summary>
     /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,

@@ -123,6 +123,7 @@ you need the update in place:
 | --- | --- | --- |
 | The destination property is a struct | the getter returns a copy; updating the copy changes nothing | declare the destination type a class (a struct is a value: assigning it is the update) |
 | The destination type of the pair has a mapped `init` property (a record with `init` properties) | the in-place overload skips `init` properties, so the updated object would keep their old values | make those properties settable (`set`), or `Ignore` them in the pair's mapping |
+| The destination type of the pair is created by a constructor (a positional record, no parameterless constructor; from 2.1.0) | it has no in-place mapping ([Constructors and positional records](#constructors-and-positional-records)) | give the type a parameterless constructor and settable properties |
 | The mapping of the pair uses `ConvertUsing` | the converter makes the object | remove `ConvertUsing` and map the properties (`ForMember`), or update the object with your own code after the in-place call (the in-place overload does not call hooks) |
 | The mapping of the pair is in a referenced project with its in-place overload turned off (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`) | there is no public in-place `MapToX(source, destination)` to call | turn the in-place overload on for that pair in the referenced project |
 | The destination property has no getter the generated code can call (set-only, or a non-public getter) | the existing object cannot be read | add a public (or internal) getter |
@@ -240,26 +241,77 @@ Notes:
 
 ---
 
-## Record types
+## Constructors and positional records
 
-The generator always creates the destination with an **object initializer** (`new TDest { ... }`); it never
-calls a constructor with arguments.
+How the destination is created (from 2.1.0, [#24](https://github.com/iron-mapper/IronMapper/issues/24)):
 
-- **Works:** records (and classes) with a parameterless constructor and `init` or `set` properties:
+- **With an accessible parameterless constructor** (public or internal), or for a struct: an **object initializer**
+  (`new TDest { ... }`), as before. Records and classes with `init` or `set` properties keep the same generated code.
+- **Otherwise with a constructor:** a positional record or a class whose constructors all take parameters is created by
+  a call of its constructor with named arguments; the destination properties the constructor does not set are filled
+  by an object initializer after it.
+
+```csharp
+[MapTo(typeof(PendingChangeState))]
+public record PendingChange(string NewAddress, DateTimeOffset ExpiresAt);
+public record PendingChangeState(string? NewAddress, DateTimeOffset? ExpiresAt);
+
+// generated:
+// return new PendingChangeState(
+//     NewAddress: source.NewAddress,
+//     ExpiresAt: source.ExpiresAt);
+```
+
+**Parameters** get their values as properties do:
+
+- from the source property with the same name, **ignoring case** (`id` ↔ `Id`); in attribute mappings also from
+  `[MapProperty("parameterName")]` on a source property, and through `[MapConverter]` on it;
+- with the same conversions as a property: implicit conversions (`string` → `string?`, `DateTimeOffset` →
+  `DateTimeOffset?`, `int` → `long`), collections (`T[]` passed to `IReadOnlyList<T>` as is, other element types
+  mapped one by one), nested objects through the mapping of their pair with the same `null` checks
+  ([Nested objects](#nested-objects));
+- a parameter **with a default value** and no source keeps its default value (`string Theme = "system"`);
+- in a profile, `ForMember` of the destination property **with the same name** (ignoring case) configures the
+  parameter: `MapFrom`, `UseConverter`, and `Ignore()`, which for a parameter means "use the default value":
 
   ```csharp
-  public record PointDto
-  {
-      public double X { get; init; }
-      public double Y { get; init; }
-  }
+  public record Account(Guid Id, string Email, bool Blocked, string Theme = "system");
+
+  CreateMap<UserRecord, Account>()
+      .ForMember(d => d.Blocked, o => o.MapFrom(s => s.BlockedAt != null)); // computed parameter
   ```
 
-- **Does not compile:** positional records without a parameterless constructor, e.g.
-  `public record PointDto(double X, double Y);` — the generated `new PointDto { ... }` fails with `CS7036`.
+- `[Ignore]` on the destination property with the same name, or on the source property, means the default value too.
 
-For attribute mappings, `IM0009` warns when a record's constructor parameter has no matching source property
-(see [diagnostics](diagnostics.md#im0009--record-constructor-parameter-not-mapped)).
+A destination property whose name is a parameter name is treated as set by the constructor: the initializer does not
+write it again, and `IM0001` is not reported for it (a `required` property is still set in the initializer unless the
+constructor has `[SetsRequiredMembers]`). Extra source properties are ignored, as for an initializer.
+
+**Which constructor.** Of the accessible constructors (no `ref`/`out` parameters, not the copy constructor of a record)
+whose every parameter gets a value, the one with the most parameters mapped from the source, then the one with the
+most parameters. Static factory methods are not used: a type with a public constructor and a `Create` method is created
+by the constructor. Nothing in the destination type selects a constructor: no IronMapper attribute is needed in domain
+types. Diagnostics, all errors that skip the mapping (other mappings are generated):
+
+- a parameter that gets no value (no source property, a value that cannot be converted, `Ignore` without a default
+  value) — [`IM0009`](diagnostics.md#im0009--constructor-parameter-not-mapped);
+- two constructors that fit equally well — [`IM0017`](diagnostics.md#im0017--constructor-of-the-destination-is-ambiguous);
+- no accessible constructor (only a private one, for example a domain type created by a factory method) —
+  [`IM0018`](diagnostics.md#im0018--destination-has-no-accessible-constructor). Until factories are supported,
+  create such an object with `ConvertUsing(s => D.Restore(...))` in a profile.
+
+**Not generated for such a destination: the in-place overload.** `source.MapToX(destination)` does not exist for a
+destination created by a constructor: what an in-place update should do with values that only the constructor takes is
+not decided yet (planned together with the in-place behavior of `init`-only types).
+`IMapper.Map(source, destination)` throws `MappingException` that says so. In the in-place update of a parent object, a
+nested object of such a type is replaced by a new instance (as for a record with `init` properties, see
+[In-place update of nested objects](#in-place-update-of-nested-objects)).
+
+Other details: an exception thrown by the constructor reaches the caller as it is; `ConvertUsing` creates the object
+itself, so no constructor is needed; with `BeforeMap`/`AfterMap` the constructor runs first, then `BeforeMap`, the
+assignments of the settable (`set`) properties and `AfterMap`. As for a property, a nullable source for a non-nullable reference parameter
+(`string?` → `string`) compiles with a nullable warning in the generated file (`CS8604`; `CS8601` for a property) and
+passes `null` on.
 
 ---
 
@@ -278,6 +330,7 @@ mapper.Map<WorkerEntity, WorkerDto>(entity, dto);
 ```
 
 The in-place overload only assigns the mapped properties. It:
+- is not generated for a destination created by a constructor ([Constructors and positional records](#constructors-and-positional-records));
 - skips `init`-only destination properties;
 - does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`.
 

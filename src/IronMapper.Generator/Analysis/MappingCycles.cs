@@ -32,7 +32,7 @@ internal sealed class MappingCycles
                 continue;
             }
 
-            foreach (var prop in descriptor.PropertyMappings)
+            foreach (var prop in descriptor.AllValueMappings)
             {
                 bool nested = MapperCodeEmitter.IsMappedNestedObject(prop);
                 if (!nested && !MapperCodeEmitter.UsesCollectionHelper(prop))

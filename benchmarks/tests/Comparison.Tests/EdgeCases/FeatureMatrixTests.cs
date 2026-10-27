@@ -120,7 +120,12 @@ public class FeatureMatrixTests
         "IronMapper_IMapper, collections: the benchmark calls `MapCollection<TSource, TDest>` and `ToList()`. Up to 1.1.x `MapCollection` returns a lazy " +
         "`IEnumerable<TDest>` (no known capacity, so the list grows while filling) and `Map<List<TDto>>(list)` throws `MappingException`; " +
         "from 2.0.0 `MapCollection` returns a filled `List<TDest>` and `Map<List<TDto>>(list)` works (issue #8).",
+#if IRONMAPPER_CONSTRUCTORS
+        "IronMapper, positional record: from 2.1 created by its constructor (parameters matched to source properties ignoring case). " +
+        "Up to 2.0 the mapping could not be declared: CS7036 in the generated file, no IronMapper diagnostic (checked with 1.1.3).",
+#else
         "IronMapper, positional record: the mapping is not declared in the code, because it breaks the build (checked with IronMapper 1.1.3: CS7036 in the generated file, no IronMapper diagnostic).",
+#endif
     ];
 
     [Fact]

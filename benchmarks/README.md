@@ -164,8 +164,8 @@ Another published version: `IronMapperPackageVersion=<version>` (environment var
 - **Mapster.Tool (`Mapster_Codegen`).** It does not run as part of a plain `dotnet build`, which the specification
   requires for every participant.
 - **Positional records, flattening, `null` handling in the timed scenarios.** Support differs between libraries
-  (IronMapper does not compile positional records as destinations and does not flatten); the behavior is recorded in
-  the feature matrix, not timed.
+  (IronMapper up to 2.0 does not compile positional records as destinations, and it does not flatten); the behavior is
+  recorded in the feature matrix, not timed.
 - **Other mappers.** The participants are fixed by the specification (BENCHMARK_SPEC.md, 2).
 - **Other machines and operating systems.** One full run on one machine; the scripts work on Windows, Linux and macOS
   (PowerShell 7), so the numbers can be reproduced elsewhere.

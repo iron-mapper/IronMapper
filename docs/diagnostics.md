@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0018`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 2.1.0):
@@ -17,7 +17,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. 
 | IM0006 | Error | `[MapProperty]` destination property not found | Yes |
 | IM0007 | Warning | Duplicate mapping definition | Yes — attributes and profiles |
 | IM0008 | Error | Abstract or interface destination type | Yes — attributes and profiles |
-| IM0009 | Warning | Record constructor parameter not mapped | Yes — `[MapTo]`/`[MapFrom]` only |
+| IM0009 | Error | Constructor parameter not mapped | Yes — attributes and profiles (an error from 2.1.0; up to 2.0.0 a warning for records in `[MapTo]`/`[MapFrom]`) |
 | IM0010 | Error | Mapping type is not accessible from generated code | Yes — attributes and profiles |
 | IM0011 | Error | Profile lambda uses a member that generated code cannot access | Yes — profiles |
 | IM0012 | Error | Profile lambda captures state | Yes — profiles |
@@ -25,6 +25,8 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0016`. 
 | IM0014 | Error | Mapping method name collision cannot be resolved | Yes — attributes and profiles |
 | IM0015 | Error | Converter cannot be created by generated code | Yes — `[MapConverter]`, `UseConverter`, `ConvertUsing<T>` |
 | IM0016 | Warning | `GenerateMethods` argument is not a constant | Yes — profiles |
+| IM0017 | Error | Constructor of the destination is ambiguous | Yes — attributes and profiles (from 2.1.0) |
+| IM0018 | Error | Destination has no accessible constructor | Yes — attributes and profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -38,8 +40,10 @@ dotnet_diagnostic.IM0001.severity = error   # or warning, suggestion, none
 without a location (only in the Error List), so neither the per-file `.editorconfig` severities nor the code fixes
 applied to them.
 
-When a problem has no working diagnostic (for example, a positional record as the destination), the build fails with
-a regular C# error (`CS7036`, …) inside the generated `*.g.cs` file instead.
+When a problem has no working diagnostic, the build fails with a regular C# error inside the generated `*.g.cs` file
+instead. Up to 2.0.0 that was the case for a positional record as the destination (`CS7036`); from 2.1.0 it is created by
+its constructor ([Constructors and positional records](advanced.md#constructors-and-positional-records)), with
+`IM0009`, `IM0017` or `IM0018` when no constructor can be called.
 
 A type that does not resolve (`typeof(Missing)` in `[MapTo]`/`[MapFrom]`, a type argument of `CreateMap`, a converter
 type) is reported by the compiler at your code (`CS0246`, `CS0234`, `CS0122`, …). The generator skips that mapping, so
@@ -249,23 +253,36 @@ because the generator reports IM0008 before reading the rest of the mapping.
 
 ---
 
-## IM0009 — Record constructor parameter not mapped
+## IM0009 — Constructor parameter not mapped
 
-**Severity:** Warning
+**Severity:** Error (from 2.1.0; up to 2.0.0 a warning, see below)
 
-**Points to:** the constructor parameter (its name) when the record is declared in your project; otherwise the attribute.
+**Points to:** in attribute mappings, the constructor parameter (its name) when the destination type is declared in
+your project, otherwise the attribute; in profiles, the `CreateMap` or `ReverseMap()` call.
 
-**Message:** `Constructor parameter '{0}' in record '{1}' has no matching source property`
+**Message:** `Mapping to '{1}' was not generated: constructor parameter '{0}' gets no value: {2}`
 
-**Cause:** a record destination has an explicitly declared constructor (including a primary constructor)
-with a parameter that has no source property of the same name (case-insensitive).
+**Cause:** the destination has no accessible parameterless constructor, so it is created by a constructor
+([Constructors and positional records](advanced.md#constructors-and-positional-records)), and no accessible
+constructor can be called: a parameter of the one that comes closest (the most parameters mapped from the source)
+gets no value. The last part of the message says why:
 
-**Reported for:** `[MapTo]` / `[MapFrom]` mappings only.
+- the source has no property with the parameter's name (ignoring case), and the parameter has no default value;
+- the source value cannot be passed (the reasons of [`IM0002`](#im0002--property-types-are-incompatible-or-have-no-mapping):
+  no implicit conversion, a nullable nested object for a non-nullable parameter); a default value does not help then;
+- the parameter is ignored (`Ignore()` of the property with the same name, `[Ignore]`) and has no default value.
 
-**Note:** the generator creates destinations with an object initializer, never with a constructor call.
-A positional record such as `record PointDto(double X, double Y)` has no parameterless constructor, so the
-generated code does not compile (`CS7036`) even when this warning is not reported. Use records with
-`init` properties as destinations.
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** add the source property, or map another one to the parameter (`[MapProperty("parameterName")]` on the source
+property; `ForMember(d => d.Property, o => o.MapFrom(...))` of the property with the same name in a profile), convert
+the value (a converter, `MapFrom`), give the parameter a default value, or create the object with `ConvertUsing` in a
+profile. A parameter without a property of the same name cannot be configured with `ForMember` yet.
+
+**Up to 2.0.0** `IM0009` was a warning for records in attribute mappings, reported for every declared constructor,
+while the generated object initializer did not compile anyway when the record had no parameterless constructor
+(`CS7036`). A record with a parameterless constructor is created with an object initializer, and the parameters of its
+other constructors are no longer checked.
 
 ---
 
@@ -404,3 +421,43 @@ unknown when the code is generated.
 arguments are generated as written. See [Generated overloads](configuration.md#generated-overloads-and-code-coverage).
 
 **Fix:** pass `true`, `false` or `null` (or a `const`).
+
+---
+
+## IM0017 — Constructor of the destination is ambiguous
+
+**Severity:** Error (from 2.1.0)
+
+**Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new {4}(...)) in a profile.`
+
+**Cause:** the destination is created by a constructor, and two or more of its constructors can be called with the
+same number of parameters mapped from the source and the same number of parameters, for example `Range(int, int)` and
+`Range(long, long)` for a source with `int` properties. The order of declaration does not decide: reordering the code
+would change the mapping silently.
+
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** remove or change one of the constructors, or create the object with `ConvertUsing(s => new Range(s.From, s.To))`
+in a profile. An attribute in the destination type is deliberately not offered: domain types should not depend on
+IronMapper.
+
+---
+
+## IM0018 — Destination has no accessible constructor
+
+**Severity:** Error (from 2.1.0)
+
+**Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create the object with ConvertUsing(s => ...) in a profile, for example with its factory method.`
+
+**Cause:** every constructor of the destination is `private` or `protected` (or has `ref`/`out` parameters), as in a
+domain type created by a static factory method (`Project.Restore(...)`). Up to 2.0.0 the build failed inside the
+generated file (`CS0122`, `CS7036`).
+
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** create the object in a profile with `ConvertUsing(s => Project.Restore(s.Id, s.Name))`, or make a constructor
+public or internal.

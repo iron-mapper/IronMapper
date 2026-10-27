@@ -171,9 +171,14 @@ internal static class MappingPlanner
             string coreName = namesBySource[mapping.SourceFullName!].Contains(methodName + "Core")
                 ? methodName + "Core" + helperScope
                 : methodName + "Core";
+            // A destination created by a constructor has no in-place overload (item 2.15 of the plan): only the private
+            // MapInto for the IMapper registration, which throws.
+            var overrides = mapping.UsesConstructor
+                ? new GeneratedMethodOverrides(inPlace: false, mapping.MethodOverrides.List, mapping.MethodOverrides.Array)
+                : mapping.MethodOverrides;
             entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodName, hintName, helperScope,
                 mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!, mapping.UsesConverterCache,
-                mapping.MethodOverrides, coreName, UsesNestedObjectCheck(mapping, generatedPairs), mapping.CanUpdateInPlace));
+                overrides, coreName, UsesNestedObjectCheck(mapping, generatedPairs), mapping.CanUpdateInPlace));
         }
 
         return new MappingPlan(
@@ -190,7 +195,7 @@ internal static class MappingPlanner
     /// </summary>
     private static bool UsesNestedObjectCheck(MappingDescriptor mapping, HashSet<string> generatedPairs)
     {
-        foreach (var property in mapping.PropertyMappings)
+        foreach (var property in mapping.AllValueMappings)
         {
             if (property.NullHandling != NullHandling.Throw || !MapperCodeEmitter.IsMappedNestedObject(property))
             {

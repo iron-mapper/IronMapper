@@ -79,7 +79,8 @@ public class IM0001CodeFixTests
     [Fact]
     public async Task PositionalRecordParameter_AddsPropertyTargetedIgnore()
     {
-        // A positional record is mapped through its parameterless constructor (object initializer; see IM0009).
+        // A positional record with a parameterless constructor is created with an object initializer, as before 2.1.0, so
+        // its parameters are not checked (up to 2.0.0 IM0009 was reported for them as well).
         await new CodeFixTest<IM0001CodeFixProvider>("""
             using IronMapper.Attributes;
 
@@ -88,7 +89,7 @@ public class IM0001CodeFixTests
             [MapTo(typeof(Dest))]
             public class Source { public int Id { get; set; } }
 
-            public record Dest(int Id, int {|IM0001:{|IM0009:Extra|}|}) { public Dest() : this(0, 0) { } }
+            public record Dest(int Id, int {|IM0001:Extra|}) { public Dest() : this(0, 0) { } }
             """, """
             using IronMapper.Attributes;
 
@@ -97,7 +98,7 @@ public class IM0001CodeFixTests
             [MapTo(typeof(Dest))]
             public class Source { public int Id { get; set; } }
 
-            public record Dest(int Id, [property: Ignore] int {|IM0009:Extra|}) { public Dest() : this(0, 0) { } }
+            public record Dest(int Id, [property: Ignore] int Extra) { public Dest() : this(0, 0) { } }
             """).RunAsync();
     }
 

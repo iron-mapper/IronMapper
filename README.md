@@ -252,8 +252,11 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 
 ## Known limitations
 
-- **Positional records as destination types do not compile** (`CS7036`, [#24](https://github.com/iron-mapper/IronMapper/issues/24)): the generator always uses an object
-  initializer. Records and classes with `init` properties work.
+- **Destinations created by a constructor** (positional records, classes without a parameterless constructor; from
+  2.1.0, [#24](https://github.com/iron-mapper/IronMapper/issues/24)) get no in-place overload, and a constructor
+  cannot be chosen explicitly. A destination with only a private constructor and a static factory method is not
+  mapped yet (`IM0018`; use `ConvertUsing`). See
+  [Constructors and positional records](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md#constructors-and-positional-records).
 - **No flattening by convention** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` is not filled from `Customer.Address.City`. Use
   `MapFrom`.
 - **`IM0001` is off by default for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`

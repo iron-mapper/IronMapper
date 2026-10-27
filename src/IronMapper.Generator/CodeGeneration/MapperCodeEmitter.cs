@@ -136,7 +136,9 @@ internal static class MapperCodeEmitter
         else if (hasHooks)
         {
             // Two-step pattern required when BeforeMap or AfterMap hooks are present.
-            sb.AppendLine($"            var destination = new {destFullName}();");
+            sb.Append("            var destination = ");
+            EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
+            sb.AppendLine(";");
 
             if (descriptor.BeforeMapLambdaBody is not null)
             {
@@ -160,7 +162,7 @@ internal static class MapperCodeEmitter
 
             sb.AppendLine("            return destination;");
         }
-        else
+        else if (!descriptor.UsesConstructor)
         {
             sb.AppendLine($"            return new {destFullName}");
             sb.AppendLine("            {");
@@ -176,6 +178,31 @@ internal static class MapperCodeEmitter
             }
             sb.AppendLine("            };");
         }
+        else
+        {
+            // The constructor, then the other properties in an initializer (issue #24).
+            sb.Append("            return ");
+            EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
+            bool any = false;
+            foreach (var prop in descriptor.PropertyMappings)
+            {
+                if (prop.IsIgnored || IsMappingMissing(prop, plan))
+                {
+                    continue;
+                }
+
+                if (!any)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("            {");
+                    any = true;
+                }
+
+                sb.Append("                ");
+                sb.AppendLine(BuildPropertyInitializer(descriptor, prop, scopedTransformers, scope, plan) + ",");
+            }
+            sb.AppendLine(any ? "            };" : ";");
+        }
 
         sb.AppendLine("        }");
 
@@ -186,49 +213,62 @@ internal static class MapperCodeEmitter
         // registration calls, so IMapper.Map(source, destination) keeps working. Either checks both arguments and calls
         // the in-place …Core (below).
         sb.AppendLine();
-        if (methods.InPlace)
+        if (descriptor.UsesConstructor)
         {
-            sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
-            sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
-            sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
-            sb.AppendLine($"        {AggressiveInlining}");
-            sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
+            // Created by a constructor: no in-place update is generated until item 2.15 of the plan decides what it does
+            // with the values the constructor takes. IMapper.Map(source, destination) gets a clear exception.
+            string message = $"No in-place mapping from {descriptor.SourceTypeName} to {descriptor.DestTypeName} is generated: "
+                             + $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by a "
+                             + "constructor with parameters. Map to a new object instead.";
+            sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
+            sb.AppendLine($"            => throw new global::IronMapper.Exceptions.MappingException(\"{message}\");");
         }
         else
         {
-            sb.AppendLine($"        {AggressiveInlining}");
-            sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
-        }
-        sb.AppendLine("        {");
-        sb.AppendLine($"            {options.NullCheck("source", "return;")}");
-        sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
-        sb.AppendLine($"            {entry.CoreMethodName}(source, destination);");
-        sb.AppendLine("        }");
-
-        // ------------------------------------------------------------------
-        // Method 2 without the null checks: MapToDestTypeCore(SourceType source, DestType destination)
-        // ------------------------------------------------------------------
-        // Generated for every mapping, also with the in-place overload turned off: the in-place overloads of other
-        // mappings call it to update an existing nested object (EmitNestedUpdate), so a tracked EF navigation keeps its
-        // instance instead of being replaced.
-        sb.AppendLine();
-        sb.AppendLine($"        private static void {entry.CoreMethodName}({sourceFullName} source, {destFullName} destination)");
-        sb.AppendLine("        {");
-        foreach (var prop in descriptor.PropertyMappings)
-        {
-            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+            if (methods.InPlace)
             {
-                continue;
+                sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
+                sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
+                sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
+                sb.AppendLine($"        {AggressiveInlining}");
+                sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
             }
-
-            if (EmitNestedUpdate(sb, descriptor, prop, plan))
+            else
             {
-                continue;
+                sb.AppendLine($"        {AggressiveInlining}");
+                sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
             }
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {options.NullCheck("source", "return;")}");
+            sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
+            sb.AppendLine($"            {entry.CoreMethodName}(source, destination);");
+            sb.AppendLine("        }");
 
-            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
+            // ------------------------------------------------------------------
+            // Method 2 without the null checks: MapToDestTypeCore(SourceType source, DestType destination)
+            // ------------------------------------------------------------------
+            // Generated for every mapping, also with the in-place overload turned off: the in-place overloads of other
+            // mappings call it to update an existing nested object (EmitNestedUpdate), so a tracked EF navigation keeps its
+            // instance instead of being replaced.
+            sb.AppendLine();
+            sb.AppendLine($"        private static void {entry.CoreMethodName}({sourceFullName} source, {destFullName} destination)");
+            sb.AppendLine("        {");
+            foreach (var prop in descriptor.PropertyMappings)
+            {
+                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+                {
+                    continue;
+                }
+
+                if (EmitNestedUpdate(sb, descriptor, prop, plan))
+                {
+                    continue;
+                }
+
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
+            }
+            sb.AppendLine("        }");
         }
-        sb.AppendLine("        }");
 
         // ------------------------------------------------------------------
         // Methods 3 and 4: MapToDestTypeList / MapToDestTypeArray(this IEnumerable<SourceType>? source)
@@ -271,9 +311,9 @@ internal static class MapperCodeEmitter
         }
 
         // ------------------------------------------------------------------
-        // Private collection helpers of nested collection properties
+        // Private collection helpers of nested collection properties (and constructor parameters)
         // ------------------------------------------------------------------
-        foreach (var prop in descriptor.PropertyMappings)
+        foreach (var prop in descriptor.AllValueMappings)
         {
             if (!UsesCollectionHelper(prop) || IsMappingMissing(prop, plan))
             {
@@ -638,6 +678,45 @@ internal static class MapperCodeEmitter
     // -----------------------------------------------------------------------
     // Property emission helpers
     // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// The creation of the destination without the initializer: <c>new D()</c>, or for a destination created by a
+    /// constructor (<see cref="MappingDescriptor.UsesConstructor"/>) its arguments by name, one per line, in parameter order
+    /// (parameters that take their default value are left out, so the names keep the later arguments in place). A value
+    /// whose nested object or collection elements have no mapping (IM0002, reported) is passed as <c>default!</c>: the
+    /// parameter cannot be left out like a property, and the file must compile.
+    /// </summary>
+    private static void EmitCreation(StringBuilder sb, MappingDescriptor descriptor, string destFullName,
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope, MappingPlan plan, string indent)
+    {
+        if (descriptor.ConstructorArguments.Length == 0)
+        {
+            sb.Append($"new {destFullName}()");
+            return;
+        }
+
+        sb.AppendLine($"new {destFullName}(");
+        for (int i = 0; i < descriptor.ConstructorArguments.Length; i++)
+        {
+            var argument = descriptor.ConstructorArguments[i];
+            string value = IsMappingMissing(argument, plan) ? "default!" : BuildRhs(descriptor, argument, transformers, scope, plan);
+            sb.Append($"{indent}    {ArgumentName(argument.DestPropertyName)}: {value}");
+            if (i < descriptor.ConstructorArguments.Length - 1)
+            {
+                sb.AppendLine(",");
+            }
+            else
+            {
+                sb.Append(')');
+            }
+        }
+    }
+
+    /// <summary>A parameter name as a named argument: <c>@</c> before a keyword (<c>@class</c>).</summary>
+    private static string ArgumentName(string name)
+        => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) == Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? name
+            : "@" + name;
 
     /// <summary>
     /// Builds an object-initializer line: <c>PropName = &lt;rhs&gt;</c>.
