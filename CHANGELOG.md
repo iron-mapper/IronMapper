@@ -19,16 +19,32 @@
   by the constructor reaches the caller as it is. A destination with an accessible parameterless constructor, or a
   struct, is created with an object initializer as before (the generated code of such mappings does not change). Up to
   2.0.0 such a destination failed with `CS7036` inside the generated file, so no build that compiles with 2.0.0 changes.
-  **No in-place overload** is generated for a destination created by a constructor (what it should do with values that
-  only the constructor takes is not decided yet): `IMapper.Map(source, destination)` throws `MappingException` that says
-  so, and the in-place update of a parent object assigns a new instance of such a nested object. See
+  **No in-place overload** is generated for a destination created by a constructor (updating only the other properties
+  would silently keep the old values of what only the constructor takes): `IMapper.Map(source, destination)` throws
+  `MappingException` that says so, and the in-place update of a parent object assigns a new instance of such a nested object. See
   [Constructors and positional records](docs/advanced.md#constructors-and-positional-records).
 - **Diagnostics `IM0017` and `IM0018` (errors):** two constructors of the destination fit equally well (`IM0017`; the
-  order of declaration does not decide), or the destination has no public or internal constructor, such as a domain type
-  created by a static factory method (`IM0018`; until factories are supported, use `ConvertUsing`). The mapping is not
-  generated; up to 2.0.0 the build failed inside the generated file (`CS7036`, `CS0122`). See
+  order of declaration does not decide; choose one with `ConstructWith`), or the destination has no public or internal
+  constructor, such as a domain type created by a static factory method (`IM0018`; name the factory with
+  `ConstructWith`). The mapping is not generated; up to 2.0.0 the build failed inside the generated file (`CS7036`,
+  `CS0122`). See
   [IM0017](docs/diagnostics.md#im0017--constructor-of-the-destination-is-ambiguous) and
   [IM0018](docs/diagnostics.md#im0018--destination-has-no-accessible-constructor).
+- **Factories: `ConstructWith`, `ForCtorParam`, `ConstructUsing`** (profiles). `CreateMap<S, D>().ConstructWith(D.Restore)`
+  creates the destination with a static factory method, also when its constructor is private;
+  `ConstructWith((string name, int age) => new D(name, age))` with a lambda with typed parameters, which also chooses one
+  of several constructors. The parameters of the factory are matched to the source as those of a constructor (ignoring
+  case, default values, `ForMember` of the property of the same name, nested objects, also created by a factory, and
+  collections); the properties with a public `set` are assigned after the call; an exception of the factory reaches the
+  caller as it is. `ForCtorParam("name", o => o.MapFrom(...))` configures a parameter of the constructor or the factory
+  that has no property of the same name. `ConstructUsing(s => new D(...))` creates the destination with the expression
+  as written, as in AutoMapper (no parameters matched; the in-place overload ignores it). New diagnostics: `IM0019`
+  (error, `ForCtorParam` names no parameter), `IM0020` (error, a `ConstructWith` argument that the generated code cannot
+  call: an instance or private method, a wrong or nullable return type, an overloaded method group, a lambda without
+  parameter types), `IM0021` (warning, an `init` property cannot be set after the factory). No in-place overload for a
+  destination created by a constructor with parameters or a factory: this is final (updating only the other properties
+  would silently keep the old values of what only the constructor takes). See
+  [Factories](docs/advanced.md#factories-constructwith).
 
 - **Nested objects are mapped automatically** ([#23](https://github.com/iron-mapper/IronMapper/issues/23)): a
   name-matched property whose types differ (`Customer.Address` → `CustomerDto.Address` of type `AddressDto`) is mapped by
@@ -78,7 +94,7 @@
 ### Changed
 
 - **`IM0009` is an error and means "a constructor parameter gets no value"** (attribute mappings and profiles): for a
-  destination created by its constructor, a parameter of the constructor that comes closest has no source property of
+  destination created by its constructor (or by the factory of `ConstructWith`), a parameter of the constructor that comes closest has no source property of
   the same name and no default value, a source value that cannot be converted, or `Ignore` without a default value; the
   mapping is not generated. Up to 2.0.0 `IM0009` was a warning for records in attribute mappings only, while the
   generated object initializer did not compile anyway without a parameterless constructor (`CS7036`); a record with a

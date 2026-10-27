@@ -121,11 +121,11 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor ConstructorParameterNotMapped = new(
         id: "IM0009",
         title: "Constructor parameter not mapped",
-        messageFormat: "Mapping to '{1}' was not generated: constructor parameter '{0}' gets no value: {2}",
+        messageFormat: "Mapping to '{1}' was not generated: parameter '{0}' of {3} gets no value: {2}",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A destination without an accessible parameterless constructor is created by its constructor with the most parameters that can be mapped. A parameter takes the source property of the same name (ignoring case, or [MapProperty] on it), the MapFrom, UseConverter or Ignore of the property of the same name in ForMember, or its default value. Other mappings in the project are still generated.");
+        description: "A destination without an accessible parameterless constructor is created by its constructor with the most parameters that can be mapped, or by the factory of ConstructWith. A parameter takes the source property of the same name (ignoring case, or [MapProperty] on it), ForCtorParam, the MapFrom, UseConverter or Ignore of the property of the same name in ForMember, or its default value. Other mappings in the project are still generated.");
 
     /// <summary>
     /// IM0017 — Several constructors of the destination fit equally well (the same number of parameters mapped from the
@@ -134,7 +134,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor AmbiguousConstructor = new(
         id: "IM0017",
         title: "Constructor of the destination is ambiguous",
-        messageFormat: "Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new {4}(...)) in a profile.",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Choose one in a profile with a lambda that calls it, such as ConstructWith({4}), or remove or change one of the constructors.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -147,11 +147,51 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor NoAccessibleConstructor = new(
         id: "IM0018",
         title: "Destination has no accessible constructor",
-        messageFormat: "Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create the object with ConvertUsing(s => ...) in a profile, for example with its factory method.",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create it with its static factory method in a profile: CreateMap<{2}, {3}>().ConstructWith({3}.Create), where Create is the factory method.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The generated code creates the destination with a parameterless constructor and an object initializer, or with a constructor with parameters. A constructor with ref or out parameters is not used. Other mappings in the project are still generated.");
+        description: "The generated code creates the destination with a parameterless constructor and an object initializer, with a constructor with parameters, or with the factory of ConstructWith in a profile (a static method or a lambda). A constructor with ref or out parameters is not used. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0019 — <c>ForCtorParam</c> names a parameter that the constructor or the factory creating the destination does not
+    /// have (or the destination is created with an object initializer); the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor UnknownConstructorParameter = new(
+        id: "IM0019",
+        title: "ForCtorParam names no parameter",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: ForCtorParam({2}) {3}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "ForCtorParam configures a parameter of the constructor the generator chooses, or of the factory of ConstructWith; names are compared ignoring case. A name that is no parameter would be ignored silently, so the mapping is not generated. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0020 — The argument of <c>ConstructWith</c> (or <c>ConstructUsing</c>) cannot be used: not a static method group
+    /// or a lambda with typed parameters, a method the generated code cannot call, a return type other than the
+    /// destination; the mapping is not generated.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidFactory = new(
+        id: "IM0020",
+        title: "Factory of ConstructWith cannot be used",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: {2}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "ConstructWith takes a static method group or a lambda with typed parameters, read at compile time; the method must be public or internal (the generated class calls it) and return the destination type or a type derived from it, not a nullable one. The message says what is wrong. Other mappings in the project are still generated.");
+
+    /// <summary>
+    /// IM0021 — A mapped <c>init</c> property of a destination created by the factory of <c>ConstructWith</c> cannot be set
+    /// after the call; the mapping is generated without it.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InitPropertyAfterFactory = new(
+        id: "IM0021",
+        title: "Init property cannot be set after the factory",
+        messageFormat: "Property '{1}.{0}' is not mapped: it is init-only, and the destination is created by {2}, so it cannot be set after the call. Pass the value to the factory, or ignore the property with ForMember(d => d.{0}, o => o.Ignore()).",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An init property can be set only in an object initializer of new. After the factory of ConstructWith the generated code assigns the properties with a public set; the value that the source has for an init property is not mapped.");
 
     /// <summary>
     /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,

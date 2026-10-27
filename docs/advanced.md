@@ -123,7 +123,7 @@ you need the update in place:
 | --- | --- | --- |
 | The destination property is a struct | the getter returns a copy; updating the copy changes nothing | declare the destination type a class (a struct is a value: assigning it is the update) |
 | The destination type of the pair has a mapped `init` property (a record with `init` properties) | the in-place overload skips `init` properties, so the updated object would keep their old values | make those properties settable (`set`), or `Ignore` them in the pair's mapping |
-| The destination type of the pair is created by a constructor (a positional record, no parameterless constructor; from 2.1.0) | it has no in-place mapping ([Constructors and positional records](#constructors-and-positional-records)) | give the type a parameterless constructor and settable properties |
+| The destination type of the pair is created by a constructor (a positional record, no parameterless constructor) or by a factory (`ConstructWith`, `ConstructUsing`; from 2.1.0) | it has no in-place mapping ([Constructors and positional records](#constructors-and-positional-records)) | give the type a parameterless constructor and settable properties |
 | The mapping of the pair uses `ConvertUsing` | the converter makes the object | remove `ConvertUsing` and map the properties (`ForMember`), or update the object with your own code after the in-place call (the in-place overload does not call hooks) |
 | The mapping of the pair is in a referenced project with its in-place overload turned off (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`) | there is no public in-place `MapToX(source, destination)` to call | turn the in-place overload on for that pair in the referenced project |
 | The destination property has no getter the generated code can call (set-only, or a non-public getter) | the existing object cannot be read | add a public (or internal) getter |
@@ -281,6 +281,8 @@ public record PendingChangeState(string? NewAddress, DateTimeOffset? ExpiresAt);
       .ForMember(d => d.Blocked, o => o.MapFrom(s => s.BlockedAt != null)); // computed parameter
   ```
 
+- in a profile, `ForCtorParam("parameterName", o => ...)` configures a parameter that has no destination property with
+  the same name, with the same options (see [Parameters without a property](#parameters-without-a-property-forctorparam));
 - `[Ignore]` on the destination property with the same name, or on the source property, means the default value too.
 
 A destination property whose name is a parameter name is treated as set by the constructor: the initializer does not
@@ -289,22 +291,24 @@ constructor has `[SetsRequiredMembers]`). Extra source properties are ignored, a
 
 **Which constructor.** Of the accessible constructors (no `ref`/`out` parameters, not the copy constructor of a record)
 whose every parameter gets a value, the one with the most parameters mapped from the source, then the one with the
-most parameters. Static factory methods are not used: a type with a public constructor and a `Create` method is created
-by the constructor. Nothing in the destination type selects a constructor: no IronMapper attribute is needed in domain
-types. Diagnostics, all errors that skip the mapping (other mappings are generated):
+most parameters. Static factory methods are not used unless a profile names one with
+[`ConstructWith`](#factories-constructwith): a type with a public constructor and a `Create` method is created by the
+constructor. Nothing in the destination type selects a constructor: no IronMapper attribute is needed in domain types;
+a profile chooses one with a lambda, `ConstructWith((int from, int to) => new Range(from, to))`. Diagnostics, all
+errors that skip the mapping (other mappings are generated):
 
 - a parameter that gets no value (no source property, a value that cannot be converted, `Ignore` without a default
   value) — [`IM0009`](diagnostics.md#im0009--constructor-parameter-not-mapped);
 - two constructors that fit equally well — [`IM0017`](diagnostics.md#im0017--constructor-of-the-destination-is-ambiguous);
 - no accessible constructor (only a private one, for example a domain type created by a factory method) —
-  [`IM0018`](diagnostics.md#im0018--destination-has-no-accessible-constructor). Until factories are supported,
-  create such an object with `ConvertUsing(s => D.Restore(...))` in a profile.
+  [`IM0018`](diagnostics.md#im0018--destination-has-no-accessible-constructor): name the factory with
+  [`ConstructWith`](#factories-constructwith) in a profile.
 
 **Not generated for such a destination: the in-place overload.** `source.MapToX(destination)` does not exist for a
-destination created by a constructor: what an in-place update should do with values that only the constructor takes is
-not decided yet (planned together with the in-place behavior of `init`-only types).
-`IMapper.Map(source, destination)` throws `MappingException` that says so. In the in-place update of a parent object, a
-nested object of such a type is replaced by a new instance (as for a record with `init` properties, see
+destination created by a constructor with parameters or by a factory (`ConstructWith`). This is final: updating only the
+properties outside the constructor would silently keep the old values of everything that only the constructor or the
+factory takes. `IMapper.Map(source, destination)` throws `MappingException` that says so. In the in-place update of a
+parent object, a nested object of such a type is replaced by a new instance (as for a record with `init` properties, see
 [In-place update of nested objects](#in-place-update-of-nested-objects)).
 
 Other details: an exception thrown by the constructor reaches the caller as it is; `ConvertUsing` creates the object
@@ -312,6 +316,94 @@ itself, so no constructor is needed; with `BeforeMap`/`AfterMap` the constructor
 assignments of the settable (`set`) properties and `AfterMap`. As for a property, a nullable source for a non-nullable reference parameter
 (`string?` → `string`) compiles with a nullable warning in the generated file (`CS8604`; `CS8601` for a property) and
 passes `null` on.
+
+### Factories (`ConstructWith`)
+
+A domain type is often created by a static factory method and has a private constructor. In a profile,
+`ConstructWith` names what creates the destination (from 2.1.0):
+
+```csharp
+public sealed class Team
+{
+    private Team(MemberId owner, string name, IReadOnlyList<Guid> memberIds) { ... }
+
+    public MemberId Owner { get; }
+    public string Name { get; }
+    public IReadOnlyList<Guid> MemberIds { get; }
+    public string? Motto { get; set; }
+
+    public static Team Restore(MemberId owner, string name, IReadOnlyList<Guid> memberIds) => new(owner, name, memberIds);
+}
+
+CreateMap<TeamRow, Team>()
+    .ConstructWith(Team.Restore)                                          // a static method group
+    .ForMember(d => d.Owner, o => o.MapFrom(s => MemberId.From(s.Owner))); // a value object from a Guid
+
+// generated:
+// var destination = Team.Restore(
+//     owner: MemberId.From(source.Owner),
+//     name: source.Name,
+//     memberIds: source.MemberIds);    // Guid[] → IReadOnlyList<Guid> as is
+// destination.Motto = source.Motto;    // a property with a public set, after the call
+// return destination;
+```
+
+- **A static method group** (`ConstructWith(Team.Restore)`): a method of any type that returns the destination type or a
+  type derived from it; the constructor of the type may be private. The method must be public or internal, because the
+  generated class calls it.
+- **A lambda with typed parameters** (`ConstructWith((string name, int age) => new Person(name, age))`): also chooses one
+  of several constructors, or prepares a value. Its body is emitted as a private helper method (an expression or a
+  block, default values of its parameters kept); like `MapFrom`, it cannot use locals or the profile instance (`IM0012`).
+  The parameters need types: their names are matched to the source.
+- The parameters of the method or the lambda get their values **as those of a constructor** (see above): the source
+  property with the same name ignoring case, `ForCtorParam`, `ForMember` of the destination property with the same name,
+  nested objects (also created by a factory: `CreateMap<SettingsRow, Settings>().ConstructWith(Settings.Create)`),
+  collections, the default value of an optional parameter. A parameter without a value is
+  [`IM0009`](diagnostics.md#im0009--constructor-parameter-not-mapped).
+- **After the call**, the destination properties with a public `set` that no parameter sets are assigned. An `init`
+  property cannot be set after a call: when the source has a value for it, the generator reports
+  [`IM0021`](diagnostics.md#im0021--init-property-cannot-be-set-after-the-factory) (warning) and leaves it out.
+- An exception of the factory (for example a value object that rejects `Guid.Empty`) reaches the caller as it is, also
+  through `IMapper`.
+- No in-place overload (see above); `ReverseMap()` maps the reverse direction by name, without the factory.
+- A method group of an overloaded method has no delegate type in C#; choose the overload with a lambda that calls it,
+  `ConstructWith((Guid id, string name) => Team.Restore(id, name))`. The short forms need C# 10; with older language
+  versions write `ConstructWith(new Func<Guid, string, Team>(Team.Restore))`.
+- An argument that the generated code cannot call (an instance method, a private method, a wrong or nullable return
+  type, a `ref` parameter, a delegate in a variable) is
+  [`IM0020`](diagnostics.md#im0020--factory-of-constructwith-cannot-be-used), not an error in the generated file.
+
+### Parameters without a property (`ForCtorParam`)
+
+`ForMember` selects a destination property, so it cannot configure a parameter whose name no property has.
+`ForCtorParam` takes the parameter name and the same options as `ForMember` (`MapFrom`, `UseConverter`, `Ignore()` for the
+default value), for the constructor the generator chooses and for the factory of `ConstructWith`:
+
+```csharp
+public class Author
+{
+    public Author(string display, string code) { Text = display; Id = code; }
+    public string Text { get; }
+    public string Id { get; }
+}
+
+CreateMap<AuthorRow, Author>()
+    .ForCtorParam("display", o => o.MapFrom(s => s.First + " " + s.Last))
+    .ForCtorParam(nameof(AuthorRow.Code), o => o.MapFrom(s => s.Code.ToUpperInvariant()));
+```
+
+The name is compared ignoring case and must be a constant: a literal, or `nameof` of something with the same name (C#
+has no `nameof` of a parameter outside its method). A name that is no parameter of what creates the destination is
+[`IM0019`](diagnostics.md#im0019--forctorparam-names-no-parameter) (error), not a silently ignored setting.
+
+### `ConstructUsing` (as in AutoMapper)
+
+`ConstructUsing(s => new OrderDto(s.Id))` creates the destination with the expression as written, without matching any
+parameter: the same lambda rules as `MapFrom` (an expression tree, no locals of the profile). Then the destination
+properties with a public `set` are mapped as usual and assigned after it; `init` properties are left to the expression.
+The in-place overload ignores it, as in AutoMapper, and updates the existing object; for a destination without an
+accessible parameterless constructor there is no in-place overload. Prefer `ConstructWith` for new code: it matches the
+parameters and reports a parameter without a value at build time.
 
 ---
 
@@ -330,7 +422,9 @@ mapper.Map<WorkerEntity, WorkerDto>(entity, dto);
 ```
 
 The in-place overload only assigns the mapped properties. It:
-- is not generated for a destination created by a constructor ([Constructors and positional records](#constructors-and-positional-records));
+- is not generated for a destination created by a constructor with parameters or a factory (`ConstructWith`)
+  ([Constructors and positional records](#constructors-and-positional-records));
+- ignores `ConstructUsing` (the existing object is updated);
 - skips `init`-only destination properties;
 - does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`.
 

@@ -77,7 +77,7 @@ internal static class PropertyTypeCheck
         {
             // Only IncludeMembers gets here: name-matched nested objects are mapped by CheckNestedObject.
             reason = $"'{sourceDisplay}' is '{st}' and the destination is '{dt}': IncludeMembers does not map nested objects. "
-                     + $"Configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)), with o.UseConverter<T>() "
+                     + $"Configure it with {destProp.ConfigureCall}, o => o.MapFrom(...)), with o.UseConverter<T>() "
                      + $"(an ITypeConverter<{st}, {dt}>), or with o.Ignore().";
         }
         else
@@ -87,7 +87,7 @@ internal static class PropertyTypeCheck
                      {
                          Origin.Attribute => $"Add [MapConverter(typeof(...))] (an ITypeConverter<{st}, {dt}>) to the source property, "
                                              + "map it in a profile with ForMember(..., o => o.MapFrom(...)), or mark the destination property [Ignore].",
-                         Origin.Profile => $"Configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)) that converts the value, "
+                         Origin.Profile => $"Configure it with {destProp.ConfigureCall}, o => o.MapFrom(...)) that converts the value, "
                                            + $"with o.UseConverter<T>() (an ITypeConverter<{st}, {dt}>), or with o.Ignore().",
                          _ => ReverseHint(destProp),
                      };
@@ -180,7 +180,7 @@ internal static class PropertyTypeCheck
                 + origin switch
                 {
                     Origin.Attribute => ", or mark the destination property [Ignore].",
-                    Origin.Profile => $", or configure it with ForMember(d => d.{destProp.DisplayName}, o => o.MapFrom(...)) or with o.Ignore().",
+                    Origin.Profile => $", or configure it with {destProp.ConfigureCall}, o => o.MapFrom(...)) or with o.Ignore().",
                     _ => ". " + ReverseHint(destProp),
                 }, location));
             return new NestedObjectMapping(method, NullHandling.NotNull, default, skipped: true, updatesInPlace: false,
@@ -450,12 +450,13 @@ internal sealed class NestedObjectMapping
 /// </summary>
 internal readonly struct DestinationMember
 {
-    private DestinationMember(string name, string displayName, ITypeSymbol type, IPropertySymbol? property)
+    private DestinationMember(string name, string displayName, ITypeSymbol type, IPropertySymbol? property, bool byParameterName)
     {
         Name = name;
         DisplayName = displayName;
         Type = type;
         Property = property;
+        ConfigureCall = byParameterName ? $"ForCtorParam(\"{name}\"" : $"ForMember(d => d.{displayName}";
     }
 
     /// <summary>The property or parameter name: the diagnostic's first argument and the name in the generated code.</summary>
@@ -467,6 +468,12 @@ internal readonly struct DestinationMember
     /// </summary>
     public string DisplayName { get; }
 
+    /// <summary>
+    /// The start of the profile call that configures the member, for hints: <c>ForMember(d =&gt; d.{DisplayName}</c>, or
+    /// <c>ForCtorParam("{Name}"</c> for a parameter without a property of the same name.
+    /// </summary>
+    public string ConfigureCall { get; }
+
     /// <summary>The type the value must convert to.</summary>
     public ITypeSymbol Type { get; }
 
@@ -475,9 +482,9 @@ internal readonly struct DestinationMember
 
     /// <summary>A constructor parameter; <paramref name="sameNamedProperty"/> is the property of the same name, if any.</summary>
     public static DestinationMember ForParameter(IParameterSymbol parameter, IPropertySymbol? sameNamedProperty)
-        => new(parameter.Name, sameNamedProperty?.Name ?? parameter.Name, parameter.Type, null);
+        => new(parameter.Name, sameNamedProperty?.Name ?? parameter.Name, parameter.Type, null, sameNamedProperty is null);
 
     /// <summary>A property.</summary>
     public static DestinationMember ForProperty(IPropertySymbol property)
-        => new(property.Name, property.Name, property.Type, property);
+        => new(property.Name, property.Name, property.Type, property, false);
 }

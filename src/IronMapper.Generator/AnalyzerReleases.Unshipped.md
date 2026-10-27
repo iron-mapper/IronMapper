@@ -20,3 +20,6 @@ IM0015 | IronMapper | Error | ConverterCannotBeCreated
 IM0016 | IronMapper | Warning | NonConstantGenerateMethodsArgument
 IM0017 | IronMapper | Error | AmbiguousConstructor
 IM0018 | IronMapper | Error | NoAccessibleConstructor
+IM0019 | IronMapper | Error | UnknownConstructorParameter
+IM0020 | IronMapper | Error | InvalidFactory
+IM0021 | IronMapper | Warning | InitPropertyAfterFactory
