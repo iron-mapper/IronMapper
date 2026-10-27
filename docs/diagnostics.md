@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0018`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0021`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 2.1.0):
@@ -27,6 +27,9 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0018`. 
 | IM0016 | Warning | `GenerateMethods` argument is not a constant | Yes — profiles |
 | IM0017 | Error | Constructor of the destination is ambiguous | Yes — attributes and profiles (from 2.1.0) |
 | IM0018 | Error | Destination has no accessible constructor | Yes — attributes and profiles (from 2.1.0) |
+| IM0019 | Error | `ForCtorParam` names no parameter | Yes — profiles (from 2.1.0) |
+| IM0020 | Error | Factory of `ConstructWith` cannot be used | Yes — profiles (from 2.1.0) |
+| IM0021 | Warning | Init property cannot be set after the factory | Yes — profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -43,7 +46,8 @@ applied to them.
 When a problem has no working diagnostic, the build fails with a regular C# error inside the generated `*.g.cs` file
 instead. Up to 2.0.0 that was the case for a positional record as the destination (`CS7036`); from 2.1.0 it is created by
 its constructor ([Constructors and positional records](advanced.md#constructors-and-positional-records)), with
-`IM0009`, `IM0017` or `IM0018` when no constructor can be called.
+`IM0009`, `IM0017` or `IM0018` when no constructor can be called; a factory of `ConstructWith` that the generated code
+cannot call is `IM0020`.
 
 A type that does not resolve (`typeof(Missing)` in `[MapTo]`/`[MapFrom]`, a type argument of `CreateMap`, a converter
 type) is reported by the compiler at your code (`CS0246`, `CS0234`, `CS0122`, …). The generator skips that mapping, so
@@ -260,12 +264,14 @@ because the generator reports IM0008 before reading the rest of the mapping.
 **Points to:** in attribute mappings, the constructor parameter (its name) when the destination type is declared in
 your project, otherwise the attribute; in profiles, the `CreateMap` or `ReverseMap()` call.
 
-**Message:** `Mapping to '{1}' was not generated: constructor parameter '{0}' gets no value: {2}`
+**Message:** `Mapping to '{1}' was not generated: parameter '{0}' of {3} gets no value: {2}` (`{3}` is `the constructor`,
+`factory 'Team.Restore'` or `the lambda of ConstructWith`)
 
 **Cause:** the destination has no accessible parameterless constructor, so it is created by a constructor
 ([Constructors and positional records](advanced.md#constructors-and-positional-records)), and no accessible
 constructor can be called: a parameter of the one that comes closest (the most parameters mapped from the source)
-gets no value. The last part of the message says why:
+gets no value. Or the factory of `ConstructWith` has such a parameter
+([Factories](advanced.md#factories-constructwith)). The last part of the message says why:
 
 - the source has no property with the parameter's name (ignoring case), and the parameter has no default value;
 - the source value cannot be passed (the reasons of [`IM0002`](#im0002--property-types-are-incompatible-or-have-no-mapping):
@@ -275,9 +281,9 @@ gets no value. The last part of the message says why:
 **Behavior:** the mapping is not generated; other mappings in the project are.
 
 **Fix:** add the source property, or map another one to the parameter (`[MapProperty("parameterName")]` on the source
-property; `ForMember(d => d.Property, o => o.MapFrom(...))` of the property with the same name in a profile), convert
-the value (a converter, `MapFrom`), give the parameter a default value, or create the object with `ConvertUsing` in a
-profile. A parameter without a property of the same name cannot be configured with `ForMember` yet.
+property; in a profile `ForMember(d => d.Property, o => o.MapFrom(...))` of the property with the same name, or
+`ForCtorParam("parameterName", o => o.MapFrom(...))` for a parameter without one), convert the value (a converter,
+`MapFrom`), give the parameter a default value, or choose another constructor or a factory with `ConstructWith`.
 
 **Up to 2.0.0** `IM0009` was a warning for records in attribute mappings, reported for every declared constructor,
 while the generated object initializer did not compile anyway when the record had no parameterless constructor
@@ -430,7 +436,8 @@ arguments are generated as written. See [Generated overloads](configuration.md#g
 
 **Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
 
-**Message:** `Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new {4}(...)) in a profile.`
+**Message:** `Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Choose one in a profile with a lambda that calls it, such as ConstructWith({4}), or remove or change one of the constructors.`
+(`{4}` is a lambda with the parameters of the first of them: `(int from, int to) => new Range(from, to)`)
 
 **Cause:** the destination is created by a constructor, and two or more of its constructors can be called with the
 same number of parameters mapped from the source and the same number of parameters, for example `Range(int, int)` and
@@ -439,9 +446,9 @@ would change the mapping silently.
 
 **Behavior:** the mapping is not generated; other mappings in the project are.
 
-**Fix:** remove or change one of the constructors, or create the object with `ConvertUsing(s => new Range(s.From, s.To))`
-in a profile. An attribute in the destination type is deliberately not offered: domain types should not depend on
-IronMapper.
+**Fix:** choose the constructor in a profile, `CreateMap<RangeRow, Range>().ConstructWith((int from, int to) => new Range(from, to))`
+([Factories](advanced.md#factories-constructwith)), or remove or change one of the constructors. An attribute in the
+destination type is deliberately not offered: domain types should not depend on IronMapper.
 
 ---
 
@@ -451,7 +458,7 @@ IronMapper.
 
 **Points to:** the `[MapTo]`/`[MapFrom]` attribute or the `CreateMap` call.
 
-**Message:** `Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create the object with ConvertUsing(s => ...) in a profile, for example with its factory method.`
+**Message:** `Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create it with its static factory method in a profile: CreateMap<{2}, {3}>().ConstructWith({3}.Create), where Create is the factory method.`
 
 **Cause:** every constructor of the destination is `private` or `protected` (or has `ref`/`out` parameters), as in a
 domain type created by a static factory method (`Project.Restore(...)`). Up to 2.0.0 the build failed inside the
@@ -459,5 +466,76 @@ generated file (`CS0122`, `CS7036`).
 
 **Behavior:** the mapping is not generated; other mappings in the project are.
 
-**Fix:** create the object in a profile with `ConvertUsing(s => Project.Restore(s.Id, s.Name))`, or make a constructor
-public or internal.
+**Fix:** name the factory in a profile, `CreateMap<ProjectRow, Project>().ConstructWith(Project.Restore)`: its parameters
+are matched to the source as those of a constructor ([Factories](advanced.md#factories-constructwith)). Or make a
+constructor public or internal.
+
+---
+
+## IM0019 — `ForCtorParam` names no parameter
+
+**Severity:** Error (from 2.1.0)
+
+**Points to:** the name in `ForCtorParam`.
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: ForCtorParam({2}) {3}`, for example
+`ForCtorParam("nmae") names no parameter of the constructor of 'Author' that the generator chose. Its parameters: name.`
+
+**Cause:** `ForCtorParam` configures a parameter of the constructor the generator chooses, or of the factory of
+`ConstructWith` ([Parameters without a property](advanced.md#parameters-without-a-property-forctorparam)); names are
+compared ignoring case. The name is none of its parameters (a typo, a renamed parameter), the destination is created
+with an object initializer (it has an accessible parameterless constructor) or by `ConvertUsing`/`ConstructUsing`, which
+match no parameters, or the name is not a constant.
+
+**Behavior:** the mapping is not generated (a setting that would be ignored silently); other mappings in the project
+are.
+
+**Fix:** use a name of the parameters listed in the message (a literal, or `nameof` of something with the same name);
+for a property of an object initializer use `ForMember`.
+
+---
+
+## IM0020 — Factory of `ConstructWith` cannot be used
+
+**Severity:** Error (from 2.1.0)
+
+**Points to:** the argument of `ConstructWith` (or the call that conflicts, or the argument of `ConstructUsing`).
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: {2}`; `{2}` says what is wrong and what to write.
+
+**Cause:** the generated code cannot call what `ConstructWith` names
+([Factories](advanced.md#factories-constructwith)):
+
+- an instance method or a local function (the generated class has no instance to call it on);
+- a private or protected method, or a method of a private type;
+- the method returns another type than the destination or a type derived from it, or a nullable one (`Team?`);
+- a `ref`/`out` parameter;
+- a method group of an overloaded method, or a lambda without parameter types: no delegate type can be inferred (the
+  compiler reports `CS8917` at the same place);
+- not a method group or a lambda written in the call (a delegate in a variable or a field cannot be read at compile
+  time);
+- `ConstructWith` together with `ConstructUsing` or `ConvertUsing`, or twice.
+
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** pass a public or internal static method, or a lambda with typed parameters that calls the factory or the
+constructor: `ConstructWith((Guid id, string name) => Team.Restore(id, name))`.
+
+---
+
+## IM0021 — Init property cannot be set after the factory
+
+**Severity:** Warning (from 2.1.0)
+
+**Points to:** the `CreateMap` call.
+
+**Message:** `Property '{1}.{0}' is not mapped: it is init-only, and the destination is created by {2}, so it cannot be set after the call. Pass the value to the factory, or ignore the property with ForMember(d => d.{0}, o => o.Ignore()).`
+
+**Cause:** the destination is created by the factory of `ConstructWith`, and the source has a value for an `init`
+property that no parameter of the factory sets. An `init` property can be set only in an object initializer of `new`;
+after the call the generated code assigns the properties with a public `set`.
+
+**Behavior:** the mapping is generated without that property.
+
+**Fix:** add a parameter for it to the factory (or set it in the lambda of `ConstructWith`), or ignore it with
+`ForMember(d => d.Property, o => o.Ignore())`.

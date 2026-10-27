@@ -27,8 +27,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// The destination is created by a constructor with parameters (<c>new D(a: …, b: …) { … }</c>): it has no accessible
     /// parameterless constructor (<see cref="ConstructorSelection"/>). <see cref="ConstructorArguments"/> are the
     /// arguments, in parameter order, without the parameters that take their default value; <see cref="PropertyMappings"/>
-    /// are the properties set by the initializer after the constructor (not those of the parameters). No in-place update
-    /// is generated for such a mapping (item 2.15 of the plan).
+    /// are the properties set by the initializer after the constructor (not those of the parameters). Also
+    /// <see langword="true"/> for the factory of <c>ConstructWith</c> (<see cref="Factory"/>), and for <c>ConstructUsing</c>
+    /// when the destination has no accessible parameterless constructor. No in-place update is generated for such a mapping
+    /// (item 2.15 of the plan: it would silently keep the old values of what only the constructor takes).
     /// </summary>
     public bool UsesConstructor { get; }
 
@@ -37,6 +39,14 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// is the parameter name. Empty when the destination is created with an object initializer.
     /// </summary>
     public EquatableArray<PropertyMappingDescriptor> ConstructorArguments { get; }
+
+    /// <summary>
+    /// The factory of a profile that creates the destination (<c>ConstructWith</c>, <c>ConstructUsing</c>), or
+    /// <see langword="null"/>. With <c>ConstructWith</c>, <see cref="UsesConstructor"/> is <see langword="true"/> and
+    /// <see cref="ConstructorArguments"/> are the arguments of the factory; <see cref="PropertyMappings"/> are assigned after
+    /// the call (properties with a public <c>set</c> only).
+    /// </summary>
+    public FactoryDescriptor? Factory { get; }
 
     /// <summary>The constructor arguments, then the properties: every value the generated code maps.</summary>
     public IEnumerable<PropertyMappingDescriptor> AllValueMappings => ConstructorArguments.Concat(PropertyMappings);
@@ -180,13 +190,13 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// with <c>ConvertUsing</c> (the converter makes the object) or a mapped <c>init</c>-only property (the in-place
     /// overload skips it, item 2.15 of the plan): such a nested object is assigned a new instance, as before. Also
     /// <see langword="false"/> for a destination created by a constructor (<see cref="UsesConstructor"/>), which has no
-    /// in-place <c>…Core</c>.
+    /// in-place <c>…Core</c>, and with a factory (<see cref="Factory"/>): a new object is created by it.
     /// </summary>
     public bool CanUpdateInPlace
     {
         get
         {
-            if (UsesConstructor || WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
+            if (UsesConstructor || Factory is not null || WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
             {
                 return false;
             }
@@ -234,6 +244,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="methodOverrides">Overloads set for this mapping (see <see cref="MethodOverrides"/>).</param>
     /// <param name="usesConstructor">The destination is created by a constructor (see <see cref="UsesConstructor"/>).</param>
     /// <param name="constructorArguments">The constructor arguments (see <see cref="ConstructorArguments"/>).</param>
+    /// <param name="factory">The factory of a profile (see <see cref="Factory"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -261,8 +272,10 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         LocationInfo? originLocation = null,
         GeneratedMethodOverrides methodOverrides = default,
         bool usesConstructor = false,
-        EquatableArray<PropertyMappingDescriptor> constructorArguments = default)
+        EquatableArray<PropertyMappingDescriptor> constructorArguments = default,
+        FactoryDescriptor? factory = null)
     {
+        Factory = factory;
         UsesConstructor = usesConstructor;
         ConstructorArguments = constructorArguments;
         SourceTypeName = sourceTypeName;
@@ -305,7 +318,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
                 naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation,
-                MethodOverrides, UsesConstructor, ConstructorArguments);
+                MethodOverrides, UsesConstructor, ConstructorArguments, Factory);
 
     /// <summary>A copy with the overloads set for this mapping (see <see cref="MethodOverrides"/>).</summary>
     public MappingDescriptor WithMethodOverrides(GeneratedMethodOverrides overrides)
@@ -315,7 +328,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 HasCustomConverter, WhenConditionBody, WholeObjectConverterType, WholeObjectLambdaBody,
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
-                DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides, UsesConstructor, ConstructorArguments);
+                DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides, UsesConstructor, ConstructorArguments,
+                Factory);
 
     /// <summary>
     /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
@@ -330,7 +344,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 WholeObjectLambdaBody, BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName,
                 DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
                 DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides,
-                usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments);
+                usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments, factory: Factory);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -367,7 +381,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || DestTypeArgsFull != other.DestTypeArgsFull
             || !Nullable.Equals(OriginLocation, other.OriginLocation)
             || !MethodOverrides.Equals(other.MethodOverrides)
-            || UsesConstructor != other.UsesConstructor)
+            || UsesConstructor != other.UsesConstructor
+            || !Equals(Factory, other.Factory))
         {
             return false;
         }
@@ -411,6 +426,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + PropertyMappings.GetHashCode();
         hash = hash * 31 + UsesConstructor.GetHashCode();
         hash = hash * 31 + ConstructorArguments.GetHashCode();
+        hash = hash * 31 + (Factory?.GetHashCode() ?? 0);
         hash = hash * 31 + Diagnostics.GetHashCode();
         hash = hash * 31 + ValueTransformers.GetHashCode();
         return hash;

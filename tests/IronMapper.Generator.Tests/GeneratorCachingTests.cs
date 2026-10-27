@@ -69,10 +69,23 @@ public class GeneratorCachingTests
         public class Order { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
         public class OrderDto { public string Address { get; set; } = ""; }
         public record Place(string Street, string City);
+        // Created by a factory (ConstructWith): a method group and a lambda.
+        public sealed class Site
+        {
+            private Site(string street) => Street = street;
+            public string Street { get; }
+            public string City { get; set; } = "";
+            public static Site Restore(string street) => new(street);
+        }
+        public record Pin(string Label);
         public class OrderProfile : MappingProfile
         {
             public OrderProfile()
             {
+                CreateMap<Order, Site>().ConstructWith(Site.Restore);
+                CreateMap<Order, Pin>()
+                    .ConstructWith((string label) => new Pin(label.Trim()))
+                    .ForCtorParam("label", o => o.MapFrom(s => s.City));
                 CreateMap<Order, OrderDto>()
                     .ForMember(d => d.Address, o => o.MapFrom(s => s.Street + ", " + s.City))
                     .AfterMap((s, d) => d.Address = d.Address.Trim());

@@ -101,6 +101,34 @@ public class ProfileUnmappedPropertyTests
     }
 
     [Fact]
+    public void PropertyTrue_FactoryWithExtraSourceProperties_NoIM0001()
+    {
+        string source = """
+            using IronMapper.Configuration;
+
+            namespace App;
+
+            public class TagRow { public string Name { get; set; } = ""; public string Color { get; set; } = ""; public int Uses { get; set; } }
+
+            public sealed class Tag
+            {
+                private Tag(string name) => Name = name;
+                public string Name { get; }
+                public string? Note { get; private set; }
+                public static Tag Create(string name) => new(name);
+            }
+
+            public class TagProfile : MappingProfile
+            {
+                public TagProfile() { CreateMap<TagRow, Tag>().ConstructWith(Tag.Create); }
+            }
+            """;
+
+        // Color and Uses have no place in Tag: a source property is never reported, and Tag has no public set.
+        Assert.Empty(Run(source, reportUnmapped: "true"));
+    }
+
+    [Fact]
     public void PropertyTrue_GeneratedCodeUnchanged()
     {
         string[] off = RunSources(Profile, reportUnmapped: null);

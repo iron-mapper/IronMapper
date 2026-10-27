@@ -79,6 +79,10 @@ internal static class SymbolHelpers
     public static string GetFullyQualifiedName(ITypeSymbol type)
         => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
+    /// <summary>As <see cref="GetFullyQualifiedName"/>, with <c>?</c> on a nullable reference type (a declared parameter).</summary>
+    public static string GetFullyQualifiedNullableName(ITypeSymbol type)
+        => type.ToDisplayString(FullyQualifiedNullableFormat);
+
     /// <summary>
     /// Returns the parts of <paramref name="destType"/> used to qualify a colliding <c>MapTo{Name}</c> method name:
     /// namespace segments and containing types (outermost first) and the type arguments.

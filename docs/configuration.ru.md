@@ -453,6 +453,8 @@ public class OrderProfile : MappingProfile
 Для destination, который создаётся конструктором (позиционный record, нет конструктора без параметров; с 2.1.0),
 вызовы `ForMember` ниже настраивают параметр конструктора с тем же именем, что у свойства (без учёта регистра);
 `Ignore()` означает его значение по умолчанию. См. [Конструкторы и позиционные record](advanced.ru.md#конструкторы-и-позиционные-record).
+Фабрику или другой конструктор называет `ConstructWith`, параметр без одноимённого свойства настраивает `ForCtorParam`
+(ниже).
 
 ---
 
@@ -512,6 +514,45 @@ Lambda-based конвертация всего объекта. Тело выра
 ```csharp
 CreateMap<Point, PointDto>()
     .ConvertUsing(src => new PointDto { X = src.X, Y = src.Y });
+```
+
+---
+
+### `ConstructWith(Factory)`
+
+Создаёт destination статическим фабричным методом (в том числе при приватном конструкторе) или лямбдой с
+типизированными параметрами; их параметры сопоставляются с source так же, как параметры конструктора; свойства с
+публичным `set` присваиваются после вызова. In-place-перегрузка не генерируется. С 2.1.0; см.
+[Фабрики](advanced.ru.md#фабрики-constructwith).
+
+```csharp
+CreateMap<TeamRow, Team>().ConstructWith(Team.Restore);
+CreateMap<PersonRow, Person>().ConstructWith((string name, int age) => new Person(name, age));
+```
+
+---
+
+### `ForCtorParam("name", opt => ...)`
+
+Настраивает параметр конструктора или фабрики, у которого нет одноимённого свойства destination, вариантами `ForMember`
+(`MapFrom`, `UseConverter`, `Ignore()`). Неизвестное имя — `IM0019`. С 2.1.0; см.
+[Параметры без свойства](advanced.ru.md#параметры-без-свойства-forctorparam).
+
+```csharp
+CreateMap<AuthorRow, Author>()
+    .ForCtorParam("display", o => o.MapFrom(s => s.First + " " + s.Last));
+```
+
+---
+
+### `ConstructUsing(src => ...)`
+
+Создаёт destination выражением как написано (как в AutoMapper): параметры не сопоставляются; свойства с публичным `set`
+маппятся и присваиваются после него. In-place-перегрузка его не использует. С 2.1.0; см.
+[`ConstructUsing`](advanced.ru.md#constructusing-как-в-automapper).
+
+```csharp
+CreateMap<OrderRow, Order>().ConstructUsing(s => new Order("#" + s.Code));
 ```
 
 ---

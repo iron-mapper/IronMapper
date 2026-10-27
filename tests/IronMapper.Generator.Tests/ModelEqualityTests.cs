@@ -211,6 +211,30 @@ public class ModelEqualityTests
         Assert.Equal(a.ConstructorArguments, copy.ConstructorArguments);
     }
 
+    [Fact]
+    public void MappingDescriptor_Factory_TakesPartInEqualityAndSurvivesTheCopies()
+    {
+        static MappingDescriptor With(FactoryDescriptor? factory)
+            => new("Src", null, "Dst", null, ImmutableArray<PropertyMappingDescriptor>.Empty, ImmutableArray<DiagnosticInfo>.Empty,
+                false, usesConstructor: true, factory: factory);
+
+        var method = new FactoryDescriptor(FactoryKind.Method, "global::App.Dst.Restore", null, false, "factory 'Dst.Restore'");
+        var other = new FactoryDescriptor(FactoryKind.Method, "global::App.Dst.Create", null, false, "factory 'Dst.Create'");
+        var lambda = new FactoryDescriptor(FactoryKind.Lambda, "new global::App.Dst(a)", "int a", false, "the lambda of ConstructWith");
+
+        Assert.Equal(With(method), With(new FactoryDescriptor(FactoryKind.Method, "global::App.Dst.Restore", null, false, "factory 'Dst.Restore'")));
+        Assert.Equal(With(method).GetHashCode(), With(method).GetHashCode());
+        Assert.NotEqual(With(method), With(other));
+        Assert.NotEqual(With(method), With(lambda));
+        Assert.NotEqual(With(lambda), With(new FactoryDescriptor(FactoryKind.Lambda, "new global::App.Dst(a)", "long a", false, "the lambda of ConstructWith")));
+        Assert.NotEqual(With(method), With(null));
+        var copy = With(lambda).WithOrigin("o", "display", 0, new DestinationNaming("", "", ""), null)
+            .WithMethodOverrides(new GeneratedMethodOverrides(null, false, null))
+            .WithoutDiagnostics();
+        Assert.Equal(lambda, copy.Factory);
+        Assert.False(copy.CanUpdateInPlace);
+    }
+
     // -----------------------------------------------------------------------
     // DiagnosticInfo
     // -----------------------------------------------------------------------

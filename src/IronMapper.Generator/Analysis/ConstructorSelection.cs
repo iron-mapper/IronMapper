@@ -66,23 +66,24 @@ internal sealed class ParameterValue
 /// </summary>
 internal delegate ParameterValue ParameterResolver(IParameterSymbol parameter, IPropertySymbol? sameNamedProperty, bool commit);
 
-/// <summary>Result of <see cref="ConstructorSelection.Choose"/>.</summary>
+/// <summary>Result of <see cref="ConstructorSelection.Choose"/> and <see cref="ConstructorSelection.ForFactory"/>.</summary>
 internal sealed class ConstructorChoice
 {
     public static readonly ConstructorChoice Initializer = new(false, false, ImmutableArray<PropertyMappingDescriptor>.Empty,
-        ImmutableArray<DiagnosticInfo>.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        ImmutableArray<DiagnosticInfo>.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase), ImmutableArray<string>.Empty);
 
     public ConstructorChoice(bool usesConstructor, bool failed, ImmutableArray<PropertyMappingDescriptor> arguments,
-        ImmutableArray<DiagnosticInfo> diagnostics, HashSet<string> setByConstructor)
+        ImmutableArray<DiagnosticInfo> diagnostics, HashSet<string> setByConstructor, ImmutableArray<string> parameterNames)
     {
         UsesConstructor = usesConstructor;
         Failed = failed;
         Arguments = arguments;
         Diagnostics = diagnostics;
         SetByConstructor = setByConstructor;
+        ParameterNames = parameterNames;
     }
 
-    /// <summary>The destination is created by a constructor with parameters (<see cref="MappingDescriptor.UsesConstructor"/>).</summary>
+    /// <summary>The destination is created by a constructor with parameters or a factory (<see cref="MappingDescriptor.UsesConstructor"/>).</summary>
     public bool UsesConstructor { get; }
 
     /// <summary>No constructor can be called (IM0009, IM0017, IM0018 in <see cref="Diagnostics"/>): the mapping is not generated.</summary>
@@ -99,6 +100,12 @@ internal sealed class ConstructorChoice
     /// so the initializer leaves it out and IM0001 is not reported for it; <c>[MapProperty]</c> may name a parameter.
     /// </summary>
     public HashSet<string> SetByConstructor { get; }
+
+    /// <summary>
+    /// The parameter names of the chosen constructor or factory; when no constructor can be called, those of every
+    /// accessible constructor. <c>ForCtorParam</c> must name one of them (IM0019).
+    /// </summary>
+    public ImmutableArray<string> ParameterNames { get; }
 }
 
 /// <summary>
@@ -108,7 +115,8 @@ internal sealed class ConstructorChoice
 /// most parameters; a tie is IM0017 (the order of declaration does not decide: reordering code would change the mapping
 /// silently). When no constructor can be called, IM0009 for the parameters of the one that comes closest (the most
 /// parameters mapped, then the fewest without a value, then the first declared), or IM0018 when none is accessible. No
-/// attribute in the destination type chooses the constructor: domain types must not depend on IronMapper.
+/// attribute in the destination type chooses the constructor: domain types must not depend on IronMapper; a profile
+/// chooses a factory or a constructor with <c>ConstructWith</c> (<see cref="ForFactory"/>).
 /// </summary>
 internal static class ConstructorSelection
 {
@@ -137,22 +145,14 @@ internal static class ConstructorSelection
             return ConstructorChoice.Initializer;
         }
 
-        var properties = new Dictionary<string, IPropertySymbol>(StringComparer.OrdinalIgnoreCase);
-        foreach (var property in SymbolHelpers.GetPublicReadableProperties(dest))
-        {
-            // The most derived property wins (GetPublicReadableProperties starts with the type itself).
-            if (!properties.ContainsKey(property.Name))
-            {
-                properties[property.Name] = property;
-            }
-        }
-
+        var properties = DestinationProperties(dest);
         IPropertySymbol? SameNamed(IParameterSymbol parameter) => properties.TryGetValue(parameter.Name, out var p) ? p : null;
 
         var candidates = dest.InstanceConstructors.Where(c => IsCandidate(c, dest, compilation)).ToList();
         if (candidates.Count == 0)
         {
-            return Failure(new DiagnosticInfo(DiagnosticDescriptors.NoAccessibleConstructor, source.ToDisplayString(), dest.ToDisplayString())
+            return Failure(new DiagnosticInfo(DiagnosticDescriptors.NoAccessibleConstructor, source.ToDisplayString(), dest.ToDisplayString(),
+                    source.Name, dest.Name)
                 .WithLocation(origin));
         }
 
@@ -177,19 +177,85 @@ internal static class ConstructorSelection
             {
                 return Failure(new DiagnosticInfo(DiagnosticDescriptors.AmbiguousConstructor, source.ToDisplayString(),
                         dest.ToDisplayString(), string.Join(" and ", best.Select(r => $"'{Display(r.constructor)}'")),
-                        bestMapped.ToString(System.Globalization.CultureInfo.InvariantCulture), dest.Name)
+                        bestMapped.ToString(System.Globalization.CultureInfo.InvariantCulture), LambdaCalling(best[0].constructor))
                     .WithLocation(origin));
             }
 
-            return Build(best[0].constructor);
+            return Build(best[0].constructor, resolve, SameNamed, isConstructor: true);
         }
 
         // Nothing can be called: IM0009 for the parameters of the constructor that comes closest.
         var closest = rated.OrderByDescending(r => r.mapped).ThenBy(r => r.missing).ThenBy(r => r.index).First().constructor;
-        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
-        foreach (var parameter in closest.Parameters)
+        string? closestOf = candidates.Count > 1
+            ? $" (Constructor '{Display(closest)}', the closest of {candidates.Count} accessible constructors.)"
+            : null;
+        return new ConstructorChoice(true, true, ImmutableArray<PropertyMappingDescriptor>.Empty,
+            Missing(closest, "the constructor", closestOf, source, dest, resolve, SameNamed, origin, atParameter, hint),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            candidates.SelectMany(c => c.Parameters).Select(p => p.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToImmutableArray());
+    }
+
+    /// <summary>
+    /// The destination is created by <paramref name="factory"/> (<c>ConstructWith</c> in a profile: a static method, or the
+    /// method of a lambda): its parameters get their values as those of a constructor, and a parameter without one is
+    /// IM0009. Every parameter counts as setting the destination property of the same name: the factory returns the
+    /// object, no initializer follows it.
+    /// </summary>
+    /// <param name="factory">The method that creates the destination.</param>
+    /// <param name="what">The factory in messages: <c>factory 'D.Restore'</c>, <c>the lambda of ConstructWith</c>.</param>
+    /// <param name="source">The source type (messages).</param>
+    /// <param name="dest">The destination type.</param>
+    /// <param name="resolve">Finds the value of a parameter (the analyzer of the profile).</param>
+    /// <param name="origin">Where IM0009 points (the <c>CreateMap</c> call).</param>
+    /// <param name="hint">The hint of IM0009 for a parameter without a source.</param>
+    public static ConstructorChoice ForFactory(IMethodSymbol factory, string what, INamedTypeSymbol source,
+        INamedTypeSymbol dest, ParameterResolver resolve, LocationInfo? origin, Func<IParameterSymbol, IPropertySymbol?, string> hint)
+    {
+        var properties = DestinationProperties(dest);
+        IPropertySymbol? SameNamed(IParameterSymbol parameter) => properties.TryGetValue(parameter.Name, out var p) ? p : null;
+
+        var missing = Missing(factory, what, null, source, dest, resolve, SameNamed, origin, atParameter: false, hint);
+        if (missing.Length > 0)
         {
-            var sameNamed = SameNamed(parameter);
+            return new ConstructorChoice(true, true, ImmutableArray<PropertyMappingDescriptor>.Empty, missing,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase), factory.Parameters.Select(p => p.Name).ToImmutableArray());
+        }
+
+        return Build(factory, resolve, SameNamed, isConstructor: false);
+    }
+
+    /// <summary>
+    /// A constructor or factory parameter the generated code can pass a value to: no <c>ref</c>, <c>out</c> or
+    /// <c>ref readonly</c>.
+    /// </summary>
+    public static bool IsPassedByValue(IParameterSymbol parameter)
+        => parameter.RefKind is not (RefKind.Ref or RefKind.Out or RefKind.RefReadOnlyParameter);
+
+    // The readable properties of the destination by name, ignoring case; the most derived one wins
+    // (GetPublicReadableProperties starts with the type itself).
+    private static Dictionary<string, IPropertySymbol> DestinationProperties(INamedTypeSymbol dest)
+    {
+        var properties = new Dictionary<string, IPropertySymbol>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in SymbolHelpers.GetPublicReadableProperties(dest))
+        {
+            if (!properties.ContainsKey(property.Name))
+            {
+                properties[property.Name] = property;
+            }
+        }
+
+        return properties;
+    }
+
+    // IM0009 for each parameter of `method` that gets no value; `suffix` is appended to each reason.
+    private static ImmutableArray<DiagnosticInfo> Missing(IMethodSymbol method, string what, string? suffix, INamedTypeSymbol source,
+        INamedTypeSymbol dest, ParameterResolver resolve, Func<IParameterSymbol, IPropertySymbol?> sameNamedOf,
+        LocationInfo? origin, bool atParameter, Func<IParameterSymbol, IPropertySymbol?, string> hint)
+    {
+        var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        foreach (var parameter in method.Parameters)
+        {
+            var sameNamed = sameNamedOf(parameter);
             var value = resolve(parameter, sameNamed, commit: false);
             if (HasValue(parameter, value))
             {
@@ -203,45 +269,43 @@ internal static class ConstructorSelection
                 _ => $"'{source.Name}' has no property named '{parameter.Name}' (names are compared ignoring case), and the "
                      + $"parameter has no default value. {hint(parameter, sameNamed)}",
             };
-            if (candidates.Count > 1)
-            {
-                reason += $" (Constructor '{Display(closest)}', the closest of {candidates.Count} accessible constructors.)";
-            }
 
             diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.ConstructorParameterNotMapped, parameter.Name,
-                    dest.ToDisplayString(), reason)
+                    dest.ToDisplayString(), reason + suffix, what)
                 .WithLocation((atParameter ? LocationInfo.From(parameter) : null) ?? origin));
         }
 
-        return new ConstructorChoice(true, true, ImmutableArray<PropertyMappingDescriptor>.Empty, diagnostics.ToImmutable(),
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        return diagnostics.ToImmutable();
+    }
 
-        ConstructorChoice Build(IMethodSymbol constructor)
+    // The arguments of `method`, which can be called. A constructor sets the property of a parameter's name unless it is
+    // required and the constructor has no [SetsRequiredMembers] (the initializer must set it, CS9035).
+    private static ConstructorChoice Build(IMethodSymbol method, ParameterResolver resolve,
+        Func<IParameterSymbol, IPropertySymbol?> sameNamedOf, bool isConstructor)
+    {
+        var arguments = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
+        var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+        var setByConstructor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        bool setsRequiredMembers = !isConstructor || method.GetAttributes().Any(a =>
+            a.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
+        foreach (var parameter in method.Parameters)
         {
-            var arguments = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
-            var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
-            var setByConstructor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bool setsRequiredMembers = constructor.GetAttributes().Any(a =>
-                a.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
-            foreach (var parameter in constructor.Parameters)
+            var sameNamed = sameNamedOf(parameter);
+            var value = resolve(parameter, sameNamed, commit: true);
+            if (value.Kind == ParameterValueKind.Mapped)
             {
-                var sameNamed = SameNamed(parameter);
-                var value = resolve(parameter, sameNamed, commit: true);
-                if (value.Kind == ParameterValueKind.Mapped)
-                {
-                    arguments.Add(value.Mapping!);
-                    found.AddRange(value.Diagnostics);
-                }
-
-                // A required property must still be set in the initializer unless the constructor says it sets it (CS9035).
-                if (sameNamed is not { IsRequired: true } || setsRequiredMembers)
-                {
-                    setByConstructor.Add(parameter.Name);
-                }
+                arguments.Add(value.Mapping!);
+                found.AddRange(value.Diagnostics);
             }
 
-            return new ConstructorChoice(true, false, arguments.ToImmutable(), found.ToImmutable(), setByConstructor);
+            if (sameNamed is not { IsRequired: true } || setsRequiredMembers)
+            {
+                setByConstructor.Add(parameter.Name);
+            }
         }
+
+        return new ConstructorChoice(true, false, arguments.ToImmutable(), found.ToImmutable(), setByConstructor,
+            method.Parameters.Select(p => p.Name).ToImmutableArray());
     }
 
     /// <summary>The parameter gets a value: a source value, or its default value when nothing maps it or it is ignored.</summary>
@@ -251,7 +315,7 @@ internal static class ConstructorSelection
 
     private static ConstructorChoice Failure(DiagnosticInfo diagnostic)
         => new(true, true, ImmutableArray<PropertyMappingDescriptor>.Empty, ImmutableArray.Create(diagnostic),
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase), ImmutableArray<string>.Empty);
 
     /// <summary>
     /// A constructor the generated code can call with values: accessible, no <c>ref</c>/<c>out</c> parameter, not the copy
@@ -264,7 +328,7 @@ internal static class ConstructorSelection
             return false;
         }
 
-        if (constructor.Parameters.Any(p => p.RefKind is RefKind.Ref or RefKind.Out or RefKind.RefReadOnlyParameter))
+        if (!constructor.Parameters.All(IsPassedByValue))
         {
             return false;
         }
@@ -276,6 +340,11 @@ internal static class ConstructorSelection
     // The generated class is in the user's assembly: public and internal (also protected internal) constructors.
     private static bool IsAccessible(IMethodSymbol constructor, Compilation compilation)
         => compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly);
+
+    // (int from, int to) => new D(from, to): the lambda of ConstructWith that chooses the constructor.
+    private static string LambdaCalling(IMethodSymbol constructor)
+        => $"({string.Join(", ", constructor.Parameters.Select(p => $"{p.Type.ToDisplayString()} {p.Name}"))}) => "
+           + $"new {constructor.ContainingType.Name}({string.Join(", ", constructor.Parameters.Select(p => p.Name))})";
 
     // D(int, string?)
     private static string Display(IMethodSymbol constructor)

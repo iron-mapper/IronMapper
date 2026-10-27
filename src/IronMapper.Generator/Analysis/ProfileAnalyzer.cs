@@ -221,6 +221,13 @@ internal static class ProfileAnalyzer
         // Where the mappings are defined: diagnostics of the whole mapping point here.
         var createMapLocation = LocationInfo.From(innermost);
         LocationInfo? reverseMapLocation = null;
+        // ConstructWith/ConstructUsing (the last call, with where it is) and ForCtorParam: the forward mapping only.
+        ExpressionSyntax? constructWith = null;
+        string? constructUsingBody = null;
+        var creationCalls = new List<(string name, LocationInfo? location)>();
+        var forCtorParamConfigs = new List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)>();
+        var forCtorParamLocations = new Dictionary<string, LocationInfo?>(System.StringComparer.OrdinalIgnoreCase);
+        LocationInfo? convertUsingLocation = null;
 
         // calls[Count-1] = CreateMap, calls[0] = outermost
         for (int i = calls.Count - 2; i >= 0; i--)
@@ -251,7 +258,32 @@ internal static class ProfileAnalyzer
                         inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
                     break;
 
+                case "ConstructWith" when inv.ArgumentList.Arguments.Count == 1:
+                    constructWith = inv.ArgumentList.Arguments[0].Expression;
+                    creationCalls.Add((methodName, LocationInfo.From(memberAccess.Name.GetLocation())));
+                    break;
+
+                case "ConstructUsing" when inv.ArgumentList.Arguments.Count == 1:
+                    int problemsBefore = lambdaDiagnostics.Count;
+                    constructUsingBody = LambdaBodyRewriter.RewriteBody(
+                        inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
+                    if (constructUsingBody is null && lambdaDiagnostics.Count == problemsBefore)
+                    {
+                        lambdaDiagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidFactory, sourceSymbol.ToDisplayString(),
+                                destSymbol.ToDisplayString(),
+                                $"ConstructUsing takes a lambda written in the call, such as ConstructUsing(s => new {destSymbol.Name}(s.Id)), so the generator can read it.")
+                            .WithLocation(LocationInfo.From(inv.ArgumentList.Arguments[0])));
+                    }
+
+                    creationCalls.Add((methodName, LocationInfo.From(memberAccess.Name.GetLocation())));
+                    break;
+
+                case "ForCtorParam":
+                    ParseForCtorParam(inv, forCtorParamConfigs, forCtorParamLocations, model, profileName, lambdaDiagnostics, ct);
+                    break;
+
                 case "ConvertUsing":
+                    convertUsingLocation = LocationInfo.From(memberAccess.Name.GetLocation());
                     if (inv.ArgumentList.Arguments.Count == 0)
                     {
                         // ConvertUsing<TConverter>() — extract generic type argument.
@@ -290,6 +322,33 @@ internal static class ProfileAnalyzer
             }
         }
 
+        // How the destination is created: one of ConstructWith and ConstructUsing, not with ConvertUsing (which creates the
+        // whole object); otherwise IM0020 at the call that conflicts.
+        ProfileFactory? factory = null;
+        if (creationCalls.Count > 0)
+        {
+            string? conflict = creationCalls.Count > 1
+                ? $"{creationCalls[creationCalls.Count - 1].name} is called after {creationCalls[0].name}; one of them creates the destination. Remove the other."
+                : convertUsingLocation is not null
+                    ? $"{creationCalls[0].name} has no effect with ConvertUsing, which creates the whole object. Remove one of them."
+                    : null;
+            if (conflict is not null)
+            {
+                lambdaDiagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidFactory, sourceSymbol.ToDisplayString(),
+                        destSymbol.ToDisplayString(), conflict)
+                    .WithLocation(creationCalls[creationCalls.Count - 1].location));
+            }
+            else if (constructWith is not null)
+            {
+                factory = FactoryAnalyzer.ConstructWith(constructWith, model, sourceSymbol, destSymbol, profileName, lambdaDiagnostics, ct);
+            }
+            else if (constructUsingBody is not null)
+            {
+                factory = new ProfileFactory(
+                    new FactoryDescriptor(FactoryKind.ConstructUsing, constructUsingBody, null, false, "ConstructUsing"), null);
+            }
+        }
+
         if (lambdaDiagnostics.Count > 0)
         {
             return new[] { MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(lambdaDiagnostics)) };
@@ -305,6 +364,7 @@ internal static class ProfileAnalyzer
             sourceSymbol, destSymbol, forMemberConfigs, includedMembersArray, whenConditionBody,
             wholeObjectConverter, wholeObjectLambdaBody,
             beforeMapBody, afterMapBody, transformers, profileName, createMapLocation,
+            factory, forCtorParamConfigs, forCtorParamLocations,
             // ConvertUsing replaces the whole mapping: no property is left unmapped.
             reportUnmapped: wholeObjectConverter is null && wholeObjectLambdaBody is null,
             PropertyTypeCheck.Origin.Profile, model, ct);
@@ -340,6 +400,9 @@ internal static class ProfileAnalyzer
                 beforeMapBody: null,
                 afterMapBody: null,
                 transformers, profileName, reverseMapLocation ?? createMapLocation,
+                factory: null,
+                new List<(string, string?, bool, ConverterReference?, MapFromType?)>(),
+                new Dictionary<string, LocationInfo?>(),
                 // Not checked, as in AutoMapper (a reverse map is created with MemberList.None): it maps by name only and
                 // ForMember does not apply to it. Declare it with CreateMap to have it checked.
                 reportUnmapped: false,
@@ -375,8 +438,57 @@ internal static class ProfileAnalyzer
             return;
         }
 
-        // Second argument is Action<IMemberConfigurationExpression> — a lambda like opt => opt.MapFrom(...) or opt => opt.Ignore()
-        if (args[1].Expression is not LambdaExpressionSyntax optLambda)
+        ParseMemberOptions(args[1].Expression, destPropName, configs, model, profileName, lambdaDiagnostics, ct);
+    }
+
+    /// <summary>
+    /// <c>ForCtorParam("name", o =&gt; …)</c>: the options of a constructor or factory parameter, with the same options as
+    /// <c>ForMember</c>. The name is a constant (a literal or <c>nameof</c>); <paramref name="locations"/> keeps where each
+    /// name is written, for IM0019.
+    /// </summary>
+    private static void ParseForCtorParam(
+        InvocationExpressionSyntax inv,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
+        Dictionary<string, LocationInfo?> locations,
+        SemanticModel model,
+        string profileName,
+        List<DiagnosticInfo> lambdaDiagnostics,
+        CancellationToken ct)
+    {
+        var args = inv.ArgumentList.Arguments;
+        if (args.Count < 2)
+        {
+            return;
+        }
+
+        if (model.GetConstantValue(args[0].Expression, ct) is not { HasValue: true, Value: string name })
+        {
+            var mapping = (model.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol)?.TypeArguments;
+            lambdaDiagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.UnknownConstructorParameter,
+                    mapping is { Length: 2 } ? mapping.Value[0].ToDisplayString() : "?",
+                    mapping is { Length: 2 } ? mapping.Value[1].ToDisplayString() : "?",
+                    args[0].Expression.ToString(),
+                    "does not name the parameter with a constant: write a string literal or nameof(...), so the generator can read it at compile time.")
+                .WithLocation(LocationInfo.From(args[0])));
+            return;
+        }
+
+        locations[name] = LocationInfo.From(args[0]);
+        ParseMemberOptions(args[1].Expression, name, configs, model, profileName, lambdaDiagnostics, ct);
+    }
+
+    // The options lambda of ForMember/ForCtorParam: o => o.MapFrom(...), o => o.Ignore(), o => o.UseConverter<T>().
+    private static void ParseMemberOptions(
+        ExpressionSyntax options,
+        string destPropName,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
+        SemanticModel model,
+        string profileName,
+        List<DiagnosticInfo> lambdaDiagnostics,
+        CancellationToken ct)
+    {
+        // Action<IMemberConfigurationExpression> — a lambda like opt => opt.MapFrom(...) or opt => opt.Ignore()
+        if (options is not LambdaExpressionSyntax optLambda)
         {
             return;
         }
@@ -609,6 +721,9 @@ internal static class ProfileAnalyzer
         ImmutableArray<ValueTransformerDescriptor> transformers,
         string profileName,
         LocationInfo? origin,
+        ProfileFactory? factory,
+        List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> forCtorParamConfigs,
+        Dictionary<string, LocationInfo?> forCtorParamLocations,
         bool reportUnmapped,
         PropertyTypeCheck.Origin checkOrigin,
         SemanticModel model,
@@ -627,8 +742,8 @@ internal static class ProfileAnalyzer
 
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticInfo>();
 
-        // IM0008: destination type is abstract or an interface.
-        if (destSymbol.IsAbstract || destSymbol.TypeKind == TypeKind.Interface)
+        // IM0008: destination type is abstract or an interface (a factory may create it: ConstructWith, ConstructUsing).
+        if ((destSymbol.IsAbstract || destSymbol.TypeKind == TypeKind.Interface) && factory is null)
         {
             diagnostics.Add(new DiagnosticInfo(
                 DiagnosticDescriptors.AbstractDestinationType,
@@ -664,6 +779,14 @@ internal static class ProfileAnalyzer
         foreach (var (dp, lb, ign, cvt, mf) in forMemberConfigs)
         {
             configByDest[dp] = (lb, ign, cvt, mf);
+        }
+
+        // ForCtorParam configs by parameter name (ignoring case); they come before ForMember of the property of the same name.
+        var configByParam = new Dictionary<string, (string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)>(
+            System.StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, lb, ign, cvt, mf) in forCtorParamConfigs)
+        {
+            configByParam[name] = (lb, ign, cvt, mf);
         }
 
         // Build included-member resolution lookup (first-member-wins on name conflicts).
@@ -723,9 +846,9 @@ internal static class ProfileAnalyzer
         {
             ignored = false;
             unusable = null;
-            if (configByDest.TryGetValue(target.DisplayName, out var cfg))
+            if ((isParameter && configByParam.TryGetValue(target.Name, out var cfg)) || configByDest.TryGetValue(target.DisplayName, out cfg))
             {
-                // Priority 1: explicitly configured via ForMember.
+                // Priority 1: explicitly configured via ForCtorParam (a parameter) or ForMember.
                 ignored = cfg.isIgnore;
                 var converter = cfg.converter is null || cfg.isIgnore
                     ? null
@@ -830,36 +953,75 @@ internal static class ProfileAnalyzer
         // A destination without an accessible parameterless constructor is created by a constructor (issue #24): a
         // parameter is configured by ForMember of the property of the same name (ignoring case); Ignore() leaves its
         // default value. ConvertUsing creates the object itself: no constructor is needed.
-        var construction = wholeObjectConverter is not null || wholeObjectLambdaBody is not null
+        ParameterValue Resolve(IParameterSymbol parameter, IPropertySymbol? sameNamed, bool commit)
+        {
+            var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
+            var mapping = MapMember(DestinationMember.ForParameter(parameter, sameNamed), isInitOnly: false,
+                isParameter: true, found, commit, out bool ignored, out string? unusable);
+            if (mapping is null)
+            {
+                return ParameterValue.NoSource();
+            }
+
+            if (ignored)
+            {
+                return ParameterValue.Ignored(configByParam.ContainsKey(parameter.Name)
+                    ? $"Ignore() in ForCtorParam(\"{parameter.Name}\") in MappingProfile '{profileName}'"
+                    : $"Ignore() of '{sameNamed?.Name ?? parameter.Name}' in MappingProfile '{profileName}'");
+            }
+
+            return unusable is null ? ParameterValue.Mapped(mapping, found.ToImmutable()) : ParameterValue.Unusable(unusable);
+        }
+
+        string Hint(IParameterSymbol parameter, IPropertySymbol? sameNamed) => checkOrigin == PropertyTypeCheck.Origin.ReverseMap
+            ? $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap<{sourceSymbol.Name}, {destSymbol.Name}>() and configure '{sameNamed?.Name ?? parameter.Name}' there, or remove ReverseMap()."
+            : sameNamed is not null
+                ? $"Configure it with ForMember(d => d.{sameNamed.Name}, o => o.MapFrom(...)), or add the property to '{sourceSymbol.Name}'."
+                : $"Configure it with ForCtorParam(\"{parameter.Name}\", o => o.MapFrom(...)), or add the property to '{sourceSymbol.Name}'.";
+
+        // A destination without an accessible parameterless constructor is created by a constructor (issue #24): a
+        // parameter is configured by ForCtorParam, or by ForMember of the property of the same name (ignoring case);
+        // Ignore() leaves its default value. ConstructWith names the factory (a static method or a lambda) whose parameters
+        // are matched the same way. ConvertUsing creates the object itself, ConstructUsing too (no parameters matched).
+        var construction = wholeObjectConverter is not null || wholeObjectLambdaBody is not null || factory is { Method: null }
             ? ConstructorChoice.Initializer
-            : ConstructorSelection.Choose(compilation, sourceSymbol, destSymbol,
-                (parameter, sameNamed, commit) =>
-                {
-                    var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
-                    var mapping = MapMember(DestinationMember.ForParameter(parameter, sameNamed), isInitOnly: false,
-                        isParameter: true, found, commit, out bool ignored, out string? unusable);
-                    if (mapping is null)
-                    {
-                        return ParameterValue.NoSource();
-                    }
-
-                    if (ignored)
-                    {
-                        return ParameterValue.Ignored($"Ignore() of '{sameNamed?.Name ?? parameter.Name}' in MappingProfile '{profileName}'");
-                    }
-
-                    return unusable is null ? ParameterValue.Mapped(mapping, found.ToImmutable()) : ParameterValue.Unusable(unusable);
-                },
-                origin, atParameter: false,
-                (parameter, sameNamed) => checkOrigin == PropertyTypeCheck.Origin.ReverseMap
-                    ? $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap<{sourceSymbol.Name}, {destSymbol.Name}>() and configure '{sameNamed?.Name ?? parameter.Name}' there, or remove ReverseMap()."
-                    : sameNamed is not null
-                        ? $"Configure it with ForMember(d => d.{sameNamed.Name}, o => o.MapFrom(...)), or add the property to '{sourceSymbol.Name}'."
-                        : $"'{destSymbol.Name}' has no property named '{parameter.Name}', so ForMember cannot configure the parameter: add the property to '{sourceSymbol.Name}', or create the object with ConvertUsing(s => new {destSymbol.Name}(...)).");
+            : factory?.Method is { } factoryMethod
+                ? ConstructorSelection.ForFactory(factoryMethod, factory.Descriptor.Display, sourceSymbol, destSymbol, Resolve, origin, Hint)
+                : ConstructorSelection.Choose(compilation, sourceSymbol, destSymbol, Resolve, origin, atParameter: false, Hint);
         diagnostics.AddRange(construction.Diagnostics);
 
-        // No constructor can be called (IM0009, IM0017, IM0018): the mapping is not generated.
-        if (construction.Failed)
+        // IM0019: ForCtorParam must name a parameter of what creates the destination (any accessible constructor, when
+        // none can be called and IM0009 says why).
+        bool unknownParameter = false;
+        foreach (var named in forCtorParamLocations)
+        {
+            if (construction.ParameterNames.Contains(named.Key, System.StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string parameters = construction.ParameterNames.Length == 0 ? string.Empty
+                : $" Its parameters: {string.Join(", ", construction.ParameterNames)}.";
+            string what = wholeObjectConverter is not null || wholeObjectLambdaBody is not null
+                ? "names no parameter: ConvertUsing creates the whole object. Remove ForCtorParam."
+                : factory is { Method: null }
+                    ? "names no parameter: ConstructUsing creates the object as written and matches no parameters. Pass the value in the ConstructUsing expression, or use ConstructWith."
+                    : factory is not null
+                        ? $"names no parameter of {factory.Descriptor.Display}.{parameters}"
+                        : !construction.UsesConstructor
+                            ? $"names no parameter: '{destSymbol.Name}' is created with an object initializer (it has an accessible parameterless constructor). Configure the property with ForMember, or choose a constructor with ConstructWith((…) => new {destSymbol.Name}(…))."
+                            : construction.Failed
+                                ? $"names no parameter of an accessible constructor of '{destSymbol.Name}'.{parameters}"
+                                : $"names no parameter of the constructor of '{destSymbol.Name}' that the generator chose.{parameters}";
+            diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.UnknownConstructorParameter, sourceSymbol.ToDisplayString(),
+                    destSymbol.ToDisplayString(), $"\"{named.Key}\"", what)
+                .WithLocation(named.Value ?? origin));
+            unknownParameter = true;
+        }
+
+        // No constructor can be called (IM0009, IM0017, IM0018), or ForCtorParam configures nothing (IM0019): the
+        // mapping is not generated.
+        if (construction.Failed || unknownParameter)
         {
             return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
@@ -868,7 +1030,7 @@ internal static class ProfileAnalyzer
         {
             ct.ThrowIfCancellationRequested();
 
-            // Set by the constructor (a parameter of the same name, ignoring case).
+            // Set by the constructor or the factory (a parameter of the same name, ignoring case).
             if (construction.SetByConstructor.Contains(destProp.Name))
             {
                 continue;
@@ -876,8 +1038,28 @@ internal static class ProfileAnalyzer
 
             bool isInitOnly = destProp.SetMethod?.IsInitOnly ?? false;
 
-            if (MapMember(DestinationMember.ForProperty(destProp), isInitOnly, isParameter: false, diagnostics, commit: true, out _, out _) is { } mapping)
+            // After a factory only a public set can be assigned: ConstructUsing leaves init properties to its expression.
+            if (isInitOnly && factory is { Method: null })
             {
+                continue;
+            }
+
+            if (MapMember(DestinationMember.ForProperty(destProp), isInitOnly, isParameter: false, diagnostics, commit: true, out bool ignoredProperty, out _) is { } mapping)
+            {
+                // ConstructWith: the source has a value for an init property, which cannot be set after the call (IM0021).
+                if (isInitOnly && factory is not null)
+                {
+                    if (!ignoredProperty)
+                    {
+                        diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InitPropertyAfterFactory, destProp.Name,
+                                destSymbol.Name, factory.Descriptor.Display)
+                            .WithLocation(origin)
+                            .WithProperty(MappingAnalyzer.PropertyNameKey, destProp.Name));
+                    }
+
+                    continue;
+                }
+
                 propertyMappings.Add(mapping);
             }
             // Priority 4: nothing maps the property. IM0001 at the CreateMap call; reported only with
@@ -926,8 +1108,13 @@ internal static class ProfileAnalyzer
             destFullName: destFullName,
             methodAccessibility: methodAccessibility,
             wholeObjectConverterIsCached: wholeObject?.IsCached ?? false,
-            usesConstructor: construction.UsesConstructor,
-            constructorArguments: construction.Arguments);
+            // ConstructWith: no in-place update (as for a constructor with parameters). ConstructUsing: the in-place update
+            // ignores it, as in AutoMapper, unless the destination could not be created without it.
+            usesConstructor: factory is { Method: null }
+                ? !ConstructorSelection.UsesInitializer(destSymbol, compilation)
+                : construction.UsesConstructor,
+            constructorArguments: construction.Arguments,
+            factory: factory?.Descriptor);
     }
 
     // -----------------------------------------------------------------------

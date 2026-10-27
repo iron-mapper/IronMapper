@@ -453,6 +453,8 @@ public class OrderProfile : MappingProfile
 For a destination created by a constructor (a positional record, no parameterless constructor; from 2.1.0), the
 `ForMember` calls below configure the constructor parameter with the same name as the property (ignoring case);
 `Ignore()` means its default value. See [Constructors and positional records](advanced.md#constructors-and-positional-records).
+A factory or another constructor is named with `ConstructWith`, a parameter without a property of the same name is
+configured with `ForCtorParam` (below).
 
 ---
 
@@ -512,6 +514,45 @@ Lambda-based whole-object conversion. The expression body is emitted verbatim by
 ```csharp
 CreateMap<Point, PointDto>()
     .ConvertUsing(src => new PointDto { X = src.X, Y = src.Y });
+```
+
+---
+
+### `ConstructWith(Factory)`
+
+Creates the destination with a static factory method (also when its constructor is private) or a lambda with typed
+parameters, whose parameters are matched to the source as those of a constructor; properties with a public `set` are
+assigned after the call. No in-place overload is generated. From 2.1.0; see
+[Factories](advanced.md#factories-constructwith).
+
+```csharp
+CreateMap<TeamRow, Team>().ConstructWith(Team.Restore);
+CreateMap<PersonRow, Person>().ConstructWith((string name, int age) => new Person(name, age));
+```
+
+---
+
+### `ForCtorParam("name", opt => ...)`
+
+Configures a parameter of the constructor or of the factory that has no destination property of the same name, with
+the options of `ForMember` (`MapFrom`, `UseConverter`, `Ignore()`). An unknown name is `IM0019`. From 2.1.0; see
+[Parameters without a property](advanced.md#parameters-without-a-property-forctorparam).
+
+```csharp
+CreateMap<AuthorRow, Author>()
+    .ForCtorParam("display", o => o.MapFrom(s => s.First + " " + s.Last));
+```
+
+---
+
+### `ConstructUsing(src => ...)`
+
+Creates the destination with the expression as written (as in AutoMapper): no parameters are matched; properties with a
+public `set` are mapped and assigned after it. The in-place overload ignores it. From 2.1.0; see
+[`ConstructUsing`](advanced.md#constructusing-as-in-automapper).
+
+```csharp
+CreateMap<OrderRow, Order>().ConstructUsing(s => new Order("#" + s.Code));
 ```
 
 ---

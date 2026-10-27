@@ -2,7 +2,7 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0018`. Они объявлены в
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0021`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Текущее состояние** (`main`, не выпущенная 2.1.0):
@@ -27,6 +27,9 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0016 | Warning | Аргумент `GenerateMethods` не константа | Да — профили |
 | IM0017 | Error | Конструктор destination неоднозначен | Да — атрибуты и профили (с 2.1.0) |
 | IM0018 | Error | У destination нет доступного конструктора | Да — атрибуты и профили (с 2.1.0) |
+| IM0019 | Error | `ForCtorParam` не называет параметр | Да — профили (с 2.1.0) |
+| IM0020 | Error | Фабрику `ConstructWith` нельзя использовать | Да — профили (с 2.1.0) |
+| IM0021 | Warning | init-свойство нельзя задать после фабрики | Да — профили (с 2.1.0) |
 
 Каждая диагностика указывает на место в вашем коде (**Куда указывает** ниже): IDE подчёркивает его, в выводе сборки
 видны файл и строка. Уровень задаётся стандартно, в `.editorconfig` (или `.globalconfig`):
@@ -42,7 +45,8 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 Если для проблемы нет работающей диагностики, сборка падает с обычной ошибкой C# внутри сгенерированного файла
 `*.g.cs`. До 2.0.0 так было с позиционным record в качестве destination (`CS7036`); с 2.1.0 он создаётся своим
 конструктором ([Конструкторы и позиционные record](advanced.ru.md#конструкторы-и-позиционные-record)), а если
-конструктор вызвать нельзя — `IM0009`, `IM0017` или `IM0018`.
+конструктор вызвать нельзя — `IM0009`, `IM0017` или `IM0018`; фабрика `ConstructWith`, которую сгенерированный код не
+может вызвать, — `IM0020`.
 
 Тип, который не разрешается (`typeof(Missing)` в `[MapTo]`/`[MapFrom]`, аргумент типа `CreateMap`, тип converter),
 сообщает компилятор в вашем коде (`CS0246`, `CS0234`, `CS0122`, …). Генератор пропускает этот маппинг, поэтому второй
@@ -261,12 +265,14 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 **Куда указывает:** в маппингах через атрибуты — на параметр конструктора (его имя), если тип destination объявлен в
 вашем проекте, иначе на атрибут; в профилях — на вызов `CreateMap` или `ReverseMap()`.
 
-**Сообщение:** `Mapping to '{1}' was not generated: constructor parameter '{0}' gets no value: {2}`
+**Сообщение:** `Mapping to '{1}' was not generated: parameter '{0}' of {3} gets no value: {2}` (`{3}` — `the constructor`,
+`factory 'Team.Restore'` или `the lambda of ConstructWith`)
 
 **Причина:** у destination нет доступного конструктора без параметров, поэтому он создаётся конструктором
 ([Конструкторы и позиционные record](advanced.ru.md#конструкторы-и-позиционные-record)), и ни один доступный
-конструктор нельзя вызвать: параметр ближайшего (больше всего параметров из source) не получает значения. Последняя
-часть сообщения объясняет почему:
+конструктор нельзя вызвать: параметр ближайшего (больше всего параметров из source) не получает значения. Или такой
+параметр у фабрики `ConstructWith` ([Фабрики](advanced.ru.md#фабрики-constructwith)). Последняя часть сообщения
+объясняет почему:
 
 - в source нет свойства с именем параметра (без учёта регистра), и у параметра нет значения по умолчанию;
 - значение source нельзя передать (причины [`IM0002`](#im0002--несовместимые-типы-свойств-или-нет-маппинга):
@@ -276,9 +282,9 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 **Поведение:** маппинг не генерируется; остальные маппинги проекта генерируются.
 
 **Как исправить:** добавьте свойство в source или сопоставьте с параметром другое (`[MapProperty("имяПараметра")]` на
-свойстве source; `ForMember(d => d.Свойство, o => o.MapFrom(...))` для одноимённого свойства в профиле), преобразуйте
-значение (converter, `MapFrom`), дайте параметру значение по умолчанию или создайте объект через `ConvertUsing` в
-профиле. Параметр без одноимённого свойства пока нельзя настроить через `ForMember`.
+свойстве source; в профиле — `ForMember(d => d.Свойство, o => o.MapFrom(...))` для одноимённого свойства или
+`ForCtorParam("имяПараметра", o => o.MapFrom(...))` для параметра без него), преобразуйте значение (converter,
+`MapFrom`), дайте параметру значение по умолчанию или выберите другой конструктор или фабрику через `ConstructWith`.
 
 **До 2.0.0** `IM0009` было предупреждением для record в маппингах через атрибуты и выдавалось для каждого объявленного
 конструктора, хотя сгенерированный object initializer всё равно не компилировался, если у record не было конструктора
@@ -431,7 +437,8 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Куда указывает:** на атрибут `[MapTo]`/`[MapFrom]` или вызов `CreateMap`.
 
-**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new {4}(...)) in a profile.`
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: the constructors {2} fit equally well (each maps {3} parameter(s) from the source). Choose one in a profile with a lambda that calls it, such as ConstructWith({4}), or remove or change one of the constructors.`
+(`{4}` — лямбда с параметрами первого из них: `(int from, int to) => new Range(from, to)`)
 
 **Причина:** destination создаётся конструктором, и два или больше его конструкторов можно вызвать с одинаковым числом
 параметров из source и одинаковым числом параметров, например `Range(int, int)` и `Range(long, long)` для source со
@@ -439,9 +446,10 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Поведение:** маппинг не генерируется; остальные маппинги проекта генерируются.
 
-**Как исправить:** удалите или измените один из конструкторов либо создайте объект через
-`ConvertUsing(s => new Range(s.From, s.To))` в профиле. Атрибут в типе destination намеренно не предлагается: доменные
-типы не должны зависеть от IronMapper.
+**Как исправить:** выберите конструктор в профиле,
+`CreateMap<RangeRow, Range>().ConstructWith((int from, int to) => new Range(from, to))`
+([Фабрики](advanced.ru.md#фабрики-constructwith)), либо удалите или измените один из конструкторов. Атрибут в типе
+destination намеренно не предлагается: доменные типы не должны зависеть от IronMapper.
 
 ---
 
@@ -451,7 +459,7 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Куда указывает:** на атрибут `[MapTo]`/`[MapFrom]` или вызов `CreateMap`.
 
-**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create the object with ConvertUsing(s => ...) in a profile, for example with its factory method.`
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: '{1}' has no public or internal constructor the generated code can call. Create it with its static factory method in a profile: CreateMap<{2}, {3}>().ConstructWith({3}.Create), where Create is the factory method.`
 
 **Причина:** все конструкторы destination `private` или `protected` (или с параметрами `ref`/`out`), как у доменного
 типа, который создаётся статическим фабричным методом (`Project.Restore(...)`). До 2.0.0 сборка падала внутри
@@ -459,5 +467,74 @@ dotnet_diagnostic.IM0001.severity = error   # или warning, suggestion, none
 
 **Поведение:** маппинг не генерируется; остальные маппинги проекта генерируются.
 
-**Как исправить:** создайте объект в профиле через `ConvertUsing(s => Project.Restore(s.Id, s.Name))` или сделайте
-конструктор public или internal.
+**Как исправить:** назовите фабрику в профиле, `CreateMap<ProjectRow, Project>().ConstructWith(Project.Restore)`: её
+параметры сопоставляются с source так же, как параметры конструктора ([Фабрики](advanced.ru.md#фабрики-constructwith)).
+Или сделайте конструктор public или internal.
+
+---
+
+## IM0019 — ForCtorParam не называет параметр
+
+**Уровень:** Error (с 2.1.0)
+
+**Куда указывает:** на имя в `ForCtorParam`.
+
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: ForCtorParam({2}) {3}`, например
+`ForCtorParam("nmae") names no parameter of the constructor of 'Author' that the generator chose. Its parameters: name.`
+
+**Причина:** `ForCtorParam` настраивает параметр конструктора, который выбирает генератор, или фабрики `ConstructWith`
+([Параметры без свойства](advanced.ru.md#параметры-без-свойства-forctorparam)); имена сравниваются без учёта регистра.
+Такого параметра нет (опечатка, параметр переименован), destination создаётся через object initializer (есть доступный
+конструктор без параметров) или через `ConvertUsing`/`ConstructUsing`, которые параметры не сопоставляют, либо имя — не
+константа.
+
+**Поведение:** маппинг не генерируется (настройка иначе молча пропала бы); остальные маппинги проекта генерируются.
+
+**Как исправить:** укажите одно из имён параметров из сообщения (литерал или `nameof` чего-то с тем же именем); для
+свойства object initializer используйте `ForMember`.
+
+---
+
+## IM0020 — Фабрику ConstructWith нельзя использовать
+
+**Уровень:** Error (с 2.1.0)
+
+**Куда указывает:** на аргумент `ConstructWith` (или на конфликтующий вызов, или на аргумент `ConstructUsing`).
+
+**Сообщение:** `Mapping from '{0}' to '{1}' was not generated: {2}`; `{2}` объясняет, что не так и что написать.
+
+**Причина:** сгенерированный код не может вызвать то, что передано в `ConstructWith`
+([Фабрики](advanced.ru.md#фабрики-constructwith)):
+
+- метод экземпляра или локальная функция (у сгенерированного класса нет экземпляра для вызова);
+- приватный или защищённый метод либо метод приватного типа;
+- метод возвращает не тип destination и не производный от него, либо nullable (`Team?`);
+- параметр `ref`/`out`;
+- группа методов перегруженного метода или лямбда без типов параметров: тип делегата не выводится (компилятор в том же
+  месте сообщает `CS8917`);
+- не группа методов и не лямбда, написанная в вызове (делегат в переменной или поле при сборке не прочитать);
+- `ConstructWith` вместе с `ConstructUsing` или `ConvertUsing` либо дважды.
+
+**Поведение:** маппинг не генерируется; остальные маппинги проекта генерируются.
+
+**Как исправить:** передайте public или internal статический метод либо лямбду с типизированными параметрами, которая
+вызывает фабрику или конструктор: `ConstructWith((Guid id, string name) => Team.Restore(id, name))`.
+
+---
+
+## IM0021 — init-свойство нельзя задать после фабрики
+
+**Уровень:** Warning (с 2.1.0)
+
+**Куда указывает:** на вызов `CreateMap`.
+
+**Сообщение:** `Property '{1}.{0}' is not mapped: it is init-only, and the destination is created by {2}, so it cannot be set after the call. Pass the value to the factory, or ignore the property with ForMember(d => d.{0}, o => o.Ignore()).`
+
+**Причина:** destination создаётся фабрикой `ConstructWith`, и у source есть значение для `init`-свойства, которое не
+задаёт ни один параметр фабрики. `init`-свойство можно задать только в object initializer при `new`; после вызова
+сгенерированный код присваивает свойства с публичным `set`.
+
+**Поведение:** маппинг генерируется без этого свойства.
+
+**Как исправить:** добавьте в фабрику параметр для него (или задайте его в лямбде `ConstructWith`) либо проигнорируйте
+его через `ForMember(d => d.Свойство, o => o.Ignore())`.

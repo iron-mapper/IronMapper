@@ -80,6 +80,59 @@ internal static class LambdaBodyRewriter
         return rewritten + ";";
     }
 
+    /// <summary>
+    /// Rewrites the lambda of <c>ConstructWith((string name, int age) =&gt; …)</c> into a private helper method of the generated
+    /// class: the parameter list (types fully qualified, names and default values kept) and the body (an expression, or the
+    /// statements of a block, one per line). Returns <see langword="null"/> when problems were found (they are added to
+    /// <paramref name="diagnostics"/>).
+    /// </summary>
+    public static (string Parameters, string Body, bool IsBlock)? RewriteFactory(
+        LambdaExpressionSyntax lambda,
+        IMethodSymbol method,
+        SemanticModel model,
+        string profileName,
+        List<DiagnosticInfo> diagnostics,
+        CancellationToken ct)
+    {
+        // The parameters keep their names: they are declared inside the lambda, so the rewriter leaves them as written.
+        var rewriter = new Rewriter(model, lambda, new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default), profileName, ct);
+        var syntaxParameters = lambda switch
+        {
+            ParenthesizedLambdaExpressionSyntax paren => paren.ParameterList.Parameters.ToArray(),
+            SimpleLambdaExpressionSyntax simple => new[] { simple.Parameter },
+            _ => System.Array.Empty<ParameterSyntax>(),
+        };
+
+        var parameters = new List<string>();
+        for (int i = 0; i < method.Parameters.Length; i++)
+        {
+            var parameter = method.Parameters[i];
+            string name = SyntaxFacts.GetKeywordKind(parameter.Name) == SyntaxKind.None ? parameter.Name : "@" + parameter.Name;
+            string text = $"{SymbolHelpers.GetFullyQualifiedNullableName(parameter.Type)} {name}";
+            if (i < syntaxParameters.Length && syntaxParameters[i].Default is { } defaultValue)
+            {
+                text += " = " + rewriter.Visit(defaultValue.Value)!.ToString().Trim();
+            }
+
+            parameters.Add(text);
+        }
+
+        var body = rewriter.Visit(lambda.Body);
+        if (rewriter.Problems.Count > 0)
+        {
+            diagnostics.AddRange(rewriter.Problems);
+            return null;
+        }
+
+        if (body is BlockSyntax block)
+        {
+            return (string.Join(", ", parameters),
+                string.Join("\n", block.Statements.Select(statement => statement.ToString().Trim())), true);
+        }
+
+        return (string.Join(", ", parameters), body!.ToString().Trim(), false);
+    }
+
     private static SyntaxNode? Rewrite(
         ExpressionSyntax expr,
         SemanticModel model,

@@ -381,6 +381,81 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task Factories() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public readonly record struct MemberId
+        {
+            private MemberId(System.Guid value) => Value = value;
+            public System.Guid Value { get; }
+            public static MemberId From(System.Guid value) => new(value);
+        }
+
+        public class TeamRow
+        {
+            public System.Guid OwnerId { get; set; }
+            public string Name { get; set; } = "";
+            public System.Guid[] MemberIds { get; set; } = System.Array.Empty<System.Guid>();
+            public string? Motto { get; set; }
+            public SettingsRow Settings { get; set; } = new();
+        }
+
+        public class SettingsRow { public int PageSize { get; set; } public string Locale { get; set; } = ""; }
+
+        public sealed class Settings
+        {
+            private Settings(int pageSize, string locale) { PageSize = pageSize; Locale = locale; }
+            public int PageSize { get; }
+            public string Locale { get; }
+            public static Settings Create(int pageSize, string locale) => new(pageSize, locale);
+        }
+
+        public sealed class Team
+        {
+            private Team(MemberId owner, string name, IReadOnlyList<System.Guid> memberIds, Settings settings)
+            {
+                Owner = owner; Name = name; MemberIds = memberIds; Settings = settings;
+            }
+
+            public MemberId Owner { get; }
+            public string Name { get; }
+            public IReadOnlyList<System.Guid> MemberIds { get; }
+            public Settings Settings { get; }
+            public string? Motto { get; set; }
+
+            public static Team Restore(MemberId owner, string name, IReadOnlyList<System.Guid> memberIds, Settings settings)
+                => new(owner, name, memberIds, settings);
+        }
+
+        public class PersonRow { public string First { get; set; } = ""; public string Last { get; set; } = ""; public int Age { get; set; } }
+
+        public class Person
+        {
+            public Person(string fullName) { FullName = fullName; }
+            public Person(string fullName, int age) { FullName = fullName; Age = age; }
+            public string FullName { get; }
+            public int Age { get; }
+        }
+
+        public class TeamProfile : MappingProfile
+        {
+            public TeamProfile()
+            {
+                CreateMap<SettingsRow, Settings>().ConstructWith(Settings.Create);
+                CreateMap<TeamRow, Team>()
+                    .ConstructWith(Team.Restore)
+                    .ForCtorParam("owner", o => o.MapFrom(s => MemberId.From(s.OwnerId)));
+                CreateMap<PersonRow, Person>()
+                    .ConstructWith((string fullName, int age) => new Person(fullName, age))
+                    .ForCtorParam("fullName", o => o.MapFrom(s => s.First + " " + s.Last));
+            }
+        }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

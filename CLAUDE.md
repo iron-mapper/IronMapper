@@ -163,6 +163,17 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   generated. No in-place overload and no in-place `…Core` for such a mapping (the plan's entry turns `InPlace` off); the
   private `MapInto{scope}` of the registration throws `MappingException`. No attribute in the destination type: domain
   types must not depend on IronMapper. Tests: `ConstructorMappingTests` (generator and runtime), `ConstructorMapperTests`.
+  **Factories** (profiles, `Analysis/FactoryAnalyzer.cs`): `ConstructWith(Delegate)` (an extension method in
+  `MappingExpressionExtensions`, like `ForCtorParam` and `ConstructUsing`) is read through the operations: the argument's
+  delegate creation targets an `IMethodReferenceOperation` (a static method, called with named arguments) or an
+  `IAnonymousFunctionOperation` (a lambda with typed parameters → private helper `ConstructWith{scope}` with its parameters
+  and body, `LambdaBodyRewriter.RewriteFactory`); anything else is IM0020. `ConstructorSelection.ForFactory` matches its
+  parameters (`ParameterResolver`, `ForCtorParam` before `ForMember`); `MappingDescriptor.Factory`
+  (`FactoryDescriptor`: Method, Lambda, ConstructUsing) with `UsesConstructor` = no in-place. After a factory: assignments
+  of the `set` properties (`var destination = …;`); a mapped `init` property is IM0021. `ConstructUsing` emits its
+  expression and matches nothing; the in-place overload ignores it (no in-place without a parameterless constructor).
+  `ForCtorParam` names that no parameter has: IM0019. Tests: `FactoryMappingTests` (generator and runtime), snapshot
+  `Factories`, `ConstructorMapperTests`.
 - **Unresolved types** (`typeof(Missing)`, `CreateMap<_, Missing>`, a converter type): the compiler reports them at the
   user's code; the mapping is skipped without a diagnostic of its own (`SymbolHelpers.ContainsErrorType`), so the
   generated code adds no errors. IM0003 only for a type that compiles but cannot be mapped (`typeof(Box<>)`, arrays).

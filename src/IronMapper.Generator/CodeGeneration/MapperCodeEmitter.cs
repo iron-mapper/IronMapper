@@ -162,6 +162,39 @@ internal static class MapperCodeEmitter
 
             sb.AppendLine("            return destination;");
         }
+        else if (descriptor.Factory is not null)
+        {
+            // ConstructWith/ConstructUsing, then the properties with a public set (an initializer needs `new`).
+            bool any = false;
+            foreach (var prop in descriptor.PropertyMappings)
+            {
+                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+                {
+                    continue;
+                }
+
+                if (!any)
+                {
+                    sb.Append("            var destination = ");
+                    EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
+                    sb.AppendLine(";");
+                    any = true;
+                }
+
+                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
+            }
+
+            if (any)
+            {
+                sb.AppendLine("            return destination;");
+            }
+            else
+            {
+                sb.Append("            return ");
+                EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
+                sb.AppendLine(";");
+            }
+        }
         else if (!descriptor.UsesConstructor)
         {
             sb.AppendLine($"            return new {destFullName}");
@@ -215,11 +248,17 @@ internal static class MapperCodeEmitter
         sb.AppendLine();
         if (descriptor.UsesConstructor)
         {
-            // Created by a constructor: no in-place update is generated until item 2.15 of the plan decides what it does
-            // with the values the constructor takes. IMapper.Map(source, destination) gets a clear exception.
+            // Created by a constructor with parameters or a factory: no in-place update is generated (item 2.15 of the
+            // plan: updating only the other properties would lose the values that only the constructor or the factory
+            // takes, silently). IMapper.Map(source, destination) gets a clear exception.
+            string how = descriptor.Factory switch
+            {
+                { Kind: FactoryKind.ConstructUsing } => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by ConstructUsing",
+                { } factory => $"{descriptor.DestTypeName} is created by {factory.Display}",
+                null => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by a constructor with parameters",
+            };
             string message = $"No in-place mapping from {descriptor.SourceTypeName} to {descriptor.DestTypeName} is generated: "
-                             + $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by a "
-                             + "constructor with parameters. Map to a new object instead.";
+                             + $"{how}. Map to a new object instead.";
             sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
             sb.AppendLine($"            => throw new global::IronMapper.Exceptions.MappingException(\"{message}\");");
         }
@@ -322,6 +361,30 @@ internal static class MapperCodeEmitter
 
             sb.AppendLine();
             EmitCollectionHelper(sb, prop, scope, plan);
+        }
+
+        // ------------------------------------------------------------------
+        // Private helper of the lambda of ConstructWith: its parameters (matched like those of a constructor) and body
+        // ------------------------------------------------------------------
+        if (descriptor.Factory is { Kind: FactoryKind.Lambda } lambda)
+        {
+            sb.AppendLine();
+            if (lambda.IsBlock)
+            {
+                sb.AppendLine($"        private static {destFullName} {FactoryHelperName(scope)}({lambda.Parameters})");
+                sb.AppendLine("        {");
+                foreach (string line in lambda.Code.Split('\n'))
+                {
+                    sb.AppendLine($"            {line.TrimEnd()}");
+                }
+
+                sb.AppendLine("        }");
+            }
+            else
+            {
+                sb.AppendLine($"        private static {destFullName} {FactoryHelperName(scope)}({lambda.Parameters})");
+                sb.AppendLine($"            => {lambda.Code};");
+            }
         }
 
         // ------------------------------------------------------------------
@@ -689,13 +752,27 @@ internal static class MapperCodeEmitter
     private static void EmitCreation(StringBuilder sb, MappingDescriptor descriptor, string destFullName,
         ImmutableArray<ValueTransformerDescriptor> transformers, string scope, MappingPlan plan, string indent)
     {
-        if (descriptor.ConstructorArguments.Length == 0)
+        // ConstructUsing: the expression as written. ConstructWith: the factory method, or the helper of its lambda.
+        string callee = descriptor.Factory switch
         {
-            sb.Append($"new {destFullName}()");
+            { Kind: FactoryKind.ConstructUsing } factory => factory.Code,
+            { Kind: FactoryKind.Method } factory => factory.Code,
+            { Kind: FactoryKind.Lambda } => FactoryHelperName(scope),
+            _ => $"new {destFullName}",
+        };
+        if (descriptor.Factory is { Kind: FactoryKind.ConstructUsing })
+        {
+            sb.Append(callee);
             return;
         }
 
-        sb.AppendLine($"new {destFullName}(");
+        if (descriptor.ConstructorArguments.Length == 0)
+        {
+            sb.Append($"{callee}()");
+            return;
+        }
+
+        sb.AppendLine($"{callee}(");
         for (int i = 0; i < descriptor.ConstructorArguments.Length; i++)
         {
             var argument = descriptor.ConstructorArguments[i];
@@ -779,6 +856,9 @@ internal static class MapperCodeEmitter
     /// <c>IMapper</c> calls. The helper scope makes it unique in the class, like the hook and collection helpers.
     /// </summary>
     private static string PrivateInPlaceName(string scope) => $"MapInto{scope}";
+
+    /// <summary>The private helper with the lambda of <c>ConstructWith</c>; the helper scope makes it unique in the class.</summary>
+    private static string FactoryHelperName(string scope) => $"ConstructWith{scope}";
 
     /// <summary>
     /// The private struct of a mapping that maps one element for <see cref="ListHelperName"/>/<see cref="ArrayHelperName"/>;

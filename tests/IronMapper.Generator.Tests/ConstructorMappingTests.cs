@@ -467,7 +467,7 @@ public class ConstructorMappingTests
         var im0017 = Assert.Single(Of("IM0017", diagnostics));
         Assert.Equal(DiagnosticSeverity.Error, im0017.Severity);
         Assert.Equal(
-            "Mapping from 'App.RangeRow' to 'App.Range' was not generated: the constructors 'Range(int, int)' and 'Range(long, long)' fit equally well (each maps 2 parameter(s) from the source). Remove or change one of the constructors, or create the object with ConvertUsing(s => new Range(...)) in a profile.",
+            "Mapping from 'App.RangeRow' to 'App.Range' was not generated: the constructors 'Range(int, int)' and 'Range(long, long)' fit equally well (each maps 2 parameter(s) from the source). Choose one in a profile with a lambda that calls it, such as ConstructWith((int from, int to) => new Range(from, to)), or remove or change one of the constructors.",
             im0017.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
         Assert.DoesNotContain(generated, s => s.Contains("MapToRange("));
     }
@@ -492,7 +492,7 @@ public class ConstructorMappingTests
         var im0009 = Assert.Single(Of("IM0009", diagnostics));
         Assert.Equal(DiagnosticSeverity.Error, im0009.Severity);
         Assert.Equal(
-            "Mapping to 'App.Project' was not generated: constructor parameter 'OwnerId' gets no value: 'ProjectRow' has no property named 'OwnerId' (names are compared ignoring case), and the parameter has no default value. Add the property to 'ProjectRow', or put [MapProperty(\"OwnerId\")] on the source property that holds the value.",
+            "Mapping to 'App.Project' was not generated: parameter 'OwnerId' of the constructor gets no value: 'ProjectRow' has no property named 'OwnerId' (names are compared ignoring case), and the parameter has no default value. Add the property to 'ProjectRow', or put [MapProperty(\"OwnerId\")] on the source property that holds the value.",
             im0009.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("OwnerId", source.Substring(im0009.Location.SourceSpan.Start, im0009.Location.SourceSpan.Length));
         // The extra source property Plan gives no IM0001.
@@ -524,7 +524,7 @@ public class ConstructorMappingTests
 
         AssertNoErrors(errors);
         var im0009 = Assert.Single(Of("IM0009", diagnostics));
-        Assert.Contains("constructor parameter 'Name' gets no value: it is ignored (Ignore() of 'Name' in MappingProfile 'App.ProjectProfile') and has no default value.",
+        Assert.Contains("parameter 'Name' of the constructor gets no value: it is ignored (Ignore() of 'Name' in MappingProfile 'App.ProjectProfile') and has no default value.",
             im0009.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
         Assert.StartsWith("CreateMap<ProjectRow, Project>()", source[im0009.Location.SourceSpan.Start..]);
     }
@@ -569,7 +569,7 @@ public class ConstructorMappingTests
 
         AssertNoErrors(errors);
         Assert.Empty(Of("IM0002", diagnostics));
-        Assert.Contains("constructor parameter 'Id' gets no value: 'ProjectRow.Id' is 'string', which cannot be assigned to 'System.Guid'.",
+        Assert.Contains("parameter 'Id' of the constructor gets no value: 'ProjectRow.Id' is 'string', which cannot be assigned to 'System.Guid'.",
             Assert.Single(Of("IM0009", diagnostics)).GetMessage(System.Globalization.CultureInfo.InvariantCulture));
     }
 

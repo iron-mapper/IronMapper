@@ -171,7 +171,7 @@ internal static class MappingPlanner
             string coreName = namesBySource[mapping.SourceFullName!].Contains(methodName + "Core")
                 ? methodName + "Core" + helperScope
                 : methodName + "Core";
-            // A destination created by a constructor has no in-place overload (item 2.15 of the plan): only the private
+            // A destination created by a constructor or a factory has no in-place overload (item 2.15 of the plan): only the private
             // MapInto for the IMapper registration, which throws.
             var overrides = mapping.UsesConstructor
                 ? new GeneratedMethodOverrides(inPlace: false, mapping.MethodOverrides.List, mapping.MethodOverrides.Array)

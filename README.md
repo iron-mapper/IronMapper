@@ -252,11 +252,12 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 
 ## Known limitations
 
-- **Destinations created by a constructor** (positional records, classes without a parameterless constructor; from
-  2.1.0, [#24](https://github.com/iron-mapper/IronMapper/issues/24)) get no in-place overload, and a constructor
-  cannot be chosen explicitly. A destination with only a private constructor and a static factory method is not
-  mapped yet (`IM0018`; use `ConvertUsing`). See
-  [Constructors and positional records](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md#constructors-and-positional-records).
+- **Destinations created by a constructor or a factory** (positional records, classes without a parameterless
+  constructor, `ConstructWith(D.Restore)` in a profile; from 2.1.0,
+  [#24](https://github.com/iron-mapper/IronMapper/issues/24)) get no in-place overload: updating only the other
+  properties would silently keep the old values of what only the constructor takes. See
+  [Constructors and positional records](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md#constructors-and-positional-records)
+  and [Factories](https://github.com/iron-mapper/IronMapper/blob/main/docs/advanced.md#factories-constructwith).
 - **No flattening by convention** ([#25](https://github.com/iron-mapper/IronMapper/issues/25)): `CustomerAddressCity` is not filled from `Customer.Address.City`. Use
   `MapFrom`.
 - **`IM0001` is off by default for profile mappings** ([#22](https://github.com/iron-mapper/IronMapper/issues/22)): an unmatched destination property in a `CreateMap`
