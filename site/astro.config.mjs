@@ -1,0 +1,73 @@
+// @ts-check
+import { defineConfig } from 'astro/config';
+import starlight from '@astrojs/starlight';
+import { project, githubUrl, blobUrl } from './project.config.mjs';
+
+// Sidebar entries use `slug`, which Starlight resolves per locale (`/configuration/` and `/ru/configuration/`)
+// and prefixes with `base` itself. The slugs are the file names in docs/ (see scripts/prepare.mjs).
+const sidebar = [
+  {
+    label: 'Start',
+    translations: { ru: 'Начало' },
+    items: [
+      { slug: 'getting-started', label: 'Getting started', translations: { ru: 'Начало работы' } },
+      { slug: 'migration-from-automapper', label: 'Migrating from AutoMapper', translations: { ru: 'Миграция с AutoMapper' } },
+    ],
+  },
+  {
+    label: 'Guide',
+    translations: { ru: 'Руководство' },
+    items: [
+      { slug: 'configuration', label: 'Configuration', translations: { ru: 'Настройка' } },
+      { slug: 'advanced', label: 'Advanced', translations: { ru: 'Продвинутые возможности' } },
+    ],
+  },
+  {
+    label: 'Diagnostics',
+    translations: { ru: 'Диагностики' },
+    items: [{ slug: 'diagnostics', label: 'All diagnostics', translations: { ru: 'Все диагностики' } }],
+  },
+  {
+    label: 'Releases',
+    translations: { ru: 'Релизы' },
+    items: [
+      { slug: 'upgrading-to-2.1', label: 'Upgrading to 2.1', translations: { ru: 'Обновление до 2.1' } },
+      { slug: 'upgrading-to-2.0', label: 'Upgrading to 2.0', translations: { ru: 'Обновление до 2.0' } },
+      { slug: 'changelog', label: 'Changelog' },
+      { slug: 'roadmap', label: 'Roadmap', translations: { ru: 'Планы' } },
+    ],
+  },
+];
+
+export default defineConfig({
+  site: project.site,
+  base: project.base,
+  trailingSlash: 'always',
+  integrations: [
+    starlight({
+      title: project.name,
+      description: project.tagline.en,
+      defaultLocale: 'root',
+      locales: {
+        root: { label: 'English', lang: 'en' },
+        ru: { label: 'Русский', lang: 'ru' },
+      },
+      social: [{ icon: 'github', label: 'GitHub', href: githubUrl }],
+      editLink: {
+        // Pages are generated from docs/*.md; prepare.mjs sets `editUrl` per page to the source file.
+        baseUrl: blobUrl('/'),
+      },
+      sidebar,
+      customCss: ['./src/styles/custom.css'],
+      lastUpdated: false,
+      credits: false,
+      // No analytics, no trackers, no third-party scripts: nothing is added to <head>.
+      head: [],
+      expressiveCode: {
+        // C# is the language of nearly every block; the themes follow the site's light/dark mode.
+        themes: ['github-dark', 'github-light'],
+        styleOverrides: { borderRadius: '0.4rem' },
+      },
+    }),
+  ],
+});

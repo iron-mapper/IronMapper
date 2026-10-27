@@ -1,0 +1,44 @@
+---
+title: IronMapper
+description: Маппер объектов для .NET времени компиляции. Roslyn source generator пишет код маппинга как обычный C# при сборке.
+template: splash
+hero:
+  tagline: Маппер объектов для .NET времени компиляции. Roslyn source generator пишет код маппинга как обычный C# при сборке. Бесплатно, MIT.
+  actions:
+    - text: Начать
+      link: ../../../docs/getting-started.ru.md
+      icon: right-arrow
+    - text: Миграция с AutoMapper
+      link: ../../../docs/migration-from-automapper.ru.md
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/iron-mapper/IronMapper
+      icon: external
+      variant: minimal
+---
+
+import { Content as QuickStart } from '@generated/quickstart.ru.md';
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+## Установка
+
+```bash
+dotnet add package IronMapper
+```
+
+## Быстрый старт
+
+`Program.cs` консольного приложения (`dotnet new console`):
+
+<QuickStart />
+
+Код маппинга для каждой пары типов генерируется в вашу сборку: extension-методы `MapTo*` с явными присваиваниями
+свойств и без рефлексии, так что маппинг можно прочитать и пройти отладчиком в IDE. Ошибки конфигурации
+сообщаются при сборке как [диагностики](../../../docs/diagnostics.ru.md) в вашем коде.
+
+<CardGrid>
+  <LinkCard title="Настройка" description="Атрибуты, профили, конвертеры, коллекции, IMapper и DI." href="../../../docs/configuration.ru.md" />
+  <LinkCard title="Продвинутые возможности" description="Вложенные объекты, конструкторы и record, фабрики, преобразования значений, NativeAOT." href="../../../docs/advanced.ru.md" />
+  <LinkCard title="Диагностики" description="Каждая диагностика IM: на что указывает, почему и как исправить." href="../../../docs/diagnostics.ru.md" />
+  <LinkCard title="Changelog" description="Что изменилось в каждом релизе (на английском)." href="../../../CHANGELOG.md" />
+</CardGrid>

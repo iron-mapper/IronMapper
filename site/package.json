@@ -1,0 +1,23 @@
+{
+  "name": "ironmapper-site",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare-content": "node scripts/prepare.mjs",
+    "dev": "npm run prepare-content && astro dev",
+    "build": "npm run prepare-content && astro build",
+    "preview": "astro preview",
+    "check-links": "node scripts/check-links.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.7",
+    "astro": "7.4.2",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "github-slugger": "2.0.0"
+  }
+}
