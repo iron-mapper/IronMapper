@@ -298,6 +298,220 @@ internal static class PropertyTypeCheck
             ? ImmutableArray.Create($"{SymbolHelpers.GetFullyQualifiedName(source)}->{SymbolHelpers.GetFullyQualifiedName(dest)}")
             : ElementPairKeys(source, dest);
 
+    /// <summary>
+    /// Diagnostic property of an IM0023 for the elements of a collection mapped by the mappings of their pairs: reported
+    /// only when the plan generates one of them (otherwise the property is not generated, and IM0002 says why).
+    /// </summary>
+    internal const string IfMappingForKey = "IfMappingFor";
+
+    /// <summary>
+    /// IM0023 for a value assigned as it is (<c>destination.X = source.X</c>, a constructor or factory argument): a
+    /// nullable reference type for a non-nullable destination (<c>string?</c> → <c>string</c>), or collection elements
+    /// that narrow the same way (<c>List&lt;string?&gt;</c> → <c>List&lt;string&gt;</c>). <paramref name="forgive"/>: the generated
+    /// code marks the value with <c>!</c> (also, without a diagnostic, for nested annotations that differ only by widening,
+    /// <c>List&lt;string&gt;</c> → <c>List&lt;string?&gt;</c>, which the compiler reports as <c>CS8619</c> for an invariant type).
+    /// Without nullable annotations (oblivious types) there is nothing to report. <paramref name="sourceAccess"/> is the value
+    /// in the hint: <c>s.Name</c>, <c>s.Inner.Code</c>.
+    /// </summary>
+    public static DiagnosticInfo? CheckNullableValue(ITypeSymbol sourceType, DestinationMember destProp, INamedTypeSymbol destSymbol,
+        string sourceDisplay, string sourceAccess, Origin origin, LocationInfo? location, out bool forgive)
+    {
+        forgive = false;
+        if (IsNullableReference(sourceType) && IsNonNullableReference(destProp.Type))
+        {
+            forgive = true;
+            return Nullable(destProp, destSymbol,
+                $"'{sourceDisplay}' is '{Display(sourceType)}' and the destination is '{Display(destProp.Type)}'. "
+                + NarrowingHint(destProp, sourceAccess, origin), location, Replaced(destProp, elements: false));
+        }
+
+        if (NarrowingElements(sourceType, destProp.Type) is { } elements)
+        {
+            forgive = true;
+            return Nullable(destProp, destSymbol,
+                $"the elements of '{sourceDisplay}' are '{Display(elements.source)}' and the elements of the destination are "
+                + $"'{Display(elements.dest)}'. " + ElementsHint(destProp, sourceAccess, origin), location, Replaced(destProp, elements: true));
+        }
+
+        forgive = ElementAnnotationsDiffer(sourceType, destProp.Type);
+        return null;
+    }
+
+    /// <summary>
+    /// IM0023 for the expression of <c>MapFrom</c>: it can be <see langword="null"/> (its flow state, so <c>s.X!</c> and
+    /// <c>s.X ?? ""</c> are not reported) and the destination is a non-nullable reference type, or its collection elements
+    /// narrow (not reported when the expression ends with <c>!</c>).
+    /// </summary>
+    public static DiagnosticInfo? CheckNullableMapFrom(ITypeSymbol? expressionType, bool maybeNull, bool suppressed,
+        DestinationMember destProp, INamedTypeSymbol destSymbol, LocationInfo? location, out bool forgive)
+    {
+        forgive = false;
+        if (expressionType is null || suppressed)
+        {
+            return null;
+        }
+
+        if (maybeNull && !expressionType.IsValueType && IsNonNullableReference(destProp.Type))
+        {
+            forgive = true;
+            return Nullable(destProp, destSymbol,
+                $"the MapFrom expression is '{Display(expressionType)}' and the destination is '{Display(destProp.Type)}'. Return a "
+                + "non-null value from it (s => s.X! or s.X ?? a default), or declare the destination nullable.", location, Replaced(destProp, elements: false));
+        }
+
+        if (NarrowingElements(expressionType, destProp.Type) is { } elements)
+        {
+            forgive = true;
+            return Nullable(destProp, destSymbol,
+                $"the elements of the MapFrom expression are '{Display(elements.source)}' and the elements of the destination are "
+                + $"'{Display(elements.dest)}'. Return non-null elements from it (or end it with ! if no element is null), or "
+                + "declare the destination elements nullable.", location, Replaced(destProp, elements: true));
+        }
+
+        forgive = ElementAnnotationsDiffer(expressionType, destProp.Type);
+        return null;
+    }
+
+    /// <summary>
+    /// IM0023 for a converter (<c>[MapConverter]</c>, <c>UseConverter&lt;T&gt;()</c>) whose <c>ITypeConverter&lt;TSource, …&gt;</c>
+    /// takes a non-nullable reference type, called with a nullable source property (<c>CS8604</c> in the generated file).
+    /// </summary>
+    public static DiagnosticInfo? CheckNullableConverter(ITypeSymbol sourceType, INamedTypeSymbol converter, DestinationMember destProp,
+        INamedTypeSymbol destSymbol, string sourceDisplay, LocationInfo? location)
+    {
+        if (!IsNullableReference(sourceType))
+        {
+            return null;
+        }
+
+        foreach (var iface in converter.AllInterfaces)
+        {
+            if (iface.OriginalDefinition.ToDisplayString() == "IronMapper.Interfaces.ITypeConverter<TSource, TDest>"
+                && IsNonNullableReference(iface.TypeArguments[0]))
+            {
+                string takes = Display(iface.TypeArguments[0]);
+                return Nullable(destProp, destSymbol,
+                    $"'{sourceDisplay}' is '{Display(sourceType)}' and the converter '{converter.ToDisplayString()}' takes '{takes}'. "
+                    + $"Implement ITypeConverter<{Display(sourceType)}, …> to handle null, or declare the source property non-nullable.",
+                    location, "CS8604");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// IM0023 for a value transformer of a profile (<c>AddTransformer&lt;string&gt;</c>) applied to a nullable source value:
+    /// the generated helper takes a non-nullable value (<c>CS8604</c> in the generated file).
+    /// </summary>
+    public static DiagnosticInfo Transformer(ITypeSymbol sourceType, DestinationMember destProp, INamedTypeSymbol destSymbol,
+        string sourceDisplay, LocationInfo? location)
+    {
+        string type = Display(sourceType.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+        return Nullable(destProp, destSymbol,
+            $"'{sourceDisplay}' is '{Display(sourceType)}' and the transformer of '{type}' (AddTransformer<{type}>) takes a "
+            + $"non-null '{type}': null is passed to it. Declare the source property non-nullable, or configure the member with "
+            + $"{destProp.ConfigureCall}, o => o.MapFrom(...)) (transformers do not apply to MapFrom).", location, "CS8604");
+    }
+
+    /// <summary>
+    /// IM0023 for the elements of a collection mapped one by one when they are a nullable reference type: the element
+    /// mapping (<c>item.MapToX()</c>) takes a non-nullable value and throws <see cref="System.ArgumentNullException"/> for a
+    /// <see langword="null"/> element, whatever the destination elements are (<c>CS8604</c> in the generated file up to now).
+    /// With <paramref name="pairs"/> (a mapping of this compilation), reported only when the plan generates one of them.
+    /// </summary>
+    public static DiagnosticInfo? CheckNullableElements(ITypeSymbol sourceElement, string elementMethod, DestinationMember destProp,
+        INamedTypeSymbol destSymbol, string sourceDisplay, ImmutableArray<string> pairs, LocationInfo? location)
+    {
+        if (!IsNullableReference(sourceElement))
+        {
+            return null;
+        }
+
+        string element = Display(sourceElement);
+        string takes = Display(sourceElement.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+        var diagnostic = Nullable(destProp, destSymbol,
+            $"the elements of '{sourceDisplay}' are '{element}', and the mapping of the elements ({elementMethod}) takes '{takes}': a "
+            + "null element throws ArgumentNullException. Declare the source elements non-nullable, or remove the null elements "
+            + "before the mapping.", location, "CS8604");
+        return pairs.IsDefaultOrEmpty ? diagnostic : diagnostic.WithProperty(IfMappingForKey, string.Join("|", pairs));
+    }
+
+    /// <summary>
+    /// Diagnostic property of IM0023: the compiler warning that the generated code would have reported instead
+    /// (<c>CS8601</c>, <c>CS8604</c>, <c>CS8619</c>, <c>CS8620</c>). IM0023 is not reported when the project suppresses that
+    /// warning (<c>NoWarn</c>): a build that was clean with it stays clean.
+    /// </summary>
+    internal const string ReplacesWarningKey = "ReplacesWarning";
+
+    // The compiler warning of a value that can be null for `destProp`: an assignment (CS8601) or an argument (CS8604), of
+    // the value or of its collection elements (CS8619, CS8620).
+    private static string Replaced(DestinationMember destProp, bool elements)
+        => destProp.Property is null ? (elements ? "CS8620" : "CS8604") : (elements ? "CS8619" : "CS8601");
+
+    private static DiagnosticInfo Nullable(DestinationMember destProp, INamedTypeSymbol destSymbol, string reason, LocationInfo? location,
+        string replaces)
+        => new DiagnosticInfo(DiagnosticDescriptors.NullableNarrowing,
+                $"{(destProp.Property is null ? "Parameter" : "Property")} '{destProp.Name}'", destSymbol.ToDisplayString(), reason)
+            .WithLocation(location)
+            .WithProperty(MappingAnalyzer.PropertyNameKey, destProp.Name)
+            .WithProperty(ReplacesWarningKey, replaces);
+
+    private static string NarrowingHint(DestinationMember destProp, string access, Origin origin) => origin switch
+    {
+        Origin.Attribute => $"Declare the destination nullable, or map it in a profile with {destProp.ConfigureCall}, "
+                            + $"o => o.MapFrom(s => {access}!)) or {access} ?? a default; [Ignore] leaves it out.",
+        Origin.Profile => $"Map a non-null value with {destProp.ConfigureCall}, o => o.MapFrom(s => {access}!)) or {access} ?? "
+                          + $"a default, declare the destination nullable, or ignore it with {destProp.ConfigureCall}, o => o.Ignore()).",
+        _ => $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap and use {destProp.ConfigureCall}, "
+             + $"o => o.MapFrom(s => {access}!)) there, or declare the destination nullable.",
+    };
+
+    private static string ElementsHint(DestinationMember destProp, string access, Origin origin) => origin switch
+    {
+        Origin.Attribute => "Declare the destination elements nullable, or map it in a profile with "
+                            + $"{destProp.ConfigureCall}, o => o.MapFrom(s => {access}!)) if no element is null; [Ignore] leaves it out.",
+        Origin.Profile => $"Map it with {destProp.ConfigureCall}, o => o.MapFrom(s => {access}!)) if no element is null, declare the "
+                          + $"destination elements nullable, or ignore it with {destProp.ConfigureCall}, o => o.Ignore()).",
+        _ => "The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap and use "
+             + $"{destProp.ConfigureCall}, o => o.MapFrom(s => {access}!)) there, or declare the destination elements nullable.",
+    };
+    // A reference type (or a type parameter) annotated nullable: `string?`. Not a Nullable<T> (that is a value type).
+    private static bool IsNullableReference(ITypeSymbol type)
+        => !type.IsValueType && type.NullableAnnotation == NullableAnnotation.Annotated;
+
+    // A reference type declared without `?` in a nullable context (oblivious types are neither).
+    private static bool IsNonNullableReference(ITypeSymbol type)
+        => !type.IsValueType && type.NullableAnnotation == NullableAnnotation.NotAnnotated;
+
+    // The element types (at any depth) where a collection of `source` narrows into one of `dest`.
+    private static (ITypeSymbol source, ITypeSymbol dest)? NarrowingElements(ITypeSymbol source, ITypeSymbol dest)
+    {
+        if (!SymbolHelpers.TryGetCollectionElementType(source, out var se) || se is null
+            || !SymbolHelpers.TryGetCollectionElementType(dest, out var de) || de is null
+            || source.SpecialType == SpecialType.System_String)
+        {
+            return null;
+        }
+
+        return IsNullableReference(se) && IsNonNullableReference(de) ? (se, de) : NarrowingElements(se, de);
+    }
+
+    // The annotations of the collection elements (at any depth) differ: an assignment of an invariant type warns (CS8619).
+    private static bool ElementAnnotationsDiffer(ITypeSymbol source, ITypeSymbol dest)
+    {
+        if (!SymbolHelpers.TryGetCollectionElementType(source, out var se) || se is null
+            || !SymbolHelpers.TryGetCollectionElementType(dest, out var de) || de is null
+            || source.SpecialType == SpecialType.System_String)
+        {
+            return false;
+        }
+
+        return (!se.IsValueType && !de.IsValueType && se.NullableAnnotation != NullableAnnotation.None
+                && de.NullableAnnotation != NullableAnnotation.None && se.NullableAnnotation != de.NullableAnnotation)
+               || ElementAnnotationsDiffer(se, de);
+    }
+
     private static string AddMappingHint(string source, string dest)
         => $"Add [MapTo(typeof({dest}))] to '{source}', [MapFrom(typeof({source}))] to '{dest}', or CreateMap<{source}, {dest}>() in a profile.";
 

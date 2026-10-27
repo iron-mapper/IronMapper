@@ -41,6 +41,16 @@ public class ModelEqualityTests
     }
 
     [Fact]
+    public void PropertyMappingDescriptor_DifferentNullForgiving_ReturnsFalse()
+    {
+        var a = new PropertyMappingDescriptor("Email", "Email", false, null, false, nullForgiving: true);
+        var b = new PropertyMappingDescriptor("Email", "Email", false, null, false);
+
+        Assert.False(a.Equals(b));
+        Assert.Equal(a.GetHashCode(), new PropertyMappingDescriptor("Email", "Email", false, null, false, nullForgiving: true).GetHashCode());
+    }
+
+    [Fact]
     public void PropertyMappingDescriptor_EqualToSelf_ReturnsTrue()
     {
         var p = Make("Id", "Id");

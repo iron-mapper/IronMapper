@@ -132,9 +132,32 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             }
 
             var trees = LocationInfo.TreesByPath(compilation);
+            var options = compilation.Options.SpecificDiagnosticOptions;
             foreach (var diagnostic in found)
             {
-                spc.ReportDiagnostic(diagnostic.ToDiagnostic(location => location.ToLocation(trees)));
+                // IM0023 replaces a compiler warning inside the generated file and takes its configuration for every file
+                // (NoWarn/WarningsAsErrors, a .globalconfig; an .editorconfig section does not reach the generated files):
+                // suppressed, it is not reported (a clean build stays clean, also with TreatWarningsAsErrors); an error
+                // (WarningsAsErrors=nullable), it is reported as an error (a failing build keeps failing).
+                DiagnosticSeverity? severity = null;
+                if (diagnostic.GetProperty(PropertyTypeCheck.ReplacesWarningKey) is { } replaced)
+                {
+                    var report = options.TryGetValue(replaced, out var specific) ? specific
+                        : compilation.Options.SyntaxTreeOptionsProvider is { } provider
+                          && provider.TryGetGlobalDiagnosticValue(replaced, default, out var global) ? global
+                        : ReportDiagnostic.Default;
+                    if (report == ReportDiagnostic.Suppress)
+                    {
+                        continue;
+                    }
+
+                    if (report == ReportDiagnostic.Error)
+                    {
+                        severity = DiagnosticSeverity.Error;
+                    }
+                }
+
+                spc.ReportDiagnostic(diagnostic.ToDiagnostic(location => location.ToLocation(trees), severity));
             }
         });
 
@@ -232,6 +255,12 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                     // same condition skips the property in the generated code, MapperCodeEmitter.IsMappingMissing).
                     if (diagnostic.GetProperty(PropertyTypeCheck.MissingElementPairsKey) is { } pairs
                         && plan.GeneratesAny(pairs.Split('|')))
+                    {
+                        continue;
+                    }
+                    // IM0023 of nullable collection elements: only when their mapping is generated (otherwise IM0002 says why).
+                    if (diagnostic.GetProperty(PropertyTypeCheck.IfMappingForKey) is { } mapped
+                        && !plan.GeneratesAny(mapped.Split('|')))
                     {
                         continue;
                     }

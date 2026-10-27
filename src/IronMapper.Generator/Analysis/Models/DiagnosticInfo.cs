@@ -82,8 +82,10 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
     /// <summary>
     /// Creates the diagnostic to report. <paramref name="resolve"/> turns a <see cref="LocationInfo"/> into the location
     /// in the current compilation (see <see cref="LocationInfo.ToLocation(System.Collections.Generic.IReadOnlyDictionary{string, SyntaxTree?})"/>).
+    /// <paramref name="effectiveSeverity"/> replaces the default severity of the descriptor (the compilation options of
+    /// the ID still apply over it).
     /// </summary>
-    public Diagnostic ToDiagnostic(Func<LocationInfo, Location>? resolve = null)
+    public Diagnostic ToDiagnostic(Func<LocationInfo, Location>? resolve = null, DiagnosticSeverity? effectiveSeverity = null)
     {
         resolve ??= static location => location.ToLocation();
 
@@ -111,8 +113,10 @@ internal readonly struct DiagnosticInfo : IEquatable<DiagnosticInfo>
             properties = builder.ToImmutable();
         }
 
-        return Diagnostic.Create(Descriptor, Location is { } at ? resolve(at) : Microsoft.CodeAnalysis.Location.None, additional,
-            properties, args);
+        var where = Location is { } at ? resolve(at) : Microsoft.CodeAnalysis.Location.None;
+        return effectiveSeverity is { } severity
+            ? Diagnostic.Create(Descriptor, where, severity, additional, properties, args)
+            : Diagnostic.Create(Descriptor, where, additional, properties, args);
     }
 
     /// <inheritdoc/>

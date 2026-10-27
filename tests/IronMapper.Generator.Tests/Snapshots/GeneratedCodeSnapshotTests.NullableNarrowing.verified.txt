@@ -1,0 +1,88 @@
+﻿{
+  Diagnostics: [
+    {
+      Location: /*
+        CreateMap<Line, LineDto>();
+        CreateMap<ContactRow, Contact>();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        CreateMap<ContactRow, ContactCard>();
+*/
+ : (30,8)-(30,40),
+      Message: Property 'Email' of 'App.Contact' can receive null: 'ContactRow.Email' is 'string?' and the destination is 'string'. Map a non-null value with ForMember(d => d.Email, o => o.MapFrom(s => s.Email!)) or s.Email ?? a default, declare the destination nullable, or ignore it with ForMember(d => d.Email, o => o.Ignore()).,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0023,
+        Title: Nullable value mapped to a non-nullable member,
+        Description: The source value is declared nullable, and the generated code passes it where null is not expected. The value is mapped as it is (null at run time stays null, or throws where the generated call rejects it), as in 2.0.0, where the compiler warned inside the generated file. Map a non-null value (MapFrom(s => s.X!) or s.X ?? a default), declare the destination nullable, or ignore the member. Not reported when nullable annotations are disabled.,
+        MessageFormat: {0} of '{1}' can receive null: {2},
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: /*
+        CreateMap<Line, LineDto>();
+        CreateMap<ContactRow, Contact>();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        CreateMap<ContactRow, ContactCard>();
+*/
+ : (30,8)-(30,40),
+      Message: Property 'Tags' of 'App.Contact' can receive null: the elements of 'ContactRow.Tags' are 'string?' and the elements of the destination are 'string'. Map it with ForMember(d => d.Tags, o => o.MapFrom(s => s.Tags!)) if no element is null, declare the destination elements nullable, or ignore it with ForMember(d => d.Tags, o => o.Ignore()).,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0023,
+        Title: Nullable value mapped to a non-nullable member,
+        Description: The source value is declared nullable, and the generated code passes it where null is not expected. The value is mapped as it is (null at run time stays null, or throws where the generated call rejects it), as in 2.0.0, where the compiler warned inside the generated file. Map a non-null value (MapFrom(s => s.X!) or s.X ?? a default), declare the destination nullable, or ignore the member. Not reported when nullable annotations are disabled.,
+        MessageFormat: {0} of '{1}' can receive null: {2},
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: /*
+        CreateMap<Line, LineDto>();
+        CreateMap<ContactRow, Contact>();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        CreateMap<ContactRow, ContactCard>();
+*/
+ : (30,8)-(30,40),
+      Message: Property 'Lines' of 'App.Contact' can receive null: the elements of 'ContactRow.Lines' are 'App.Line?', and the mapping of the elements (MapToLineDto) takes 'App.Line': a null element throws ArgumentNullException. Declare the source elements non-nullable, or remove the null elements before the mapping.,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0023,
+        Title: Nullable value mapped to a non-nullable member,
+        Description: The source value is declared nullable, and the generated code passes it where null is not expected. The value is mapped as it is (null at run time stays null, or throws where the generated call rejects it), as in 2.0.0, where the compiler warned inside the generated file. Map a non-null value (MapFrom(s => s.X!) or s.X ?? a default), declare the destination nullable, or ignore the member. Not reported when nullable annotations are disabled.,
+        MessageFormat: {0} of '{1}' can receive null: {2},
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    },
+    {
+      Location: /*
+        CreateMap<ContactRow, Contact>();
+        CreateMap<ContactRow, ContactCard>();
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    }
+*/
+ : (31,8)-(31,44),
+      Message: Parameter 'Email' of 'App.ContactCard' can receive null: 'ContactRow.Email' is 'string?' and the destination is 'string'. Map a non-null value with ForMember(d => d.Email, o => o.MapFrom(s => s.Email!)) or s.Email ?? a default, declare the destination nullable, or ignore it with ForMember(d => d.Email, o => o.Ignore()).,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0023,
+        Title: Nullable value mapped to a non-nullable member,
+        Description: The source value is declared nullable, and the generated code passes it where null is not expected. The value is mapped as it is (null at run time stays null, or throws where the generated call rejects it), as in 2.0.0, where the compiler warned inside the generated file. Map a non-null value (MapFrom(s => s.X!) or s.X ?? a default), declare the destination nullable, or ignore the member. Not reported when nullable annotations are disabled.,
+        MessageFormat: {0} of '{1}' can receive null: {2},
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

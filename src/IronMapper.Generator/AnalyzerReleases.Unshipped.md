@@ -24,3 +24,4 @@ IM0019 | IronMapper | Error | UnknownConstructorParameter
 IM0020 | IronMapper | Error | InvalidFactory
 IM0021 | IronMapper | Warning | InitPropertyAfterFactory
 IM0022 | IronMapper | Error | InvalidConverter
+IM0023 | IronMapper | Warning | NullableNarrowing

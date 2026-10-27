@@ -150,6 +150,16 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// </summary>
     public bool IsValueConversion { get; }
 
+    /// <summary>
+    /// The value can be <see langword="null"/> where the generated code needs a non-nullable one, and IM0023 says so
+    /// (<see cref="PropertyTypeCheck.CheckNullableValue"/>): the generated code marks it with <c>!</c>
+    /// (<c>source.Name!</c>, <c>(lambda)!</c>, the element of a collection helper <c>item!</c>), so the compiler reports no
+    /// <c>CS8601</c>/<c>CS8604</c>/<c>CS8619</c> inside the generated file. Also set without a diagnostic for a difference
+    /// of nested annotations that cannot put <see langword="null"/> into a non-nullable slot (<c>List&lt;string&gt;</c> →
+    /// <c>List&lt;string?&gt;</c>).
+    /// </summary>
+    public bool NullForgiving { get; }
+
     /// <summary>Initialises a new <see cref="PropertyMappingDescriptor"/>.</summary>
     /// <param name="sourcePropertyName">Name of the property to read on the source object.</param>
     /// <param name="destPropertyName">Name of the property to write on the destination object.</param>
@@ -164,6 +174,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     /// <param name="converterIsCached">When <see langword="true"/> the generated code reuses one instance of <paramref name="converterType"/>.</param>
     /// <param name="mappingPairs">See <see cref="MappingPairs"/>.</param>
     /// <param name="nested">The nested object mapping, or <see langword="null"/>.</param>
+    /// <param name="nullForgiving">See <see cref="NullForgiving"/>.</param>
     public PropertyMappingDescriptor(
         string sourcePropertyName,
         string destPropertyName,
@@ -177,8 +188,10 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         CollectionMapping? collection = null,
         bool converterIsCached = false,
         EquatableArray<string> mappingPairs = default,
-        NestedObjectMapping? nested = null)
+        NestedObjectMapping? nested = null,
+        bool nullForgiving = false)
     {
+        NullForgiving = nullForgiving;
         MappingPairs = mappingPairs;
         NestedMapMethod = nested?.Method;
         NullHandling = nested?.NullHandling;
@@ -241,7 +254,8 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && NestedSourceTypeFqn == other.NestedSourceTypeFqn
             && LiftedPairs.Equals(other.LiftedPairs)
             && NestedResultCast == other.NestedResultCast
-            && IsValueConversion == other.IsValueConversion;
+            && IsValueConversion == other.IsValueConversion
+            && NullForgiving == other.NullForgiving;
     }
 
     /// <inheritdoc/>
@@ -275,6 +289,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + LiftedPairs.GetHashCode();
         hash = hash * 31 + (NestedResultCast?.GetHashCode() ?? 0);
         hash = hash * 31 + IsValueConversion.GetHashCode();
+        hash = hash * 31 + NullForgiving.GetHashCode();
         return hash;
     }
 }

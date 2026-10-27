@@ -57,6 +57,21 @@
   build that compiles with 2.0.0 changes. A constructor that needs such a conversion is chosen only when no other one
   can be called. An exception of the converter reaches the caller as it is. See
   [Value conversions](docs/advanced.md#value-conversions-pair-mappings).
+- **Diagnostic `IM0023` (warning): a nullable value for a non-nullable member**
+  ([#54](https://github.com/iron-mapper/IronMapper/issues/54)). `string?` → `string` (and any `T?` → `T` of a reference
+  type) for a property, a constructor or factory parameter, the expression of `MapFrom`, collection elements assigned as
+  is, a converter or a transformer that takes a non-nullable value, and the elements of a collection mapped one by one
+  (`List<Line?>` → `List<LineDto>`/`List<LineDto?>`: a `null` element throws `ArgumentNullException`, as in 2.0.0) is
+  reported at your mapping, naming the member, the types and the fix (`MapFrom(s => s.X!)`, `ForCtorParam` for a
+  parameter without a property). Up to 2.0.0 the compiler reported these places inside the generated file (`CS8601`,
+  `CS8604`); the generated code now marks exactly that value with `!`, only together with `IM0023`, so the generated file
+  has no nullable warning. The mapped values do not change. Builds keep their result (checked against the 2.0.0
+  package): `TreatWarningsAsErrors` fails as before (now with `IM0023`), `<Nullable>disable</Nullable>` gets no warning,
+  and `IM0023` takes the project-wide configuration of the compiler warning it replaces: suppressed (`NoWarn`, a
+  `.globalconfig`), it is not reported; an error (`<WarningsAsErrors>nullable</WarningsAsErrors>`), it is an error. The one exception is `WarningsNotAsErrors=CS8601;CS8604` with `TreatWarningsAsErrors` (add `IM0023` there), see
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#3-nullable-warnings-move-from-the-generated-file-to-im0023). A collection
+  whose elements differ only by `?` (`List<string?>` → `List<string>`) is assigned as is (it was `IM0002`). See
+  [IM0023](docs/diagnostics.md#im0023--nullable-value-mapped-to-a-non-nullable-member).
 - **`ReverseMap(converter)`** declares both directions of a value pair in one line:
   `CreateMap<Guid, UserId>().ConvertUsing(UserId.From).ReverseMap(v => v.Value)` is the same as a second
   `CreateMap<UserId, Guid>().ConvertUsing(v => v.Value)` (a lambda or a static method group; `Nullable<T>` is lifted in

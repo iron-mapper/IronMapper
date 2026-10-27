@@ -2,7 +2,7 @@
 
 > 🌐 **[English version](diagnostics.md)**
 
-Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0022`. Они объявлены в
+Source generator IronMapper выдаёт диагностики с идентификаторами `IM0001`–`IM0023`. Они объявлены в
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Текущее состояние** (`main`, не выпущенная 2.1.0):
@@ -31,6 +31,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0020 | Error | Фабрику `ConstructWith` нельзя использовать | Да — профили (с 2.1.0) |
 | IM0021 | Warning | init-свойство нельзя задать после фабрики | Да — профили (с 2.1.0) |
 | IM0022 | Error | Converter `ConvertUsing` нельзя использовать | Да — профили (с 2.1.0) |
+| IM0023 | Warning | nullable-значение для ненулевого члена | Да — атрибуты и профили (с 2.1.0) |
 
 Каждая диагностика указывает на место в вашем коде (**Куда указывает** ниже): IDE подчёркивает его, в выводе сборки
 видны файл и строка. Уровень задаётся стандартно, в `.editorconfig` (или `.globalconfig`):
@@ -575,3 +576,48 @@ destination намеренно не предлагается: доменные �
 
 **Как исправить:** передайте public или internal статический метод либо лямбду, которая не использует локальные
 переменные и экземпляр профиля: `ConvertUsing(v => Converters.ToUserId(v))`.
+
+---
+
+## IM0023 — nullable-значение для ненулевого члена
+
+**Уровень:** Warning (с 2.1.0; issue [#54](https://github.com/iron-mapper/IronMapper/issues/54))
+
+**Куда указывает:** как `IM0002`: на свойство destination (маппинг через атрибуты), на вызов `CreateMap` или
+`ReverseMap()` (профили) или на выражение `MapFrom`.
+
+**Сообщение:** `{0} of '{1}' can receive null: {2}` — `{0}` это `Property 'Email'` или `Parameter 'email'`; `{2}` называет
+source и destination и что написать, например:
+
+- `'UserRow.Email' is 'string?' and the destination is 'string'. Map a non-null value with ForMember(d => d.Email, o => o.MapFrom(s => s.Email!)) or s.Email ?? a default, declare the destination nullable, or ignore it with ForMember(d => d.Email, o => o.Ignore()).`
+- `the elements of 'Order.Lines' are 'App.Line?', and the mapping of the elements (MapToLineDto) takes 'App.Line': a null element throws ArgumentNullException. …`
+
+**Причина:** значение, объявленное допускающим `null` (ссылочный тип с `?`), попадает туда, где сгенерированному коду
+нужно ненулевое:
+
+- ненулевое свойство destination или параметр конструктора/фабрики (`string?` → `string`); для параметра без
+  одноимённого свойства подсказка — `ForCtorParam("name", …)`;
+- элементы коллекции, которые сужаются так же и присваиваются как есть (`List<string?>` → `List<string>`; до сих пор —
+  `IM0002`);
+- выражение `MapFrom` (`MapFrom(s => s.Email)`; `s.Email!` и `s.Email ?? ""` не сообщаются);
+- converter, чей `ITypeConverter<string, …>` принимает ненулевое значение, или трансформер профиля
+  (`AddTransformer<string>`), применённый к nullable-свойству;
+- элементы коллекции, которые маппятся по одному (`List<Line?>` → `List<LineDto>` или `List<LineDto?>`): маппинг
+  элемента принимает ненулевое значение и для `null`-элемента бросает `ArgumentNullException`, как описано в 2.0.0.
+
+Не выдаётся, если в проекте nullable-аннотации выключены (типы без аннотаций: сужения нет), и для значения, которое
+маппится как вложенный объект или картой пары (там для nullable source и ненулевого destination — `IM0002`).
+
+**Поведение:** значение маппится как раньше: `null` попадает в ненулевой член, `null`-элемент бросает исключение. До
+2.0.0 включительно компилятор сообщал о том же месте внутри сгенерированного файла (`CS8601` для присваивания, `CS8604`
+для аргумента, `CS8619`/`CS8620` для элементов коллекции), где его нельзя было исправить или подавить для одной карты.
+Теперь сгенерированный код помечает ровно это значение `!` (только вместе с этим предупреждением; молча генератор `!`
+не добавляет), поэтому в сгенерированном файле предупреждений nullable нет, а единственное предупреждение — в вашем
+коде. IM0023 берёт настройку заменяемого предупреждения компилятора, если она
+задана для всех файлов (`NoWarn`, `WarningsAsErrors`, `.globalconfig`): подавлено (`<NoWarn>CS8601</NoWarn>`) — не
+выдаётся, ошибка (`<WarningsAsErrors>nullable</WarningsAsErrors>`) — выдаётся как ошибка. Результат сборки не меняется.
+
+**Как исправить:** передайте ненулевое значение (`ForMember(d => d.Email, o => o.MapFrom(s => s.Email!))`, если оно
+никогда не `null`, или `s.Email ?? ""`), объявите destination nullable или проигнорируйте член. Уровень задаётся
+стандартно: `dotnet_diagnostic.IM0023.severity` в `.editorconfig`, `#pragma warning disable IM0023` вокруг строки
+`CreateMap`, `<NoWarn>`.

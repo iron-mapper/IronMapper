@@ -281,15 +281,32 @@ internal static class MappingAnalyzer
             // take is not generated (as if ignored), instead of a CS0029/CS0266/CS1061 in the generated file.
             var mappingPairs = default(EquatableArray<string>);
             NestedObjectMapping? nested = null;
+            bool forgive = false;
+            string sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
+            // IM0023: a nullable source property for a converter that takes a non-nullable value.
+            if (!isIgnored && converter is not null && GetConverterType(sourceProp) is { } converterType
+                && PropertyTypeCheck.CheckNullableConverter(sourceProp.Type, converterType, target, destSymbol, sourceDisplay, location)
+                    is { } nullableConverter)
+            {
+                into.Add(nullableConverter);
+                forgive = true;
+            }
+
             if (!isIgnored && converter is null)
             {
-                string sourceDisplay = $"{sourceSymbol.Name}.{sourceProp.Name}";
                 if (collection is not null)
                 {
                     if (CheckCollection(compilation, collection, sourceProp, target, sourceDisplay, destSymbol,
                             PropertyTypeCheck.Origin.Attribute, location, out mappingPairs) is { } missing)
                     {
                         into.Add(missing);
+                    }
+
+                    if (CheckNullableElements(collection, sourceProp, target, destSymbol, sourceDisplay, mappingPairs, location)
+                        is { } nullableElements)
+                    {
+                        into.Add(nullableElements);
+                        forgive = true;
                     }
                 }
                 else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, sourceProp.Type, target.Type,
@@ -311,6 +328,12 @@ internal static class MappingAnalyzer
                     isIgnored = true;
                     unusable = incompatible.MessageArgs[2];
                 }
+                // IM0023: assigned as it is, a value that can be null for a non-nullable member.
+                else if (PropertyTypeCheck.CheckNullableValue(sourceProp.Type, target, destSymbol, sourceDisplay, $"s.{sourceProp.Name}",
+                             PropertyTypeCheck.Origin.Attribute, location, out forgive) is { } narrowing)
+                {
+                    into.Add(narrowing);
+                }
             }
 
             return new PropertyMappingDescriptor(
@@ -324,7 +347,8 @@ internal static class MappingAnalyzer
                 collection: collection,
                 converterIsCached: converter?.IsCached ?? false,
                 mappingPairs: mappingPairs,
-                nested: nested is { Skipped: false } ? nested : null);
+                nested: nested is { Skipped: false } ? nested : null,
+                nullForgiving: forgive);
         }
 
         // A destination without an accessible parameterless constructor is created by a constructor (issue #24): its
@@ -539,6 +563,26 @@ internal static class MappingAnalyzer
         }
         return null;
     }
+
+    /// <summary>The converter type of <c>[MapConverter]</c> on <paramref name="prop"/>, or <see langword="null"/>.</summary>
+    private static INamedTypeSymbol? GetConverterType(IPropertySymbol prop)
+        => prop.GetAttributes()
+            .Where(a => a.AttributeClass?.ToDisplayString() == MapConverterAttributeFqn && a.ConstructorArguments.Length > 0)
+            .Select(a => a.ConstructorArguments[0].Value as INamedTypeSymbol)
+            .FirstOrDefault(t => t is not null);
+
+    /// <summary>
+    /// IM0023 of a collection property mapped element by element whose source elements are a nullable reference type
+    /// (<see cref="PropertyTypeCheck.CheckNullableElements"/>); reported only when one of <paramref name="mappingPairs"/> is
+    /// generated (or a referenced assembly maps the elements).
+    /// </summary>
+    internal static DiagnosticInfo? CheckNullableElements(CollectionMapping collection, IPropertySymbol sourceProp,
+        DestinationMember destProp, INamedTypeSymbol destSymbol, string sourceDisplay, EquatableArray<string> mappingPairs,
+        LocationInfo? location)
+        => SymbolHelpers.TryGetCollectionElementType(sourceProp.Type, out var sourceElement) && sourceElement is not null
+            ? PropertyTypeCheck.CheckNullableElements(sourceElement, collection.ElementMethod, destProp, destSymbol, sourceDisplay,
+                mappingPairs.AsImmutableArray(), location)
+            : null;
 
     /// <summary><c>[MapConverter]</c> on <paramref name="prop"/>, without checking the converter (constructors being compared).</summary>
     private static bool HasConverter(IPropertySymbol prop)

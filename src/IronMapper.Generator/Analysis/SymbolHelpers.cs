@@ -404,8 +404,8 @@ internal static class SymbolHelpers
 
     /// <summary>
     /// When both <paramref name="sourcePropType"/> and <paramref name="destPropType"/> are collections whose element
-    /// types differ, describes the element mapping; otherwise <see langword="null"/> (same element types: the
-    /// collection is assigned as is).
+    /// types differ, describes the element mapping; otherwise <see langword="null"/> (same element types, also when only
+    /// their nullable annotations differ: the collection is assigned as is).
     /// </summary>
     public static CollectionMapping? DetectCollectionMapping(ITypeSymbol sourcePropType, ITypeSymbol destPropType)
     {
@@ -419,7 +419,10 @@ internal static class SymbolHelpers
             return null;
         }
 
-        if (srcElem.ToDisplayString() == dstElem.ToDisplayString())
+        // Element types that differ only by nullable annotations (string? and string) are the same type: the collection is
+        // assigned as is (IM0023 when the elements narrow), not mapped element by element.
+        if (srcElem.ToDisplayString() == dstElem.ToDisplayString()
+            || GetFullyQualifiedName(srcElem) == GetFullyQualifiedName(dstElem))
         {
             return null;
         }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 using IronMapper.Generator.Analysis.Models;
 using IronMapper.Generator.Diagnostics;
@@ -535,9 +536,12 @@ internal static class ProfileAnalyzer
             string? body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
             // The type of the expression the lambda returns (IM0002 when it cannot be assigned to the property).
             var expression = (mapFromArg as LambdaExpressionSyntax)?.ExpressionBody;
+            var typeInfo = expression is null ? default : model.GetTypeInfo(expression, ct);
             var mapFrom = expression is null
                 ? (MapFromType?)null
-                : new MapFromType(model.GetTypeInfo(expression, ct).Type, LocationInfo.From(expression));
+                : new MapFromType(typeInfo.Type, LocationInfo.From(expression),
+                    maybeNull: typeInfo.Nullability.FlowState == NullableFlowState.MaybeNull,
+                    suppressed: expression.IsKind(SyntaxKind.SuppressNullableWarningExpression));
             configs.Add((destPropName, body, false, null, mapFrom));
         }
     }
@@ -568,15 +572,23 @@ internal static class ProfileAnalyzer
     /// <summary>The type of a <c>MapFrom</c> expression and where it is written (IM0002).</summary>
     private readonly struct MapFromType
     {
-        public MapFromType(ITypeSymbol? type, LocationInfo? location)
+        public MapFromType(ITypeSymbol? type, LocationInfo? location, bool maybeNull, bool suppressed)
         {
             Type = type;
             Location = location;
+            MaybeNull = maybeNull;
+            Suppressed = suppressed;
         }
 
         public ITypeSymbol? Type { get; }
 
         public LocationInfo? Location { get; }
+
+        /// <summary>The expression can be <see langword="null"/> (its nullable flow state).</summary>
+        public bool MaybeNull { get; }
+
+        /// <summary>The expression ends with <c>!</c>: its nullable warnings are suppressed by the user.</summary>
+        public bool Suppressed { get; }
     }
 
     /// <summary>A converter type of <c>UseConverter&lt;T&gt;()</c>/<c>ConvertUsing&lt;T&gt;()</c> and where it is written.</summary>
@@ -876,6 +888,22 @@ internal static class ProfileAnalyzer
                     unusable = wrong.MessageArgs[2];
                 }
 
+                // IM0023: a value that can be null for a non-nullable member (the MapFrom expression, the source of a converter).
+                bool forgive = false;
+                if (!cfg.isIgnore && !skipped && converter is null && cfg.lambdaBody is not null && cfg.mapFrom is { } checkedMapFrom
+                    && PropertyTypeCheck.CheckNullableMapFrom(checkedMapFrom.Type, checkedMapFrom.MaybeNull, checkedMapFrom.Suppressed,
+                        target, destSymbol, checkedMapFrom.Location ?? origin, out forgive) is { } nullableMapFrom)
+                {
+                    into.Add(nullableMapFrom);
+                }
+                else if (converter is not null && sourcePropsByName.TryGetValue(target.Name, out var converted)
+                         && PropertyTypeCheck.CheckNullableConverter(converted.Type, cfg.converter!.Value.Type, target, destSymbol,
+                             $"{sourceSymbol.Name}.{converted.Name}", origin) is { } nullableConverter)
+                {
+                    into.Add(nullableConverter);
+                    forgive = true;
+                }
+
                 // UseConverter reads the source property of the same name; a parameter takes its name from the source.
                 string sourceName = isParameter && sourcePropsByName.TryGetValue(target.Name, out var named) ? named.Name : target.Name;
                 return new PropertyMappingDescriptor(
@@ -886,7 +914,8 @@ internal static class ProfileAnalyzer
                     needsNullCheck: false,
                     lambdaBody: cfg.lambdaBody,
                     isInitOnly: isInitOnly,
-                    converterIsCached: converter?.IsCached ?? false);
+                    converterIsCached: converter?.IsCached ?? false,
+                    nullForgiving: forgive);
             }
             // Priority 2: direct name-match.
             else if (sourcePropsByName.TryGetValue(target.Name, out var namedProp))
@@ -897,12 +926,20 @@ internal static class ProfileAnalyzer
                 var mappingPairs = default(EquatableArray<string>);
                 NestedObjectMapping? nested = null;
                 string sourceDisplay = $"{sourceSymbol.Name}.{namedProp.Name}";
+                bool forgive = false;
                 if (collection is not null)
                 {
                     if (MappingAnalyzer.CheckCollection(compilation, collection, namedProp, target, sourceDisplay, destSymbol,
                             checkOrigin, origin, out mappingPairs) is { } missing)
                     {
                         into.Add(missing);
+                    }
+
+                    if (MappingAnalyzer.CheckNullableElements(collection, namedProp, target, destSymbol, sourceDisplay, mappingPairs,
+                            origin) is { } nullableElements)
+                    {
+                        into.Add(nullableElements);
+                        forgive = true;
                     }
                 }
                 else if ((nested = PropertyTypeCheck.CheckNestedObject(compilation, namedProp.Type, target.Type, sourceDisplay,
@@ -924,6 +961,11 @@ internal static class ProfileAnalyzer
                     skipped = true;
                     unusable = incompatible.MessageArgs[2];
                 }
+                // IM0023: assigned as it is, a value that can be null for a non-nullable member, or a transformer of the type.
+                else if (CheckNullableAssignment(namedProp.Type, typeFqn, target, sourceDisplay, $"s.{namedProp.Name}", into))
+                {
+                    forgive = true;
+                }
 
                 return new PropertyMappingDescriptor(
                     sourcePropertyName: namedProp.Name,
@@ -936,7 +978,8 @@ internal static class ProfileAnalyzer
                     sourcePropertyTypeFqn: typeFqn,
                     collection: collection,
                     mappingPairs: mappingPairs,
-                    nested: nested is { Skipped: false } ? nested : null);
+                    nested: nested is { Skipped: false } ? nested : null,
+                    nullForgiving: forgive);
             }
             // Priority 3: IncludeMembers flattening.
             else if (includedResolution.TryGetValue(target.Name, out var included))
@@ -949,6 +992,8 @@ internal static class ProfileAnalyzer
                     unusable = incompatible.Value.MessageArgs[2];
                 }
 
+                bool forgive = incompatible is null && CheckNullableAssignment(included.property.Type, included.typeFqn, target,
+                    included.display, "s." + included.display.Substring(included.display.IndexOf('.') + 1), into);
                 return new PropertyMappingDescriptor(
                     sourcePropertyName: target.Name,
                     destPropertyName: target.Name,
@@ -957,10 +1002,33 @@ internal static class ProfileAnalyzer
                     needsNullCheck: false,
                     lambdaBody: included.lambdaBody,
                     isInitOnly: isInitOnly,
-                    includedMemberTypeFqn: included.typeFqn);
+                    includedMemberTypeFqn: included.typeFqn,
+                    nullForgiving: forgive);
             }
 
             return null;
+        }
+
+        // IM0023 for a value assigned as it is (a property or an argument): narrowing to the member, or a transformer of
+        // the source type that takes a non-nullable value. True when the generated code marks the value with `!`.
+        bool CheckNullableAssignment(ITypeSymbol sourceType, string typeFqn, DestinationMember target, string sourceDisplay,
+            string sourceAccess, ImmutableArray<DiagnosticInfo>.Builder into)
+        {
+            if (PropertyTypeCheck.CheckNullableValue(sourceType, target, destSymbol, sourceDisplay, sourceAccess, checkOrigin, origin,
+                    out bool forgive) is { } narrowing)
+            {
+                into.Add(narrowing);
+                return true;
+            }
+
+            if (sourceType is { IsValueType: false, NullableAnnotation: NullableAnnotation.Annotated }
+                && transformers.Any(t => t.FullyQualifiedTypeName == typeFqn))
+            {
+                into.Add(PropertyTypeCheck.Transformer(sourceType, target, destSymbol, sourceDisplay, origin));
+                return true;
+            }
+
+            return forgive;
         }
 
         // A destination without an accessible parameterless constructor is created by a constructor (issue #24): a

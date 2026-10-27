@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0022`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0023`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 2.1.0):
@@ -31,6 +31,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0022`. 
 | IM0020 | Error | Factory of `ConstructWith` cannot be used | Yes — profiles (from 2.1.0) |
 | IM0021 | Warning | Init property cannot be set after the factory | Yes — profiles (from 2.1.0) |
 | IM0022 | Error | Converter of `ConvertUsing` cannot be used | Yes — profiles (from 2.1.0) |
+| IM0023 | Warning | Nullable value mapped to a non-nullable member | Yes — attributes and profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -575,3 +576,48 @@ by property, without the converter. A static method group is called from 2.1.0.
 
 **Fix:** pass a public or internal static method, or a lambda that does not use locals or the profile instance:
 `ConvertUsing(v => Converters.ToUserId(v))`.
+
+---
+
+## IM0023 — Nullable value mapped to a non-nullable member
+
+**Severity:** Warning (from 2.1.0; issue [#54](https://github.com/iron-mapper/IronMapper/issues/54))
+
+**Points to:** as `IM0002`: the destination property (attribute mappings), the `CreateMap` or `ReverseMap()` call
+(profiles), or the expression of `MapFrom`.
+
+**Message:** `{0} of '{1}' can receive null: {2}` — `{0}` is `Property 'Email'` or `Parameter 'email'`; `{2}` names the
+source and the destination and what to write, for example:
+
+- `'UserRow.Email' is 'string?' and the destination is 'string'. Map a non-null value with ForMember(d => d.Email, o => o.MapFrom(s => s.Email!)) or s.Email ?? a default, declare the destination nullable, or ignore it with ForMember(d => d.Email, o => o.Ignore()).`
+- `the elements of 'Order.Lines' are 'App.Line?', and the mapping of the elements (MapToLineDto) takes 'App.Line': a null element throws ArgumentNullException. …`
+
+**Cause:** a value declared nullable (a reference type with `?`) goes where the generated code needs a non-nullable
+one:
+
+- a non-nullable destination property or constructor/factory parameter (`string?` → `string`); for a parameter
+  without a property of the same name the hint is `ForCtorParam("name", …)`;
+- collection elements that narrow the same way, assigned as is (`List<string?>` → `List<string>`; up to now `IM0002`);
+- the expression of `MapFrom` (`MapFrom(s => s.Email)`; `s.Email!` and `s.Email ?? ""` are not reported);
+- a converter whose `ITypeConverter<string, …>` takes a non-nullable value, or a profile transformer
+  (`AddTransformer<string>`) applied to a nullable property;
+- the elements of a collection mapped one by one (`List<Line?>` → `List<LineDto>` or `List<LineDto?>`): the element
+  mapping takes a non-nullable value and throws `ArgumentNullException` for a `null` element, as documented in 2.0.0.
+
+Not reported when nullable annotations are disabled in the project (oblivious types: nothing narrows), nor for a value
+that is mapped through a nested object or a pair mapping (those report `IM0002` for a nullable source and a
+non-nullable destination).
+
+**Behavior:** the value is mapped as before: `null` reaches the non-nullable member, a `null` element throws. Up to
+2.0.0 the compiler reported the same place inside the generated file (`CS8601` for an assignment, `CS8604` for an
+argument, `CS8619`/`CS8620` for collection elements), where it could not be fixed or suppressed per mapping. Now the
+generated code marks exactly that value with `!` (only together with this warning; the generator never adds `!`
+silently), so the generated file has no nullable warning and the one warning is at your code. IM0023 takes the
+configuration of the compiler warning it replaces when it is set for every file (`NoWarn`, `WarningsAsErrors`, a
+`.globalconfig`): suppressed (`<NoWarn>CS8601</NoWarn>`), it is not reported; an error
+(`<WarningsAsErrors>nullable</WarningsAsErrors>`), it is reported as an error. A build keeps its result.
+
+**Fix:** map a non-null value (`ForMember(d => d.Email, o => o.MapFrom(s => s.Email!))` when it is never `null`, or
+`s.Email ?? ""`), declare the destination nullable, or ignore the member. The severity is set the standard way:
+`dotnet_diagnostic.IM0023.severity` in `.editorconfig`, `#pragma warning disable IM0023` around the `CreateMap` line,
+`<NoWarn>`.

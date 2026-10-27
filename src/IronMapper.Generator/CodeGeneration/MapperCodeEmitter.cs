@@ -808,14 +808,19 @@ internal static class MapperCodeEmitter
     private static string BuildRhs(MappingDescriptor descriptor, PropertyMappingDescriptor prop,
         ImmutableArray<ValueTransformerDescriptor> transformers, string scope, MappingPlan plan)
     {
+        // IM0023 reported the value that can be null (PropertyMappingDescriptor.NullForgiving): `!` keeps CS8601/CS8604
+        // out of the generated file. The elements of a collection helper are marked there instead.
+        string forgive = prop.NullForgiving && prop.CollectionElementMapMethod is null ? "!" : string.Empty;
         string raw;
         if (prop.LambdaBody is not null)
         {
-            raw = prop.LambdaBody;
+            // `(source.Name)!` would parse as a cast: a plain name takes `!` directly.
+            raw = forgive.Length == 0 ? prop.LambdaBody
+                : IsPlainName(prop.LambdaBody) ? prop.LambdaBody + "!" : $"({prop.LambdaBody})!";
         }
         else if (prop.ConverterType is not null)
         {
-            raw = $"{ConverterInstance(prop.ConverterType, prop.ConverterIsCached)}.Convert(source.{prop.SourcePropertyName})";
+            raw = $"{ConverterInstance(prop.ConverterType, prop.ConverterIsCached)}.Convert(source.{prop.SourcePropertyName}{forgive})";
         }
         else if (prop.CollectionElementMapMethod is not null)
         {
@@ -828,7 +833,7 @@ internal static class MapperCodeEmitter
         }
         else
         {
-            raw = $"source.{prop.SourcePropertyName}";
+            raw = $"source.{prop.SourcePropertyName}{forgive}";
         }
 
         // Apply transformer if type matches.
@@ -849,6 +854,20 @@ internal static class MapperCodeEmitter
         }
 
         return raw;
+    }
+
+    // A name or member access (`source.Name`, `global::App.Defaults.Name`): parenthesized and followed by `!` it is a cast.
+    private static bool IsPlainName(string expression)
+    {
+        foreach (char c in expression)
+        {
+            if (!(char.IsLetterOrDigit(c) || c is '_' or '.' or ':' or '@'))
+            {
+                return false;
+            }
+        }
+
+        return expression.Length > 0;
     }
 
     /// <summary>
@@ -1032,6 +1051,9 @@ internal static class MapperCodeEmitter
         string destElement = prop.CollectionDestElementFqn!;
         string list = $"global::System.Collections.Generic.List<{destElement}>";
         string? kind = prop.CollectionSourceKind;
+        // IM0023 reported nullable source elements: `!` keeps CS8604 out of the element call (a null element still throws).
+        string item = prop.NullForgiving ? "item!" : "item";
+        string indexed = prop.NullForgiving ? "source[i]!" : "source[i]";
 
         if (prop.CollectionOutputType == "Enumerable")
         {
@@ -1041,7 +1063,7 @@ internal static class MapperCodeEmitter
             sb.AppendLine();
             sb.AppendLine($"        private static {sequence} Enumerate{name}({sourceType} source)");
             sb.AppendLine("        {");
-            sb.AppendLine($"            foreach (var item in source) yield return item.{element}();");
+            sb.AppendLine($"            foreach (var item in source) yield return {item}.{element}();");
             sb.AppendLine("        }");
             return;
         }
@@ -1059,8 +1081,8 @@ internal static class MapperCodeEmitter
                 ? $"            var result = new {ArrayOf(destElement, length)};"
                 : $"            var result = new {list}({length});");
             sb.AppendLine(toArray
-                ? $"            for (var i = 0; i < {length}; i++) result[i] = source[i].{element}();"
-                : $"            for (var i = 0; i < {length}; i++) result.Add(source[i].{element}());");
+                ? $"            for (var i = 0; i < {length}; i++) result[i] = {indexed}.{element}();"
+                : $"            for (var i = 0; i < {length}; i++) result.Add({indexed}.{element}());");
             sb.AppendLine("            return result;");
         }
         else if (kind == "Counted")
@@ -1069,19 +1091,19 @@ internal static class MapperCodeEmitter
             {
                 sb.AppendLine($"            var result = new {ArrayOf(destElement, "source.Count")};");
                 sb.AppendLine("            var i = 0;");
-                sb.AppendLine($"            foreach (var item in source) result[i++] = item.{element}();");
+                sb.AppendLine($"            foreach (var item in source) result[i++] = {item}.{element}();");
             }
             else
             {
                 sb.AppendLine($"            var result = new {list}(source.Count);");
-                sb.AppendLine($"            foreach (var item in source) result.Add(item.{element}());");
+                sb.AppendLine($"            foreach (var item in source) result.Add({item}.{element}());");
             }
             sb.AppendLine("            return result;");
         }
         else
         {
             sb.AppendLine($"            var result = new {list}();");
-            sb.AppendLine($"            foreach (var item in source) result.Add(item.{element}());");
+            sb.AppendLine($"            foreach (var item in source) result.Add({item}.{element}());");
             sb.AppendLine(toArray ? "            return result.ToArray();" : "            return result;");
         }
 
