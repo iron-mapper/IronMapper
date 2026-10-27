@@ -342,10 +342,10 @@ public class ConstructorMappingTests
     }
 
     [Fact]
-    public void NarrowingNullableReference_ParameterBehavesAsAProperty_NullableWarningInTheGeneratedFile()
+    public void NarrowingNullableReference_ParameterBehavesAsAProperty_IM0023_NoWarningInTheGeneratedFile()
     {
-        // As for a property (item 3.5 of the plan): string? → string compiles with a nullable warning in the generated file
-        // (CS8601 for a property, CS8604 for a parameter) and passes null through.
+        // As for a property: string? → string is IM0023 at the user's code (up to PR 6 of 2.1.0, CS8601 for a property and
+        // CS8604 for a parameter inside the generated file); null is passed through as before.
         string source = """
             using IronMapper.Attributes;
 
@@ -361,11 +361,9 @@ public class ConstructorMappingTests
 
         var (_, diagnostics, compilation) = GeneratorTestHelper.RunGeneratorAndCompile(source);
 
-        Assert.Empty(diagnostics);
-        Assert.DoesNotContain(compilation, d => d.Severity == DiagnosticSeverity.Error);
-        // CS8601 in the initializer and in the in-place overload of the property, CS8604 in the constructor call.
-        Assert.Equal(new[] { "CS8601", "CS8604" }, compilation.Select(d => d.Id).Distinct().OrderBy(id => id).ToArray());
-        Assert.Single(compilation, d => d.Id == "CS8604");
+        Assert.Empty(compilation);
+        Assert.Equal(new[] { "Parameter 'Email' of 'App.AccountByParameter'", "Property 'Email' of 'App.AccountByProperty'" },
+            diagnostics.Select(d => { Assert.Equal("IM0023", d.Id); return d.GetMessage().Split(" can receive")[0]; }).OrderBy(m => m));
     }
 
     [Fact]

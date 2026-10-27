@@ -189,6 +189,19 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   choice. Never updated in place. `ConvertUsing` also takes a static method group (`FactoryAnalyzer.ConvertUsing`,
   `return D.From(source);`); anything else the generated code cannot call is IM0022. `ReverseMap(Func<TDest, TSource>)` (an extension in `MappingExpressionExtensions`) gives the reverse mapping that converter, read the same way. Tests: `PairConverterTests`
   (generator and runtime), `PairConverterMapperTests`, snapshot `PairConverters`.
+- **Nullable narrowing, IM0023** (issue #54, PR 6 of 2.1.0): `PropertyTypeCheck.CheckNullableValue` (assignments and
+  arguments, collection elements assigned as is), `CheckNullableMapFrom` (flow state of the `MapFrom` expression; `!` at
+  its end suppresses), `CheckNullableConverter`, `Transformer` (profile `AddTransformer` of the type), `CheckNullableElements`
+  (elements of a collection helper; `IfMappingFor`: reported only when the element pair is generated). A diagnostic sets
+  `PropertyMappingDescriptor.NullForgiving`, and the emitter marks exactly that value with `!` (`source.X!`, `(lambda)!`,
+  `source[i]!`/`item!` in the helper; a plain name in a lambda gets `x!`, `(x)!` would parse as a cast), so the generated
+  file has no CS8601/CS8604/CS8619/CS8620; `!` without a diagnostic only for a widening of nested annotations. Each
+  IM0023 carries `ReplacesWarning` (the CS id); the diagnostics output takes the project-wide report of that id
+  (`SpecificDiagnosticOptions`, then `.globalconfig`): `Suppress` — not reported, `Error` — reported with
+  `effectiveSeverity` Error (`DiagnosticInfo.ToDiagnostic`), so a build keeps its result. Element types that differ only by `?` are
+  the same type for `DetectCollectionMapping` (assigned as is). Oblivious types (nullable disabled) never narrow. Tests:
+  `NullableNarrowingTests` (generator and runtime, `#pragma warning disable IM0023` with `TreatWarningsAsErrors`),
+  snapshot `NullableNarrowing`.
 - **Unresolved types** (`typeof(Missing)`, `CreateMap<_, Missing>`, a converter type): the compiler reports them at the
   user's code; the mapping is skipped without a diagnostic of its own (`SymbolHelpers.ContainsErrorType`), so the
   generated code adds no errors. IM0003 only for a type that compiles but cannot be mapped (`typeof(Box<>)`, arrays).

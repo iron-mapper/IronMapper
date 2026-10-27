@@ -208,6 +208,22 @@ internal static class DiagnosticDescriptors
         description: "ConvertUsing takes a lambda (s => …) or a static method group (ConvertUsing(UserId.From)), read at compile time: the generated method calls it with the source. A delegate in a variable or an instance method cannot be called by the generated class; the method must be public or internal. The message says what is wrong. Other mappings in the project are still generated.");
 
     /// <summary>
+    /// IM0023 — A value that can be <see langword="null"/> (a nullable reference type) goes where the generated code needs
+    /// a non-nullable one: a non-nullable destination property or parameter (<c>string?</c> → <c>string</c>), a converter,
+    /// a transformer or an element mapping that takes a non-nullable value. Up to 2.0.0 the compiler reported it inside
+    /// the generated file (<c>CS8601</c>, <c>CS8604</c>, <c>CS8619</c>); the generated code now marks that value with
+    /// <c>!</c> only together with this warning, so the value is mapped as before and the warning is in the user's code.
+    /// </summary>
+    public static readonly DiagnosticDescriptor NullableNarrowing = new(
+        id: "IM0023",
+        title: "Nullable value mapped to a non-nullable member",
+        messageFormat: "{0} of '{1}' can receive null: {2}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The source value is declared nullable, and the generated code passes it where null is not expected. The value is mapped as it is (null at run time stays null, or throws where the generated call rejects it), as in 2.0.0, where the compiler warned inside the generated file. Map a non-null value (MapFrom(s => s.X!) or s.X ?? a default), declare the destination nullable, or ignore the member. Not reported when nullable annotations are disabled.");
+
+    /// <summary>
     /// IM0010 — A mapped type (or a type containing it, or a type argument) is private/protected,
     /// so the generated class (<c>GeneratedMappers_{AssemblyName}</c>) cannot reference it. The mapping is not generated.
     /// </summary>

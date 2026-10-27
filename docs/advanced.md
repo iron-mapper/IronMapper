@@ -314,8 +314,9 @@ parent object, a nested object of such a type is replaced by a new instance (as 
 Other details: an exception thrown by the constructor reaches the caller as it is; `ConvertUsing` creates the object
 itself, so no constructor is needed; with `BeforeMap`/`AfterMap` the constructor runs first, then `BeforeMap`, the
 assignments of the settable (`set`) properties and `AfterMap`. As for a property, a nullable source for a non-nullable reference parameter
-(`string?` → `string`) compiles with a nullable warning in the generated file (`CS8604`; `CS8601` for a property) and
-passes `null` on.
+(`string?` → `string`) passes `null` on with the warning
+[`IM0023`](diagnostics.md#im0023--nullable-value-mapped-to-a-non-nullable-member) at your mapping (up to 2.0.0 a
+nullable warning inside the generated file, `CS8604`; `CS8601` for a property).
 
 ### Factories (`ConstructWith`)
 

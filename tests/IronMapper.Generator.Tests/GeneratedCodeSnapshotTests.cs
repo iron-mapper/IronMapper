@@ -490,6 +490,44 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    [Fact]
+    public Task NullableNarrowing() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        // IM0023: Email (string? → string), Tags (List<string?> → List<string>, assigned as is), Lines (nullable elements for
+        // the element mapping), the parameter of the record; the values are marked with ! in the generated code.
+        public class Line { public string Sku { get; set; } = ""; }
+        public class LineDto { public string Sku { get; set; } = ""; }
+        public class ContactRow
+        {
+            public string? Email { get; set; }
+            public string? Phone { get; set; }
+            public List<string?> Tags { get; set; } = new();
+            public List<Line?> Lines { get; set; } = new();
+        }
+        public class Contact
+        {
+            public string Email { get; set; } = "";
+            public string? Phone { get; set; }
+            public List<string> Tags { get; set; } = new();
+            public List<LineDto> Lines { get; set; } = new();
+        }
+        public record ContactCard(string Email, string? Phone);
+
+        public class ContactProfile : MappingProfile
+        {
+            public ContactProfile()
+            {
+                CreateMap<Line, LineDto>();
+                CreateMap<ContactRow, Contact>();
+                CreateMap<ContactRow, ContactCard>();
+            }
+        }
+        """);
+
     private static Task Verify(string source)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });
