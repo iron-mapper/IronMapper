@@ -45,6 +45,13 @@ internal static class MapperCodeEmitter
     /// </summary>
     public const string NestedObjectIsNullName = "NestedObjectIsNull";
 
+    /// <summary>
+    /// With <c>IronMapperNullSourceReturnsNull</c>: the check of a collection element before its mapping (which returns
+    /// <see langword="null"/> for <see langword="null"/>), declared once in <c>GeneratedMappers.g.cs</c>; a
+    /// <see langword="null"/> element keeps throwing <c>ArgumentNullException</c>.
+    /// </summary>
+    public const string ElementCheckName = "NotNullElement";
+
     /// <summary>Generic loop of every <c>MapToXList</c> (see <see cref="EmitElementLoops"/>); no <c>MapTo</c> prefix, so it never collides with a mapping method.</summary>
     public const string ListHelperName = "MapElementsToList";
 
@@ -100,15 +107,32 @@ internal static class MapperCodeEmitter
         // ------------------------------------------------------------------
         // Method 1: MapToDestType(this SourceType source) → DestType
         // ------------------------------------------------------------------
+        // IronMapperNullSourceReturnsNull (issue #27): null → null for a class source and a class destination; a struct has no
+        // null, and a struct destination would become Nullable<D> (callers that assign it to D would stop compiling).
+        bool returnsNull = ReturnsNullForNullSource(descriptor, options);
+        string nullCheck = returnsNull
+            ? "if (source is null) return null;"
+            : options.NullCheck("source", "return default!;"); // safe: `default!` is part of the emitted C# text
+        string signature = returnsNull
+            ? $"{accessibility} static {destFullName}? {methodName}(this {sourceFullName}? source)"
+            : $"{accessibility} static {destFullName} {methodName}(this {sourceFullName} source)";
         sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> to a new <see cref=\"{EscapeXml(destFullName)}\"/>.</summary>");
         sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> instance to map.</param>");
-        sb.AppendLine($"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
+        sb.AppendLine(returnsNull
+            ? $"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>, or <see langword=\"null\"/> when <paramref name=\"source\"/> is <see langword=\"null\"/>.</returns>"
+            : $"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
+        if (returnsNull)
+        {
+            // A string, not nameof(source): nameof of a parameter in an attribute of its method needs C# 11.
+            sb.AppendLine("        [return: global::System.Diagnostics.CodeAnalysis.NotNullIfNotNull(\"source\")]");
+        }
+
         if (entry.UsesCore)
         {
             sb.AppendLine($"        {AggressiveInlining}");
-            sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
+            sb.AppendLine($"        {signature}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
+            sb.AppendLine($"            {nullCheck}");
             sb.AppendLine($"            return {entry.CoreMethodName}(source);");
             sb.AppendLine("        }");
 
@@ -126,9 +150,9 @@ internal static class MapperCodeEmitter
         }
         else
         {
-            sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
+            sb.AppendLine($"        {signature}");
             sb.AppendLine("        {");
-            sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
+            sb.AppendLine($"            {nullCheck}");
         }
 
         if (descriptor.WhenConditionBody is not null)
@@ -367,7 +391,11 @@ internal static class MapperCodeEmitter
             sb.AppendLine();
             sb.AppendLine($"        private readonly struct {elementMapper} : {ElementMapperInterface}<{src}, {destFullName}>");
             sb.AppendLine("        {");
-            sb.AppendLine($"            public {destFullName} Map({src} source) => {methodName}(source);");
+            // With IronMapperNullSourceReturnsNull a null element still throws ArgumentNullException (the element type is
+            // not nullable); null → null for elements of a nullable type is planned for 3.0.0.
+            sb.AppendLine(options.NullSourceReturnsNull
+                ? $"            public {destFullName} Map({src} source) => {methodName}({ElementCheckName}(source));"
+                : $"            public {destFullName} Map({src} source) => {methodName}(source);");
             sb.AppendLine("        }");
         }
 
@@ -382,7 +410,7 @@ internal static class MapperCodeEmitter
             }
 
             sb.AppendLine();
-            EmitCollectionHelper(sb, prop, scope, plan);
+            EmitCollectionHelper(sb, prop, scope, plan, options.NullSourceReturnsNull);
         }
 
         // ------------------------------------------------------------------
@@ -564,8 +592,45 @@ internal static class MapperCodeEmitter
             EmitElementLoops(sb, usesList, usesArray, needsSeparator: !options.UseThrowIfNull || usesConverterCache || usesNestedObjectCheck);
         }
 
+        if (options.NullSourceReturnsNull)
+        {
+            // IronMapperNullSourceReturnsNull: MapToX returns null for null, so the element mappers and the helpers of
+            // nested collections check the element first (no type constraint: a struct element is never null, and the
+            // JIT removes the check). Declared with the option, not per use: one small private method.
+            if (!options.UseThrowIfNull || usesConverterCache || usesNestedObjectCheck || usesList || usesArray)
+            {
+                sb.AppendLine();
+            }
+
+            sb.AppendLine("        /// <summary>Throws ArgumentNullException for a null collection element, whose mapping would return null.</summary>");
+            sb.AppendLine($"        {AggressiveInlining}");
+            sb.AppendLine($"        private static T {ElementCheckName}<T>(T source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {options.NullCheck("source", "return source;")}");
+            sb.AppendLine("            return source;");
+            sb.AppendLine("        }");
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
+
+        if (options.NullSourceReturnsNull && !options.HasNotNullIfNotNull && options.EmitPolyfills)
+        {
+            // netstandard2.0, .NET Framework: the compiler reads the nullable attributes by their full names, so an
+            // internal copy gives the callers the same flow analysis (no CS8602 after mapping a non-null source).
+            sb.AppendLine();
+            sb.AppendLine("namespace System.Diagnostics.CodeAnalysis");
+            sb.AppendLine("{");
+            sb.AppendLine("    /// <summary>Declared by IronMapper: the target framework has no <c>NotNullIfNotNullAttribute</c> (added in .NET Core 3.0).</summary>");
+            sb.AppendLine("    [global::System.AttributeUsage(global::System.AttributeTargets.Parameter | global::System.AttributeTargets.Property | global::System.AttributeTargets.ReturnValue, AllowMultiple = true, Inherited = false)]");
+            sb.AppendLine("    internal sealed class NotNullIfNotNullAttribute : global::System.Attribute");
+            sb.AppendLine("    {");
+            sb.AppendLine("        public NotNullIfNotNullAttribute(string parameterName) => ParameterName = parameterName;");
+            sb.AppendLine();
+            sb.AppendLine("        public string ParameterName { get; }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+        }
 
         // Per-mapping hint names always contain "_MapTo", so this one cannot collide with them.
         return ("GeneratedMappers.g.cs", sb.ToString());
@@ -725,7 +790,8 @@ internal static class MapperCodeEmitter
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
-        if (options.SupportsModuleInitializers && !options.HasModuleInitializerAttribute)
+        // Not with IronMapperEmitPolyfills=false: a polyfill generator of the project (PolySharp) declares it.
+        if (options.SupportsModuleInitializers && !options.HasModuleInitializerAttribute && options.EmitPolyfills)
         {
             sb.AppendLine();
             sb.AppendLine("namespace System.Runtime.CompilerServices");
@@ -1142,6 +1208,15 @@ internal static class MapperCodeEmitter
         return true;
     }
 
+    /// <summary>
+    /// <c>MapToX(this S? source)</c> returns <c>D?</c> and <see langword="null"/> for <see langword="null"/>
+    /// (<c>IronMapperNullSourceReturnsNull</c>): a class source and a class destination. A struct source cannot be null; a
+    /// struct destination would become <c>Nullable&lt;D&gt;</c>, and callers that assign the result to <c>D</c> would stop
+    /// compiling, so both keep the method without the option.
+    /// </summary>
+    private static bool ReturnsNullForNullSource(MappingDescriptor descriptor, GeneratedCodeOptions options)
+        => options.NullSourceReturnsNull && !descriptor.SourceIsValueType && !descriptor.DestIsValueType;
+
     /// <summary>Name of the collection helper of <paramref name="prop"/>, unique within the class through the helper scope.</summary>
     private static string CollectionHelperName(PropertyMappingDescriptor prop, string scope)
         => $"MapCollection_{prop.DestPropertyName}{scope}";
@@ -1157,7 +1232,8 @@ internal static class MapperCodeEmitter
     /// a <see langword="null"/> element throws <c>ArgumentNullException</c>, as documented since 2.0.0. The public method
     /// is a null check and a call of <c>…Core</c>, small enough for the JIT to inline it into the loop.
     /// </summary>
-    private static void EmitCollectionHelper(StringBuilder sb, PropertyMappingDescriptor prop, string scope, MappingPlan plan)
+    private static void EmitCollectionHelper(StringBuilder sb, PropertyMappingDescriptor prop, string scope, MappingPlan plan,
+        bool nullSourceReturnsNull)
     {
         // The element mapping may have a qualified name (IM0013); mappings not in this compilation keep MapTo{Name}.
         string element = (prop.CollectionElementPairKey is null ? null : plan.GetMethodName(prop.CollectionElementPairKey))
@@ -1170,6 +1246,12 @@ internal static class MapperCodeEmitter
         // IM0023 reported nullable source elements: `!` keeps CS8604 out of the element call (a null element still throws).
         string item = prop.NullForgiving ? "item!" : "item";
         string indexed = prop.NullForgiving ? "source[i]!" : "source[i]";
+        // IronMapperNullSourceReturnsNull: the element mapping returns null for null; a null element keeps throwing.
+        if (nullSourceReturnsNull)
+        {
+            item = $"{ElementCheckName}({item})";
+            indexed = $"{ElementCheckName}({indexed})";
+        }
 
         if (prop.CollectionOutputType == "Enumerable")
         {

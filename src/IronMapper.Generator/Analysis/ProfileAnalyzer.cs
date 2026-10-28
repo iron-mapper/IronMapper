@@ -1255,7 +1255,8 @@ internal static class ProfileAnalyzer
                 : construction.UsesConstructor,
             constructorArguments: construction.Arguments,
             factory: factory?.Descriptor,
-            destIsValueType: destSymbol.IsValueType);
+            destIsValueType: destSymbol.IsValueType,
+            sourceIsValueType: sourceSymbol.IsValueType);
     }
 
     // -----------------------------------------------------------------------

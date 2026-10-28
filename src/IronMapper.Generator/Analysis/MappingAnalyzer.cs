@@ -475,7 +475,8 @@ internal static class MappingAnalyzer
             methodAccessibility: methodAccessibility,
             usesConstructor: construction.UsesConstructor,
             constructorArguments: construction.Arguments,
-            destIsValueType: destSymbol.IsValueType);
+            destIsValueType: destSymbol.IsValueType,
+            sourceIsValueType: sourceSymbol.IsValueType);
     }
 
     /// <summary>

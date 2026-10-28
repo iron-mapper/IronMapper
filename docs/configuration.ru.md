@@ -292,6 +292,59 @@ public class OrderProfile : MappingProfile
 
 ---
 
+## `null` на входе (`IronMapperNullSourceReturnsNull`)
+
+По умолчанию сгенерированный `MapToX(source)` бросает `ArgumentNullException` для `null` на входе, как с 1.0. С 2.1.0
+MSBuild-свойство заставляет его вместо этого вернуть `null`, как Mapperly, Mapster и AutoMapper
+([#27](https://github.com/iron-mapper/IronMapper/issues/27)):
+
+```xml
+<PropertyGroup>
+  <IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>
+</PropertyGroup>
+```
+
+Включает только `true` (без учёта регистра). Действует на маппинги проекта, в котором задано (для решения — в
+`Directory.Build.props`). В 3.0.0 планируется поведением по умолчанию.
+
+```csharp
+// генерируется со свойством:
+[return: NotNullIfNotNull("source")]
+public static OrderDto? MapToOrderDto(this Order? source)
+{
+    if (source is null) return null;
+    ...
+}
+
+Order? maybe = null;
+OrderDto? none = maybe.MapToOrderDto();   // null
+var dto = order.MapToOrderDto();          // order не null: dto — OrderDto, предупреждения nullable нет
+```
+
+`[return: NotNullIfNotNull]` сообщает компилятору, что результат не `null`, когда источник не `null`, поэтому код,
+написанный для поведения по умолчанию (`order.MapToOrderDto().Name`), не получает новых предупреждений nullable, в том
+числе с `TreatWarningsAsErrors`. Для целевой платформы без этого атрибута (netstandard2.0, .NET Framework) генератор
+объявляет его internal-копию в `GeneratedMappers.g.cs` (компилятор узнаёт атрибут по полному имени). С PolySharp (или другим генератором, который
+объявляет эти атрибуты): `<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>` — генератор тогда не объявляет ни эту
+копию, ни копию `ModuleInitializerAttribute` (регистрация для `IMapper`), а две копии дали бы ошибку `CS0101`. Копии
+отключает только `false`; атрибуты тогда должны прийти из другого генератора.
+
+Что не меняется:
+
+- **источник-struct** (он не бывает `null`) и **приёмник-struct** (`D?` был бы `Nullable<D>`, и
+  `PointDto p = row.MapToPointDto();` перестал бы компилироваться): метод тот же, что без свойства;
+- **in-place перегрузка** `MapToX(source, destination)` бросает `ArgumentNullException` для `null` на входе;
+- `MapToXList`/`MapToXArray` для `null` возвращают пустую коллекцию, как и раньше; **`null`-элемент** этих коллекций и
+  вложенной коллекции по-прежнему бросает `ArgumentNullException` (тип элемента не допускает `null`);
+- **вложенные объекты** маппятся по nullable-аннотациям, как без свойства
+  ([Вложенные объекты](advanced.ru.md#вложенные-объекты));
+- **`IMapper`**: `mapper.Map<TDest>(null)` (и `Map<TSource, TDest>(null)`) бросает `ArgumentNullException` и со
+  свойством: runtime-пакет его не видит, и `IMapper` оно не меняет.
+
+`ConstructWith`, `ConvertUsing`, `When`, `BeforeMap` и `AfterMap` для `null` на входе не вызываются.
+
+---
+
 ## Несопоставленные свойства в профилях
 
 Для `[MapTo]`/`[MapFrom]` несопоставленное свойство destination даёт предупреждение

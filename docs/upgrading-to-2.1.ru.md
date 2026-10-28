@@ -18,6 +18,7 @@ in-place перегрузки, которые ничего не делают, п
 | [`IronMapperRegistration=false` не генерирует регистрацию](#5-ironmapperregistrationfalse-не-генерирует-регистрацию) | Проекты с `<IronMapperRegistration>false</IronMapperRegistration>` |
 | [`MapFrom`, `When` и хуки с группой методов статического метода вызываются](#6-mapfrom-when-и-хуки-с-группой-методов-статического-метода-вызываются) | Профили с `MapFrom(SomeType.Method)` в `ForMember`/`ForCtorParam`, `.When(SomeType.Method)`, `.BeforeMap(SomeType.Method)` или `.AfterMap(SomeType.Method)` |
 | [`[Ignore]` учитывается в профилях](#7-ignore-учитывается-в-профилях) | Маппинги профилей между типами с `[Ignore]` на свойстве, которое есть и у другого типа |
+| [`null` на входе может возвращать `null` (по выбору)](#8-null-на-входе-может-возвращать-null-по-выбору) | Проекты с `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>` (без него ничего не меняется) |
 
 Чтобы найти первые два, поищите в профилях `ConvertUsing(`, аргумент которого не лямбда (`s => …`) и не аргумент типа
 (`ConvertUsing<TConverter>()`); как найти случаи разделов 6 и 7 — в них. Все сразу — сравнением сгенерированного кода
@@ -213,3 +214,25 @@ CreateMap<Row, Dto>();   // у Dto тоже есть Draft
 `CreateMap<TSource, TDest>()` (любым из двух, и с `.ReverseMap()` или `IncludeMembers`), если у другого типа есть свойство
 с тем же именем. Если вы рассчитывали на копирование, уберите `[Ignore]` или замапьте свойство через
 `ForMember(d => d.Secret, o => o.MapFrom(s => s.Secret))`.
+
+---
+
+## 8. `null` на входе может возвращать `null` (по выбору)
+
+**Было.** `MapToX(source)` бросал `ArgumentNullException` для `null` на входе
+([#27](https://github.com/iron-mapper/IronMapper/issues/27)); обходной путь — `source?.MapToX()` или проверка перед вызовом.
+
+**Стало.** По умолчанию ничего не меняется. С `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>`
+метод маппинга класса в класс становится `MapToX(this S? source)` → `D?` с `[return: NotNullIfNotNull("source")]` и
+возвращает `null` для `null` ([`null` на входе](configuration.ru.md#null-на-входе-ironmappernullsourcereturnsnull)). В
+3.0.0 планируется поведением по умолчанию.
+
+**Что можно увидеть со свойством.** Код, который маппит ненулевой источник, не получает новых предупреждений nullable:
+результат там не `null`. Источники и приёмники-struct, in-place перегрузка, `null`-элементы коллекций и вложенные объекты
+ведут себя как без свойства, а `IMapper.Map<TDest>(null)` по-прежнему бросает `ArgumentNullException`. В netstandard2.0 с
+PolySharp задайте `<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>` (оба генератора объявили бы
+`NotNullIfNotNullAttribute`, ошибка `CS0101`). `catch (ArgumentNullException)` вокруг `MapToX(source)` верхнего уровня больше не
+срабатывает: вместо исключения результат — `null`.
+
+**Что делать.** Ничего, если `null` → `null` не нужен; иначе задайте свойство и (по желанию) уберите проверки `?.`/`null`
+вокруг вызовов — или подготовьтесь к 3.0.0.

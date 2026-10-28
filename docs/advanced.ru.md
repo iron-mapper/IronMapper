@@ -100,6 +100,15 @@ otherwise declare the destination property nullable (null is then mapped to null
 проверкой остаётся маленьким. AutoMapper маппит такой `null` в `null` без ошибки; Mapperly проверку не генерирует, и
 маппинг падает с `NullReferenceException`.
 
+### `null` на входе самого маппинга
+
+Проверки выше — для вложенных объектов. Источник самого `order.MapToOrderDto()` проверяет публичный метод: по
+умолчанию `ArgumentNullException`, с
+[`IronMapperNullSourceReturnsNull`](configuration.ru.md#null-на-входе-ironmappernullsourcereturnsnull) — `null` → `null`
+(с 2.1.0, `MapToOrderDto(this Order? source)` → `OrderDto?` с `[return: NotNullIfNotNull("source")]`). На вложенные
+объекты свойство не влияет: для них действуют правила таблицы выше. На `IMapper` тоже: `mapper.Map<OrderDto>(null)`
+бросает `ArgumentNullException` и со свойством.
+
 ### In-place обновление вложенных объектов
 
 `source.MapToOrderEntity(entity)` (и `IMapper.Map(source, destination)`) обновляет вложенные объекты, которые уже есть в
@@ -190,6 +199,11 @@ List<UserDto> dtos = entities.MapToUserDtoList();
 // Возвращает TDest[] (Array.Empty<TDest>(), если source равен null)
 UserDto[] arr = entities.MapToUserDtoArray();
 ```
+
+Элемент `null` бросает `ArgumentNullException`, в том числе с
+[`IronMapperNullSourceReturnsNull`](configuration.ru.md#null-на-входе-ironmappernullsourcereturnsnull): маппинг элемента
+тогда возвращает `null` для `null`, поэтому цикл сначала проверяет элемент (`NotNullElement`, закрытый помощник
+сгенерированного класса).
 
 Параметр — `IEnumerable<T>`, но сгенерированный код сначала проверяет тип во время выполнения: массив или `List<T>`
 читается циклом `for`, и результат создаётся сразу нужного размера; другой `ICollection<T>` даёт размер через `Count`
@@ -514,7 +528,9 @@ In-place перегрузка только присваивает замапле
   ([Конструкторы и позиционные record](#конструкторы-и-позиционные-record));
 - не использует `ConstructUsing` (обновляется существующий объект);
 - пропускает свойства destination с `init`;
-- **не** применяет `When`, `ConvertUsing`, `BeforeMap` и `AfterMap`.
+- **не** применяет `When`, `ConvertUsing`, `BeforeMap` и `AfterMap`;
+- бросает `ArgumentNullException` для `null` в source или destination, в том числе с `IronMapperNullSourceReturnsNull`
+  (оно меняет только `MapToX(source)`).
 
 **In-place перегрузка, которая ничего не делает, помечена `[Obsolete]`** (с 2.1.0; удаляется в 3.0.0): для destination —
 value-типа (метод получает копию), маппинга с `ConvertUsing` и destination, у которого все сопоставленные свойства `init`.
@@ -557,7 +573,8 @@ value-типа (метод получает копию), маппинга с `Co
   `IronMapper.Generated.GeneratedMappers_MyCompany_Mappings.RegisterIronMapperMappings()` для сборки `MyCompany.Mappings`
   (метод `internal`, поэтому вызывайте его из этой сборки; до 1.1.4 включительно класс назывался `GeneratedMappers`, см.
   [Решения из нескольких проектов](configuration.ru.md#решения-из-нескольких-проектов)). Для целей без `ModuleInitializerAttribute` (`netstandard`, .NET Framework) в сборку
-  генерируется internal-копия атрибута.
+  генерируется internal-копия атрибута. С PolySharp, который тоже его объявляет (ошибка `CS0101`):
+  `<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>`.
 - `Map<TSource, TDest>(source)` использует маппинг точной пары: чтение статического поля и вызов делегата. Если его
   нет, а также для `Map<TDest>(object)` маппинг ищется по типу: runtime-тип источника, затем его базовые типы
   (`DerivedEntity` без своего маппинга использует маппинг `Entity`). Интерфейсы источника и базовые типы приёмника не

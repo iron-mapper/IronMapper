@@ -18,6 +18,7 @@ and `IronMapperRegistration=false` now also applies to the project that sets it.
 | [`IronMapperRegistration=false` generates no registration](#5-ironmapperregistrationfalse-generates-no-registration) | Projects that set `<IronMapperRegistration>false</IronMapperRegistration>` |
 | [`MapFrom`, `When` and hooks with a static method group are called](#6-mapfrom-when-and-hooks-with-a-static-method-group-are-called) | Profiles with `MapFrom(SomeType.Method)` in `ForMember`/`ForCtorParam`, `.When(SomeType.Method)`, `.BeforeMap(SomeType.Method)` or `.AfterMap(SomeType.Method)` |
 | [`[Ignore]` applies in profiles](#7-ignore-applies-in-profiles) | Profile mappings between types with `[Ignore]` on a property that the other type also has |
+| [`null` source can return `null` (opt-in)](#8-null-source-can-return-null-opt-in) | Projects that set `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>` (nothing changes without it) |
 
 To find the first two, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type
 argument (`ConvertUsing<TConverter>()`); sections 6 and 7 say how to find theirs. For all of them at once, compare the
@@ -215,3 +216,26 @@ directions.
 `CreateMap<TSource, TDest>()` (either type, also with `.ReverseMap()` or `IncludeMembers`) whose other type has a property
 of the same name. If you relied on the copy, remove `[Ignore]` or map the property with
 `ForMember(d => d.Secret, o => o.MapFrom(s => s.Secret))`.
+
+---
+
+## 8. `null` source can return `null` (opt-in)
+
+**Was.** `MapToX(source)` threw `ArgumentNullException` for a `null` source
+([#27](https://github.com/iron-mapper/IronMapper/issues/27)); the workaround was `source?.MapToX()` or a check before the
+call.
+
+**Now.** Nothing changes by default. With `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>` the
+method of a class source and a class destination becomes `MapToX(this S? source)` → `D?` with
+`[return: NotNullIfNotNull("source")]` and returns `null` for `null`
+([`null` source](configuration.md#null-source-ironmappernullsourcereturnsnull)). It is planned to be the default in 3.0.0.
+
+**What you may see with the property.** Code that maps a non-null source gets no new nullable warning: the result is
+non-null there. Struct sources and destinations, the in-place overload, `null` collection elements and nested objects
+behave as without it, and `IMapper.Map<TDest>(null)` still throws `ArgumentNullException`. On netstandard2.0 with
+PolySharp set `<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>` (both generators would declare
+`NotNullIfNotNullAttribute`, error `CS0101`). `catch (ArgumentNullException)` around a top-level `MapToX(source)` no longer runs: the
+result is `null` instead.
+
+**What to do.** Nothing, unless you want `null` → `null`: then set the property and remove the `?.`/`null` checks around
+the calls (optional), or prepare for 3.0.0.

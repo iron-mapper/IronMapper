@@ -121,6 +121,19 @@
   type or interface of the source element, in a referenced assembly, or as a hand-written extension method that the
   generated call binds to. A mapping with `ConvertUsing` is checked too, because its in-place overload assigns the
   properties. See [IM0002](docs/diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping).
+- **`null` source → `null`, opt-in** (`<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>`, part of
+  [#27](https://github.com/iron-mapper/IronMapper/issues/27)): `MapToX(this S? source)` returns `D?` with
+  `[return: NotNullIfNotNull("source")]` and `null` for a `null` source, instead of `ArgumentNullException`. A non-null
+  source still gives a non-null result for the compiler, so code written for the default gets no new nullable warning
+  (checked with `TreatWarningsAsErrors`, also on netstandard2.0, where the generator declares an internal
+  `NotNullIfNotNullAttribute`). Without the property nothing changes. A struct source or destination, the in-place
+  overload, a `null` collection element, nested objects and `IMapper` behave as without it. Planned to be the default in
+  3.0.0. See [`null` source](docs/configuration.md#null-source-ironmappernullsourcereturnsnull).
+- **`IronMapperEmitPolyfills`** (MSBuild, default `true`): `false` stops declaring the internal copies of
+  `ModuleInitializerAttribute` (the registration for `IMapper`) and `NotNullIfNotNullAttribute` (`IronMapperNullSourceReturnsNull`)
+  on targets without them (netstandard2.0, .NET Framework). For projects where PolySharp or another generator declares
+  them: two copies are error `CS0101`, and one generator cannot see the other's output. Without the property nothing
+  changes.
 
 ### Changed
 

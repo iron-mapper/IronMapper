@@ -26,6 +26,9 @@
        PublishTrimmed and without the DI package, true with IronMapperRegistration=true; a framework-dependent publish
        without the DI package keeps the registration (the registry finds the mapping by type). IronMapperRegistration=false
        set in the project generates no registration (no RegisterIronMapperMappings, no private MapInto).
+       IronMapperNullSourceReturnsNull=true: null -> null without a nullable warning in the user's code (TreatWarningsAsErrors),
+       also in a netstandard2.0 library (the generated copy of NotNullIfNotNullAttribute); IronMapperEmitPolyfills=false
+       declares no copy there (the build fails without another declaration).
        IronMapperReportUnmappedInProfiles (CompilerVisibleProperty in buildTransitive/IronMapper.props): a profile
        with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
        (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
@@ -307,6 +310,22 @@ try {
            Properties = @('-p:IronMapperGenerateInPlace=false', '-p:IronMapperGenerateList=false', '-p:IronMapperGenerateArray=false',
                           '-p:IronMapperExcludeFromCodeCoverage=true', '-p:IronMapperGeneratedCodeAttribute=false',
                           '-p:DefineConstants=OVERLOADS_OFF') }
+        # IronMapperNullSourceReturnsNull (issue #27): MapToX(this S? source) -> D? with NotNullIfNotNull; the source maps a
+        # non-null order and uses the result as non-null, so a missing or unread attribute fails the build (CS8602,
+        # TreatWarningsAsErrors). On netstandard2.0 the generator declares the attribute.
+        @{ Name = 'IronMapperNullSourceReturnsNull=true (null -> null, no nullable warning in user code)'
+           Source = "$sources/NullSource.cs"; GlobalUsing = $true; Output = 'NullSource: OK'
+           Properties = @('-p:IronMapperNullSourceReturnsNull=true') }
+        @{ Name = 'netstandard2.0 library, IronMapperNullSourceReturnsNull=true (NotNullIfNotNullAttribute copy)'
+           Source = "$sources/NullSource.cs"; GlobalUsing = $true; Run = $false
+           Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library', '-p:IronMapperNullSourceReturnsNull=true') }
+        # IronMapperEmitPolyfills=false (for a project where PolySharp declares the attributes): no copies, so without
+        # another declaration the build fails at the attribute in the generated file; proves the property reaches the generator.
+        @{ Name = 'netstandard2.0 library, IronMapperEmitPolyfills=false (no attribute copies)'
+           Source = "$sources/NullSource.cs"; GlobalUsing = $true; Run = $false
+           BuildError = 'error CS02(34|46).*NotNullIfNotNull'
+           Properties = @('-p:TargetFramework=netstandard2.0', '-p:OutputType=Library', '-p:IronMapperNullSourceReturnsNull=true',
+                          '-p:IronMapperEmitPolyfills=false') }
     )
 
     $index = 0
@@ -331,6 +350,9 @@ try {
                 Write-Host $buildOutput
                 throw "Variant '$($variant.Name)': the build output must not match '$($variant.BuildErrorNot)'"
             }
+            # The failed build is the expected result: its exit code must not become the script's. GitHub Actions runs a
+            # pwsh step as `& script; exit $LASTEXITCODE`, so a last variant that fails on purpose failed CI.
+            $global:LASTEXITCODE = 0
             continue
         }
         Invoke-Dotnet build $implicitConsumer --no-restore -c $Configuration --artifacts-path $artifacts @properties
@@ -372,3 +394,5 @@ finally {
 }
 
 Write-Host "IronMapper $Version packages verified."
+# Explicitly: the exit code of the last native command (an expected failure, a probe) must not decide the result.
+exit 0

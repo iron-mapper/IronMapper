@@ -18,8 +18,12 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
 
     public GeneratedCodeOptions(bool useThrowIfNull, bool hasDoesNotReturn, bool supportsModuleInitializers,
         bool hasModuleInitializerAttribute, bool hasGeneratedCodeAttribute = true, bool hasExcludeFromCodeCoverage = true,
-        string className = GeneratedClassName.Prefix)
+        string className = GeneratedClassName.Prefix, bool hasNotNullIfNotNull = true, bool nullSourceReturnsNull = false,
+        bool emitPolyfills = true)
     {
+        EmitPolyfills = emitPolyfills;
+        HasNotNullIfNotNull = hasNotNullIfNotNull;
+        NullSourceReturnsNull = nullSourceReturnsNull;
         ClassName = className;
         UseThrowIfNull = useThrowIfNull;
         HasDoesNotReturn = hasDoesNotReturn;
@@ -61,6 +65,33 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     /// </summary>
     public bool HasExcludeFromCodeCoverage { get; }
 
+    /// <summary>
+    /// <c>System.Diagnostics.CodeAnalysis.NotNullIfNotNullAttribute</c> exists and is accessible (.NET Core 3.0+,
+    /// .NET Standard 2.1); otherwise, with <see cref="NullSourceReturnsNull"/>, the generator declares an internal copy (the
+    /// compiler recognizes the nullable attributes by their full names).
+    /// </summary>
+    public bool HasNotNullIfNotNull { get; }
+
+    /// <summary>
+    /// <c>IronMapperNullSourceReturnsNull</c> (<see cref="GeneratorSettings.NullSourceReturnsNull"/>): an MSBuild property,
+    /// not an API of the compilation; carried here because every output that depends on it also takes these options.
+    /// </summary>
+    public bool NullSourceReturnsNull { get; }
+
+    /// <summary>
+    /// <c>IronMapperEmitPolyfills</c> (<see cref="GeneratorSettings.EmitPolyfills"/>): declare the internal copies of
+    /// <c>ModuleInitializerAttribute</c> and <c>NotNullIfNotNullAttribute</c> when the target has none.
+    /// </summary>
+    public bool EmitPolyfills { get; }
+
+    /// <summary>These options with the MSBuild properties that change the generated code like an API of the target.</summary>
+    public GeneratedCodeOptions WithSettings(bool nullSourceReturnsNull, bool emitPolyfills)
+        => nullSourceReturnsNull == NullSourceReturnsNull && emitPolyfills == EmitPolyfills
+            ? this
+            : new GeneratedCodeOptions(UseThrowIfNull, HasDoesNotReturn, SupportsModuleInitializers, HasModuleInitializerAttribute,
+                HasGeneratedCodeAttribute, HasExcludeFromCodeCoverage, ClassName, HasNotNullIfNotNull, nullSourceReturnsNull,
+                emitPolyfills);
+
     /// <summary>Reads the options from <paramref name="compilation"/>.</summary>
     public static GeneratedCodeOptions From(Compilation compilation)
     {
@@ -86,20 +117,27 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
         bool supportsModuleInitializers = compilation is not CSharpCompilation csharp
                                          || csharp.LanguageVersion >= LanguageVersion.CSharp9;
 
-        bool hasModuleInitializerAttribute = false;
-        foreach (var attribute in compilation.GetTypesByMetadataName("System.Runtime.CompilerServices.ModuleInitializerAttribute"))
+        return new GeneratedCodeOptions(useThrowIfNull, hasDoesNotReturn, supportsModuleInitializers,
+            AnyAccessible(compilation, "System.Runtime.CompilerServices.ModuleInitializerAttribute"),
+            IsAccessible(compilation, "System.CodeDom.Compiler.GeneratedCodeAttribute"),
+            IsAccessible(compilation, "System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute"),
+            GeneratedClassName.For(compilation.AssemblyName),
+            AnyAccessible(compilation, "System.Diagnostics.CodeAnalysis.NotNullIfNotNullAttribute"));
+    }
+
+    // Also a copy declared by a referenced assembly and visible here (InternalsVisibleTo): declaring another one would be
+    // CS0436 at every use.
+    private static bool AnyAccessible(Compilation compilation, string metadataName)
+    {
+        foreach (var type in compilation.GetTypesByMetadataName(metadataName))
         {
-            if (compilation.IsSymbolAccessibleWithin(attribute, compilation.Assembly))
+            if (compilation.IsSymbolAccessibleWithin(type, compilation.Assembly))
             {
-                hasModuleInitializerAttribute = true;
-                break;
+                return true;
             }
         }
 
-        return new GeneratedCodeOptions(useThrowIfNull, hasDoesNotReturn, supportsModuleInitializers, hasModuleInitializerAttribute,
-            IsAccessible(compilation, "System.CodeDom.Compiler.GeneratedCodeAttribute"),
-            IsAccessible(compilation, "System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute"),
-            GeneratedClassName.For(compilation.AssemblyName));
+        return false;
     }
 
     private static bool IsAccessible(Compilation compilation, string metadataName)
@@ -129,6 +167,9 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
            && HasModuleInitializerAttribute == other.HasModuleInitializerAttribute
            && HasGeneratedCodeAttribute == other.HasGeneratedCodeAttribute
            && HasExcludeFromCodeCoverage == other.HasExcludeFromCodeCoverage
+           && HasNotNullIfNotNull == other.HasNotNullIfNotNull
+           && NullSourceReturnsNull == other.NullSourceReturnsNull
+           && EmitPolyfills == other.EmitPolyfills
            && ClassName == other.ClassName;
 
     /// <inheritdoc/>
@@ -138,5 +179,6 @@ internal sealed class GeneratedCodeOptions : IEquatable<GeneratedCodeOptions>
     public override int GetHashCode()
         => (UseThrowIfNull ? 1 : 0) | (HasDoesNotReturn ? 2 : 0) | (SupportsModuleInitializers ? 4 : 0)
            | (HasModuleInitializerAttribute ? 8 : 0) | (HasGeneratedCodeAttribute ? 16 : 0) | (HasExcludeFromCodeCoverage ? 32 : 0)
-           | (StringComparer.Ordinal.GetHashCode(ClassName) << 6);
+           | (HasNotNullIfNotNull ? 64 : 0) | (NullSourceReturnsNull ? 128 : 0) | (EmitPolyfills ? 256 : 0)
+           | (StringComparer.Ordinal.GetHashCode(ClassName) << 9);
 }

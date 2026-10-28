@@ -25,5 +25,7 @@ internal static class TrackingNames
     public const string MethodSettings = nameof(MethodSettings);
     public const string RegistrationSettings = nameof(RegistrationSettings);
     public const string CoverageSettings = nameof(CoverageSettings);
+    public const string CodeSettings = nameof(CodeSettings);
+    public const string CompilationOptions = nameof(CompilationOptions);
     public const string ClassName = nameof(ClassName);
 }
