@@ -15,7 +15,7 @@
       5. AOT        run-aot.ps1 -ReportOnly (uses the NativeAOT publish of step 4) → aot.md, aot-size-breakdown.md
       6. Footprint  run-footprint.ps1 → footprint.md
       7. Build time run-build-time.ps1 → build-time.md
-      8. Report     generate-report.ps1 → RESULTS.md
+      8. Report     generate-report.ps1 → RESULTS.md + summary.json
 
     Before starting, prints the expected duration and checks the environment: .NET SDK 10, free memory (NativeAOT),
     AutoMapper license key (Test-Path only), NativeAOT toolchain. A missing key or toolchain is a warning

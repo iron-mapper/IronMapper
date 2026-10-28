@@ -1,0 +1,791 @@
+{
+  "schemaVersion": 1,
+  "generatedUtc": "2026-10-28T10:06:00Z",
+  "resultsDir": "results/2.0.0",
+  "run": {
+    "mode": "Full",
+    "startedUtc": "2026-10-21 19:17 UTC",
+    "totalSeconds": 8998.0,
+    "commit": "909da54",
+    "uncommittedChanges": false,
+    "ironMapperSource": "local",
+    "localPackageVersion": "1.2.0-local.20261022023353"
+  },
+  "environment": {
+    "machine": "12th Gen Intel(R) Core(TM) i7-12650H (10 cores, 16 threads) · 64 GB RAM · Microsoft Windows 10.0.26300 (win-x64) · .NET SDK 10.0.403 · .NET runtime 10.0.14",
+    "benchmarkDotNet": "0.15.8",
+    "os": "Windows 11 (10.0.26300.9711)",
+    "runtime": ".NET 10.0.12 (10.0.12, 10.0.1226.42308)",
+    "architecture": "X64"
+  },
+  "packages": [
+    {
+      "id": "IronMapper",
+      "version": "local (909da54)",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "IronMapper.Extensions.DI",
+      "version": "local (909da54)",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "Riok.Mapperly",
+      "version": "4.3.1",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "Mapster",
+      "version": "10.0.13",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "Mapster.DependencyInjection",
+      "version": "10.0.13",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "AutoMapper",
+      "version": "16.2.0",
+      "role": "Mappers under test"
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection",
+      "version": "10.0.13",
+      "role": "Infrastructure"
+    },
+    {
+      "id": "Microsoft.Extensions.Logging.Abstractions",
+      "version": "10.0.13",
+      "role": "Infrastructure"
+    },
+    {
+      "id": "BenchmarkDotNet",
+      "version": "0.15.8",
+      "role": "Infrastructure"
+    },
+    {
+      "id": "Microsoft.NET.Test.Sdk",
+      "version": "18.11.0",
+      "role": "Tests"
+    },
+    {
+      "id": "xunit.v3.mtp-off",
+      "version": "4.0.2",
+      "role": "Tests"
+    },
+    {
+      "id": "xunit.runner.visualstudio",
+      "version": "4.0.1",
+      "role": "Tests"
+    }
+  ],
+  "baseline": "Manual",
+  "libraries": [
+    {
+      "name": "Manual",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 11.525112017989159,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0
+          },
+          "nested": {
+            "meanNs": 166.5059491207725,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.0
+          },
+          "collection10": {
+            "meanNs": 1275.3143613988702,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 1.0
+          },
+          "collection1000": {
+            "meanNs": 257454.2210355718,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.0
+          },
+          "collection100000": {
+            "meanNs": 220321873.262032,
+            "allocatedBytes": 163261997.0,
+            "ratioToManual": 1.0
+          },
+          "customConfig": {
+            "meanNs": 43.793754066739766,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 1.0
+          },
+          "inPlace": {
+            "meanNs": 8.808617327700961,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 1.0
+          },
+          "diOverheadFlat": {
+            "meanNs": 11.520824945250222,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0
+          },
+          "diOverheadNested": {
+            "meanNs": 205.56205537584094,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.0
+          }
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 15.218517971488664,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0
+          },
+          "nested": {
+            "meanNs": 190.11362563996087,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.0
+          },
+          "collection10": {
+            "meanNs": 1437.5505401974633,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 1.0
+          },
+          "collection1000": {
+            "meanNs": 270621.4984315814,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.0
+          },
+          "collection100000": {
+            "meanNs": 220219580.28985506,
+            "allocatedBytes": 163261557.0,
+            "ratioToManual": 1.0
+          },
+          "customConfig": {
+            "meanNs": 58.392906188964844,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 1.0
+          },
+          "inPlace": {
+            "meanNs": 8.893074161476559,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 1.0
+          },
+          "diOverheadFlat": {
+            "meanNs": 14.91651900112629,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0
+          },
+          "diOverheadNested": {
+            "meanNs": 232.85271151121273,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.0
+          }
+        }
+      },
+      "coldStart": {
+        "medianMs": 50.0228,
+        "deltaToBaselineMs": -0.2318
+      },
+      "nativeAot": {
+        "works": true,
+        "status": "ok",
+        "medianMs": 11.3874,
+        "deltaToBaselineMs": 0.2534
+      },
+      "size": {
+        "publishBytes": 200422,
+        "publishDeltaToBaselineBytes": 4602,
+        "aotExecutableBytes": 1232896,
+        "aotDeltaToBaselineBytes": 2048
+      },
+      "buildTime": {
+        "pairs": 200,
+        "medianSeconds": 1.1624612,
+        "deltaToBaselineSeconds": 0.1977
+      }
+    },
+    {
+      "name": "IronMapper",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 11.380034472261157,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 0.9874
+          },
+          "nested": {
+            "meanNs": 177.77942335882852,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.0677
+          },
+          "collection10": {
+            "meanNs": 1244.3088456696155,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 0.9757
+          },
+          "collection1000": {
+            "meanNs": 271366.92123413086,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.054
+          },
+          "collection100000": {
+            "meanNs": 219993750.1960784,
+            "allocatedBytes": 163262011.0,
+            "ratioToManual": 0.9985
+          },
+          "customConfig": {
+            "meanNs": 43.677328272563656,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 0.9973
+          },
+          "inPlace": {
+            "meanNs": 8.044907736017349,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 0.9133
+          },
+          "diOverheadFlat": {
+            "meanNs": 11.130856891924685,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 0.9662
+          },
+          "diOverheadNested": {
+            "meanNs": 214.36847231604835,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.0428
+          }
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 15.353659292062124,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0089
+          },
+          "nested": {
+            "meanNs": 208.12043964862823,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.0947
+          },
+          "collection10": {
+            "meanNs": 1474.506555601608,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 1.0257
+          },
+          "collection1000": {
+            "meanNs": 274856.99821920955,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.0157
+          },
+          "collection100000": {
+            "meanNs": 219983143.56955376,
+            "allocatedBytes": 163261557.0,
+            "ratioToManual": 0.9989
+          },
+          "customConfig": {
+            "meanNs": 56.62302193118305,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 0.9697
+          },
+          "inPlace": {
+            "meanNs": 8.314675973220305,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 0.935
+          },
+          "diOverheadFlat": {
+            "meanNs": 14.820380583405495,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 0.9936
+          },
+          "diOverheadNested": {
+            "meanNs": 249.47647821335565,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.0714
+          }
+        }
+      },
+      "coldStart": {
+        "medianMs": 51.5794,
+        "deltaToBaselineMs": 1.3248
+      },
+      "nativeAot": {
+        "works": true,
+        "status": "ok",
+        "medianMs": 11.3528,
+        "deltaToBaselineMs": 0.2188
+      },
+      "size": {
+        "publishBytes": 243569,
+        "publishDeltaToBaselineBytes": 47749,
+        "aotExecutableBytes": 1233408,
+        "aotDeltaToBaselineBytes": 2560
+      },
+      "buildTime": {
+        "pairs": 200,
+        "medianSeconds": 1.561565,
+        "deltaToBaselineSeconds": 0.5969
+      }
+    },
+    {
+      "name": "IronMapper_IMapper",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 16.264337504451927,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.4112
+          },
+          "nested": {
+            "meanNs": 185.49802845174617,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.1141
+          },
+          "collection10": {
+            "meanNs": 1329.916244329408,
+            "allocatedBytes": 13080.0,
+            "ratioToManual": 1.0428
+          },
+          "collection1000": {
+            "meanNs": 253044.329934042,
+            "allocatedBytes": 1643848.0,
+            "ratioToManual": 0.9829
+          },
+          "collection100000": {
+            "meanNs": 215863850.78125,
+            "allocatedBytes": 164062099.0,
+            "ratioToManual": 0.9798
+          },
+          "customConfig": {
+            "meanNs": 47.0033852214163,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 1.0733
+          },
+          "inPlace": {
+            "meanNs": 14.00529541248499,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 1.59
+          },
+          "diOverheadFlat": {
+            "meanNs": 15.395266669137138,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.3363
+          },
+          "diOverheadNested": {
+            "meanNs": 222.03665012266578,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.0801
+          }
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 20.88607606433687,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.3724
+          },
+          "nested": {
+            "meanNs": 215.59287905693054,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.134
+          },
+          "collection10": {
+            "meanNs": 1650.2844063011376,
+            "allocatedBytes": 13080.0,
+            "ratioToManual": 1.148
+          },
+          "collection1000": {
+            "meanNs": 284341.1358868634,
+            "allocatedBytes": 1643848.0,
+            "ratioToManual": 1.0507
+          },
+          "collection100000": {
+            "meanNs": 224732629.3427229,
+            "allocatedBytes": 164061653.0,
+            "ratioToManual": 1.0205
+          },
+          "customConfig": {
+            "meanNs": 62.36007886055188,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 1.0679
+          },
+          "inPlace": {
+            "meanNs": 14.899216559198168,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 1.6754
+          },
+          "diOverheadFlat": {
+            "meanNs": 21.999425973211014,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.4748
+          },
+          "diOverheadNested": {
+            "meanNs": 259.01857198670854,
+            "allocatedBytes": 2352.0,
+            "ratioToManual": 1.1124
+          }
+        }
+      },
+      "coldStart": {
+        "medianMs": 70.1106,
+        "deltaToBaselineMs": 19.856
+      },
+      "nativeAot": {
+        "works": true,
+        "status": "ok",
+        "medianMs": 11.6903,
+        "deltaToBaselineMs": 0.5563
+      },
+      "size": {
+        "publishBytes": 419246,
+        "publishDeltaToBaselineBytes": 223426,
+        "aotExecutableBytes": 2728960,
+        "aotDeltaToBaselineBytes": 1498112
+      },
+      "buildTime": {
+        "pairs": null,
+        "medianSeconds": null,
+        "deltaToBaselineSeconds": null
+      }
+    },
+    {
+      "name": "Mapperly",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 11.647843250206538,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.0106
+          },
+          "nested": {
+            "meanNs": 163.115155419638,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 0.9796
+          },
+          "collection10": {
+            "meanNs": 1495.6021506210852,
+            "allocatedBytes": 13304.0,
+            "ratioToManual": 1.1727
+          },
+          "collection1000": {
+            "meanNs": 276933.5662841797,
+            "allocatedBytes": 1675752.0,
+            "ratioToManual": 1.0757
+          },
+          "collection100000": {
+            "meanNs": 242011809.41704026,
+            "allocatedBytes": 167262024.0,
+            "ratioToManual": 1.0984
+          },
+          "customConfig": {
+            "meanNs": 40.3785871134864,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 0.922
+          },
+          "inPlace": {
+            "meanNs": 8.485101995080017,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 0.9633
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 14.499672253926596,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 0.9528
+          },
+          "nested": {
+            "meanNs": 229.29960663725691,
+            "allocatedBytes": 1944.0,
+            "ratioToManual": 1.2061
+          },
+          "collection10": {
+            "meanNs": 1576.5842891874768,
+            "allocatedBytes": 13304.0,
+            "ratioToManual": 1.0967
+          },
+          "collection1000": {
+            "meanNs": 266579.3831758721,
+            "allocatedBytes": 1675752.0,
+            "ratioToManual": 0.9851
+          },
+          "collection100000": {
+            "meanNs": 217032491.59663865,
+            "allocatedBytes": 167261444.0,
+            "ratioToManual": 0.9855
+          },
+          "customConfig": {
+            "meanNs": 54.66855390127315,
+            "allocatedBytes": 176.0,
+            "ratioToManual": 0.9362
+          },
+          "inPlace": {
+            "meanNs": 8.633683390087551,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 0.9708
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        }
+      },
+      "coldStart": {
+        "medianMs": 50.3894,
+        "deltaToBaselineMs": 0.1348
+      },
+      "nativeAot": {
+        "works": true,
+        "status": "ok",
+        "medianMs": 11.2314,
+        "deltaToBaselineMs": 0.0974
+      },
+      "size": {
+        "publishBytes": 234280,
+        "publishDeltaToBaselineBytes": 38460,
+        "aotExecutableBytes": 1254400,
+        "aotDeltaToBaselineBytes": 23552
+      },
+      "buildTime": {
+        "pairs": 200,
+        "medianSeconds": 1.2755945,
+        "deltaToBaselineSeconds": 0.3109
+      }
+    },
+    {
+      "name": "Mapster",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 15.206037912257882,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.3194
+          },
+          "nested": {
+            "meanNs": 185.7694520506748,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.1157
+          },
+          "collection10": {
+            "meanNs": 1324.9062513693784,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 1.0389
+          },
+          "collection1000": {
+            "meanNs": 287022.1059163411,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.1148
+          },
+          "collection100000": {
+            "meanNs": 226942911.163522,
+            "allocatedBytes": 163262016.0,
+            "ratioToManual": 1.0301
+          },
+          "customConfig": {
+            "meanNs": 47.849421530235105,
+            "allocatedBytes": 216.0,
+            "ratioToManual": 1.0926
+          },
+          "inPlace": {
+            "meanNs": 12.97987692735412,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 1.4735
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 25.68497224932625,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 1.6877
+          },
+          "nested": {
+            "meanNs": 231.16939881952797,
+            "allocatedBytes": 1904.0,
+            "ratioToManual": 1.216
+          },
+          "collection10": {
+            "meanNs": 1552.4392327596975,
+            "allocatedBytes": 12904.0,
+            "ratioToManual": 1.0799
+          },
+          "collection1000": {
+            "meanNs": 284761.1684945914,
+            "allocatedBytes": 1635752.0,
+            "ratioToManual": 1.0522
+          },
+          "collection100000": {
+            "meanNs": 217830175.84269667,
+            "allocatedBytes": 163261547.0,
+            "ratioToManual": 0.9891
+          },
+          "customConfig": {
+            "meanNs": 64.56918369892031,
+            "allocatedBytes": 216.0,
+            "ratioToManual": 1.1058
+          },
+          "inPlace": {
+            "meanNs": 20.2538829751131,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 2.2775
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        }
+      },
+      "coldStart": {
+        "medianMs": 148.4449,
+        "deltaToBaselineMs": 98.1903
+      },
+      "nativeAot": {
+        "works": false,
+        "status": "fails at runtime: exit code -1073740791: Unhandled exception. System.MissingMethodException: No parameterless constructor defined for type 'Mapster.NameMatchingStrategy'.",
+        "medianMs": null,
+        "deltaToBaselineMs": null
+      },
+      "size": {
+        "publishBytes": 440664,
+        "publishDeltaToBaselineBytes": 244844,
+        "aotExecutableBytes": 5220352,
+        "aotDeltaToBaselineBytes": 3989504
+      },
+      "buildTime": {
+        "pairs": 200,
+        "medianSeconds": 0.9808965,
+        "deltaToBaselineSeconds": 0.0162
+      }
+    },
+    {
+      "name": "AutoMapper",
+      "runtime": {
+        "net10.0": {
+          "flat": {
+            "meanNs": 33.979707062244415,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 2.9483
+          },
+          "nested": {
+            "meanNs": 263.9526909047907,
+            "allocatedBytes": 2056.0,
+            "ratioToManual": 1.5852
+          },
+          "collection10": {
+            "meanNs": 1817.5022869575314,
+            "allocatedBytes": 14304.0,
+            "ratioToManual": 1.4251
+          },
+          "collection1000": {
+            "meanNs": 344641.2574404762,
+            "allocatedBytes": 1848928.0,
+            "ratioToManual": 1.3387
+          },
+          "collection100000": {
+            "meanNs": 261246759.04761901,
+            "allocatedBytes": 184998116.0,
+            "ratioToManual": 1.1858
+          },
+          "customConfig": {
+            "meanNs": 72.30185297402468,
+            "allocatedBytes": 216.0,
+            "ratioToManual": 1.651
+          },
+          "inPlace": {
+            "meanNs": 27.90095867081122,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 3.1675
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        },
+        "net8.0": {
+          "flat": {
+            "meanNs": 49.625529799350474,
+            "allocatedBytes": 168.0,
+            "ratioToManual": 3.2609
+          },
+          "nested": {
+            "meanNs": 283.8843132320203,
+            "allocatedBytes": 2056.0,
+            "ratioToManual": 1.4932
+          },
+          "collection10": {
+            "meanNs": 2098.079351945357,
+            "allocatedBytes": 14304.0,
+            "ratioToManual": 1.4595
+          },
+          "collection1000": {
+            "meanNs": 385506.884765625,
+            "allocatedBytes": 1848928.0,
+            "ratioToManual": 1.4245
+          },
+          "collection100000": {
+            "meanNs": 256375154.45026174,
+            "allocatedBytes": 184997776.0,
+            "ratioToManual": 1.1642
+          },
+          "customConfig": {
+            "meanNs": 98.23208451271057,
+            "allocatedBytes": 216.0,
+            "ratioToManual": 1.6823
+          },
+          "inPlace": {
+            "meanNs": 39.24989280028221,
+            "allocatedBytes": 0.0,
+            "ratioToManual": 4.4135
+          },
+          "diOverheadFlat": null,
+          "diOverheadNested": null
+        }
+      },
+      "coldStart": {
+        "medianMs": 122.3994,
+        "deltaToBaselineMs": 72.1448
+      },
+      "nativeAot": {
+        "works": false,
+        "status": "fails at runtime: exit code -1073740791: Unhandled exception. System.TypeInitializationException: A type initializer threw an exception. To determine which type, inspect the InnerException's StackTrace property.",
+        "medianMs": null,
+        "deltaToBaselineMs": null
+      },
+      "size": {
+        "publishBytes": 1366869,
+        "publishDeltaToBaselineBytes": 1171049,
+        "aotExecutableBytes": 6387200,
+        "aotDeltaToBaselineBytes": 5156352
+      },
+      "buildTime": {
+        "pairs": 200,
+        "medianSeconds": 1.0045699,
+        "deltaToBaselineSeconds": 0.0399
+      }
+    }
+  ],
+  "inProcessColdStart": [
+    {
+      "name": "Manual",
+      "meanMs": 2.8372
+    },
+    {
+      "name": "IronMapper",
+      "meanMs": 2.8147
+    },
+    {
+      "name": "IronMapper_IMapper",
+      "meanMs": 20.7193
+    },
+    {
+      "name": "Mapperly",
+      "meanMs": 2.92
+    },
+    {
+      "name": "Mapster",
+      "meanMs": 85.2177
+    },
+    {
+      "name": "AutoMapper",
+      "meanMs": 70.4848
+    }
+  ],
+  "units": {
+    "meanNs": "nanoseconds per operation",
+    "allocatedBytes": "bytes per operation",
+    "medianMs": "milliseconds",
+    "*Bytes": "bytes (decimal prefixes in the reports)",
+    "*Seconds": "seconds"
+  }
+}

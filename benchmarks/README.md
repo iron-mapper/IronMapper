@@ -230,11 +230,16 @@ pwsh ./scripts/run-startup.ps1 -Mode Both                               # startu
 pwsh ./scripts/run-aot.ps1 -ReportOnly                                  # aot.md from the NativeAOT run above
 pwsh ./scripts/run-footprint.ps1                                        # footprint.md
 pwsh ./scripts/run-build-time.ps1                                       # build-time.md (20 builds per project)
-pwsh ./scripts/generate-report.ps1                                      # RESULTS.md
+pwsh ./scripts/generate-report.ps1                                      # RESULTS.md + summary.json
 ```
 
 Raw outputs (BenchmarkDotNet artifacts in all formats, CSVs, publish logs, mstat files, published probes) go to
-`results/raw/`, which is not committed; the `results/*.md` reports are.
+`results/raw/`, which is not committed; the `results/*.md` reports are, and so is `results/summary.json`:
+the numbers of the summary table of RESULTS.md (plus every Collection size, .NET 8, the in-process cold start) as
+plain values — nanoseconds, bytes, milliseconds, seconds — with the environment, the commit and the package versions.
+`generate-report.ps1` writes it from the same inputs as RESULTS.md; it is for the project site and anything else that
+must not parse the Markdown. `schemaVersion` (now 1) changes when a field is renamed, removed or changes its meaning;
+a new field does not change it. A value that was not measured is `null`.
 
 A scenario can be measured again after a full run with the single command above. The Run row of `RESULTS.md`
 then lists it with the time its measurement finished: the report compares the measurement files in `results/raw/`
