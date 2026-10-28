@@ -1,0 +1,42 @@
+---
+// The charts of the benchmarks page, each from summary.json: Collection per order by size, cold start Δ,
+// NativeAOT executable Δ, build time Δ.
+import summary from '../generated/benchmarks.json';
+import { model, formatNs, formatMs, formatBytes, formatSeconds } from '../lib/benchmarks.mjs';
+import BarChart from './BarChart.astro';
+
+interface Props { locale: 'en' | 'ru' }
+const { locale } = Astro.props;
+const ru = locale === 'ru';
+const m = model(summary);
+const libs = summary.libraries;
+
+const perOrder = (key: string, count: number) => libs.map((l) => {
+  const x = l.runtime?.['net10.0']?.[key];
+  const v = x?.meanNs == null ? null : x.meanNs / count;
+  return { name: l.name, value: v, label: v == null ? '' : `${formatNs(v)}` };
+});
+const coldStart = libs.map((l) => {
+  const v = l.coldStart?.deltaToBaselineMs ?? null;
+  return { name: l.name, value: v, label: v == null ? '' : formatMs(v, true) ?? '' };
+});
+const aotSize = libs.map((l) => {
+  const v = l.size?.aotDeltaToBaselineBytes ?? null;
+  return { name: l.name, value: v, label: v == null ? '' : formatBytes(v, true) ?? '' };
+});
+const build = libs.map((l) => {
+  const v = l.buildTime?.deltaToBaselineSeconds ?? null;
+  return { name: l.name, value: v, label: v == null ? '' : formatSeconds(v, true) ?? '' };
+});
+const lower = ru ? 'меньше — лучше' : 'lower is better';
+---
+<BarChart title={ru ? 'Коллекция, 10 заказов' : 'Collection, 10 orders'} unit={`ns ${ru ? 'на заказ' : 'per order'}, .NET 10, ${lower}`} items={perOrder('collection10', 10)} />
+<BarChart title={ru ? 'Коллекция, 1 000 заказов' : 'Collection, 1 000 orders'} unit={`ns ${ru ? 'на заказ' : 'per order'}, .NET 10, ${lower}`} items={perOrder('collection1000', 1000)} />
+<BarChart title={ru ? 'Коллекция, 100 000 заказов' : 'Collection, 100 000 orders'} unit={`ns ${ru ? 'на заказ' : 'per order'}, .NET 10, ${lower}`} items={perOrder('collection100000', 100000)}
+  note={ru ? 'На этом размере время определяет сборщик мусора, а не код маппинга; для сравнения кода смотрите 10 и 1 000.' : 'At this size the garbage collector dominates, not the mapping code; compare the code at 10 and 1 000.'} />
+<BarChart title={ru ? 'Холодный старт' : 'Cold start'} unit={`Δ ms ${ru ? 'к консоли без маппера (запуск процесса + один маппинг), ' : 'over the console without a mapper (process start + one mapping), '}${lower}`} items={coldStart}
+  note={ru ? `${m.baseline} — ручной код; отрицательное Δ — разброс измерения.` : `${m.baseline} is hand-written code; a negative Δ is measurement spread.`} />
+<BarChart title={ru ? 'Исполняемый файл NativeAOT' : 'NativeAOT executable'} unit={`Δ ${ru ? 'к консоли без маппера' : 'over the console without a mapper'}, ${lower}`} items={aotSize}
+  note={ru ? 'Размер измерен и там, где приложение под NativeAOT не работает (AutoMapper, Mapster) — см. таблицу.' : 'Measured also where the app does not run under NativeAOT (AutoMapper, Mapster) — see the table.'} />
+<BarChart title={ru ? 'Время сборки' : 'Build time'} unit={`Δ s ${ru ? 'к проекту без маппера' : 'over the project without a mapper'}, ${m.subject?.buildTime?.pairs ?? ''} ${ru ? 'пар сущность/DTO' : 'entity/DTO pairs'}, ${lower}`} items={build}
+  note={ru ? 'Генераторы платят при сборке, рантайм-мапперы — при старте; читайте вместе с холодным стартом.' : 'Source generators pay at compile time, runtime mappers at startup; read together with the cold start.'} />

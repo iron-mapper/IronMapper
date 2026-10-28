@@ -1,0 +1,31 @@
+---
+// Where the numbers come from: run label, date, commit, machine, versions. Shown on the benchmarks page.
+import summary from '../generated/benchmarks.json';
+import { model } from '../lib/benchmarks.mjs';
+import { blobUrl } from '../../project.config.mjs';
+
+interface Props { locale: 'en' | 'ru' }
+const { locale } = Astro.props;
+const m = model(summary);
+const ru = locale === 'ru';
+const rows = [
+  [ru ? 'Прогон' : 'Run', `${m.runLabel} · ${summary.run?.mode ?? ''} · ${summary.run?.startedUtc ?? ''}`],
+  [ru ? 'Коммит' : 'Commit', m.commit ?? '—'],
+  [ru ? 'Машина' : 'Machine', m.machineShort],
+  [ru ? 'ОС и runtime' : 'OS and runtime', `${m.os ?? ''} · ${m.runtime ?? ''}`],
+  ['BenchmarkDotNet', m.benchmarkDotNet ?? '—'],
+  [ru ? 'Участники' : 'Participants', m.packages.filter((p) => p.role === 'Mappers under test').map((p) => `${p.id} ${p.version}`).join(', ')],
+];
+const resultsLink = blobUrl(`benchmarks/${summary.resultsDir ?? 'results'}/RESULTS.md`);
+---
+<table class="run-info">
+  <tbody>
+    {rows.map(([k, v]) => (<tr><th scope="row">{k}</th><td>{v}</td></tr>))}
+    <tr><th scope="row">{ru ? 'Полный отчёт' : 'Full report'}</th><td><a href={resultsLink}>RESULTS.md</a> · <a href={blobUrl('benchmarks/README.md')}>benchmarks/README.md</a></td></tr>
+  </tbody>
+</table>
+<style>
+  .run-info { display: table; width: 100%; table-layout: fixed; }
+  .run-info th { width: 9rem; text-align: left; font-weight: 600; vertical-align: top; }
+  .run-info td { overflow-wrap: anywhere; }
+</style>

@@ -1,0 +1,62 @@
+---
+title: Benchmarks
+description: IronMapper against Mapperly, Mapster, AutoMapper and hand-written code, from the reproducible comparison suite.
+tableOfContents:
+  maxHeadingLevel: 3
+---
+
+import RunInfo from '@components/RunInfo.astro';
+import SummaryTable from '@components/SummaryTable.astro';
+import ScenarioTable from '@components/ScenarioTable.astro';
+import Charts from '@components/Charts.astro';
+import { Content as Methodology } from '@generated/benchmarks-readme.en.md';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Every number on this page is read at build time from `benchmarks/results/summary.json`, which the comparison suite
+writes together with its full report. The suite, its sources and the raw data layout are in
+[`benchmarks/`](../../benchmarks/README.md) of the repository; nothing here is typed in by hand.
+
+## Where the numbers come from
+
+<RunInfo locale="en" />
+
+The baseline is `Manual`: plain hand-written mapping code. A ratio of ×1.00 means "as fast as hand-written";
+a ratio slightly below 1 does not mean faster than hand-written code (see the methodology below).
+
+## Summary
+
+<SummaryTable locale="en" framework="net10.0" />
+
+## Charts
+
+<Charts locale="en" />
+
+## Runtime scenarios
+
+<Tabs>
+  <TabItem label=".NET 10">
+    <ScenarioTable locale="en" framework="net10.0" />
+  </TabItem>
+  <TabItem label=".NET 8">
+    <ScenarioTable locale="en" framework="net8.0" />
+  </TabItem>
+</Tabs>
+
+## Reproduce it
+
+One machine, nothing else running, about 2 h 45 min:
+
+```powershell
+cd benchmarks
+./bench.ps1 full          # menu: ./bench.ps1; Linux/macOS: ./bench.sh
+```
+
+The scripts (`scripts/run-all.ps1` and the single steps) are the source of truth; the CLI only drives them.
+Details, the smoke check that CI runs and the quick A/B of two versions:
+[Run it yourself](../../benchmarks/README.md#run-it-yourself) and [How to run](../../benchmarks/README.md#how-to-run).
+
+## Methodology, limits and caveats
+
+From [`benchmarks/README.md`](../../benchmarks/README.md), unchanged:
+
+<Methodology />

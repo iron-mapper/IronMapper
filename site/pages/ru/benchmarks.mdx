@@ -1,0 +1,67 @@
+---
+title: Бенчмарки
+description: IronMapper против Mapperly, Mapster, AutoMapper и ручного кода — из воспроизводимого набора сравнения.
+tableOfContents:
+  maxHeadingLevel: 3
+---
+
+import RunInfo from '@components/RunInfo.astro';
+import SummaryTable from '@components/SummaryTable.astro';
+import ScenarioTable from '@components/ScenarioTable.astro';
+import Charts from '@components/Charts.astro';
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Каждое число на этой странице читается при сборке сайта из `benchmarks/results/summary.json`, который набор
+сравнения пишет вместе с полным отчётом. Сам набор, его исходники и структура первичных данных — в
+[`benchmarks/`](../../../benchmarks/README.md) репозитория; руками здесь ничего не вписано.
+
+## Откуда числа
+
+<RunInfo locale="ru" />
+
+База сравнения — `Manual`, обычный код маппинга, написанный вручную. Отношение ×1.00 значит «как ручной код»;
+отношение чуть меньше 1 не означает «быстрее ручного кода» (см. методику ниже).
+
+## Сводка
+
+<SummaryTable locale="ru" framework="net10.0" />
+
+## Графики
+
+<Charts locale="ru" />
+
+## Сценарии
+
+<Tabs>
+  <TabItem label=".NET 10">
+    <ScenarioTable locale="ru" framework="net10.0" />
+  </TabItem>
+  <TabItem label=".NET 8">
+    <ScenarioTable locale="ru" framework="net8.0" />
+  </TabItem>
+</Tabs>
+
+## Как воспроизвести
+
+Одна машина, ничего другого не запущено, около 2 ч 45 мин:
+
+```powershell
+cd benchmarks
+./bench.ps1 full          # меню: ./bench.ps1; Linux/macOS: ./bench.sh
+```
+
+Источник правды — скрипты (`scripts/run-all.ps1` и отдельные шаги); CLI только запускает их. Подробности,
+smoke-проверка в CI и быстрое A/B двух версий: [Run it yourself](../../../benchmarks/README.md#run-it-yourself)
+и [How to run](../../../benchmarks/README.md#how-to-run).
+
+## Методика, ограничения и оговорки
+
+Описаны в [`benchmarks/README.md`](../../../benchmarks/README.md) (на английском): правила честности, как читать
+результаты, оговорки по каждой библиотеке и что в набор не вошло и почему. Коротко:
+
+- все мапперы делают одну и ту же работу на одних данных; перед замерами тесты проверяют, что результат каждого
+  структурно равен результату `Manual`;
+- каждый бенчмарк запускается в трёх отдельных процессах; разница в несколько процентов между прогонами — шум;
+- на 100 000 заказов время определяет сборщик мусора, сравнивать код маппинга стоит на 10 и 1 000;
+- холодный старт смотрите по Δ к пустой консоли, а не по абсолютному времени;
+- AutoMapper не поддерживает NativeAOT; Mapster измерен с `Compile()` в настройке; Mapster.Tool не измерялся.

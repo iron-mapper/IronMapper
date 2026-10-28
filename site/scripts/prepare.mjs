@@ -12,6 +12,9 @@
 //     `<!-- quickstart:end -->`, once;
 //   - docs/diagnostics.md and docs/diagnostics.ru.md describe the same set of codes, one `## IMxxxx — Title` each;
 //   - relative links between these files point to existing files and existing headings.
+// Benchmark numbers: benchmarks/results/summary.json (written by benchmarks/scripts/generate-report.ps1) is copied to
+// src/generated/benchmarks.json after a check of its `schemaVersion`; the methodology and caveats of the benchmarks
+// page are the matching sections of benchmarks/README.md. The Open Graph image is rendered from the same numbers.
 // Links are rewritten for the site: `configuration.md#anchor` → `<base>/configuration/#anchor`,
 // `x.ru.md` → `<base>/ru/x/`, `../CHANGELOG.md` → `<base>/changelog/`, any other file of the repository →
 // its page on GitHub. Heading anchors are the ones GitHub and Starlight both produce (github-slugger).
@@ -21,6 +24,7 @@ import { dirname, join, posix, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import GithubSlugger from 'github-slugger';
 import { project, blobUrl } from '../project.config.mjs';
+import { renderOgImage } from './og-image.mjs';
 
 const siteDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoDir = dirname(siteDir);
@@ -322,14 +326,79 @@ function preparePages() {
   return written;
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Benchmarks: summary.json, README sections, Open Graph image
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** The summary.json schema this site reads (src/lib/benchmarks.mjs). Another version → the build stops here. */
+const SUMMARY_SCHEMA_VERSION = 1;
+
+function prepareBenchmarks() {
+  const repoPath = 'benchmarks/results/summary.json';
+  let summary;
+  try {
+    summary = JSON.parse(readRepo(repoPath));
+  } catch (e) {
+    fail(repoPath, 0, `not valid JSON (${e.message}); regenerate it with benchmarks/scripts/generate-report.ps1`);
+  }
+  if (summary.schemaVersion !== SUMMARY_SCHEMA_VERSION) {
+    fail(repoPath, 0,
+      `schemaVersion ${JSON.stringify(summary.schemaVersion)} is not supported by this site (it reads version ${SUMMARY_SCHEMA_VERSION}). ` +
+      'Either the suite changed the format (then update src/lib/benchmarks.mjs and SUMMARY_SCHEMA_VERSION in scripts/prepare.mjs) ' +
+      'or the file is stale (then regenerate it with benchmarks/scripts/generate-report.ps1).');
+  }
+  for (const key of ['libraries', 'resultsDir', 'run']) {
+    if (!(key in summary)) fail(repoPath, 0, `field "${key}" is missing`);
+  }
+  if (!Array.isArray(summary.libraries) || !summary.libraries.some((l) => l.name === 'IronMapper')) {
+    fail(repoPath, 0, 'no "IronMapper" entry in libraries[]');
+  }
+  mkdirSync(generatedDir, { recursive: true });
+  const jsonFile = join(generatedDir, 'benchmarks.json');
+  writeFileSync(jsonFile, JSON.stringify(summary, null, 2) + '\n');
+  const written = [relative(siteDir, jsonFile).split(sep).join('/')];
+
+  // Methodology, reading guide, caveats and scope from benchmarks/README.md (English; the Russian page links to it).
+  const readmePath = 'benchmarks/README.md';
+  const lines = readRepo(readmePath).split('\n');
+  const headings = collectHeadings(lines);
+  const sections = ['Methodology and fairness rules', 'How to read the results', 'Caveats', 'What is not here, and why'];
+  const picked = [];
+  for (const title of sections) {
+    const start = lines.findIndex((l) => l === `## ${title}`);
+    if (start < 0) fail(readmePath, 0, `section "## ${title}" not found (the benchmarks page of the site embeds it)`);
+    let end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+    if (end < 0) end = lines.length;
+    // One level deeper: the page has its own title.
+    picked.push(...lines.slice(start, end).map((l) => (/^#{2,5} /.test(l) ? `#${l}` : l)));
+  }
+  const rewritten = rewriteLinks(readmePath, picked, headings);
+  const mdFile = join(generatedDir, 'benchmarks-readme.en.md');
+  writeFileSync(mdFile, `---\ntitle: Benchmarks methodology\n---\n${rewritten.join('\n')}\n`);
+  written.push(relative(siteDir, mdFile).split(sep).join('/'));
+
+  return { written, summary };
+}
+
+async function prepareOgImage(summary) {
+  const dir = join(siteDir, 'public', 'og');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'og.png');
+  await renderOgImage(summary, file);
+  return [relative(siteDir, file).split(sep).join('/')];
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 try {
   rmSync(contentDir, { recursive: true, force: true });
   rmSync(generatedDir, { recursive: true, force: true });
+  rmSync(join(siteDir, 'public', 'og'), { recursive: true, force: true });
   mkdirSync(contentDir, { recursive: true });
-  const written = [...prepareDocs(), ...prepareChangelog(), ...prepareQuickStart(), ...preparePages()];
-  console.log(`prepare: ${written.length} files written to site/src/ from docs/, CHANGELOG.md, README and site/pages/`);
+  const benchmarks = prepareBenchmarks();
+  const written = [...prepareDocs(), ...prepareChangelog(), ...prepareQuickStart(), ...preparePages(), ...benchmarks.written, ...(await prepareOgImage(benchmarks.summary))];
+  console.log(`prepare: ${written.length} files written to site/src/ and site/public/og/ from docs/, CHANGELOG.md, README, benchmarks/ and site/pages/`);
 } catch (e) {
   if (e instanceof ContractError) {
     console.error(`prepare: ${e.message}`);

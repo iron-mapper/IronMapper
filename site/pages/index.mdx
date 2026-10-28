@@ -19,6 +19,9 @@ hero:
 
 import { Content as QuickStart } from '@generated/quickstart.en.md';
 import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Metrics from '@components/Metrics.astro';
+
+<Metrics locale="en" />
 
 ## Install
 
@@ -40,5 +43,6 @@ reported at build time as [diagnostics](../../docs/diagnostics.md) at your code.
   <LinkCard title="Configuration" description="Attributes, profiles, converters, collections, IMapper and DI." href="../../docs/configuration.md" />
   <LinkCard title="Advanced" description="Nested objects, constructors and records, factories, value conversions, NativeAOT." href="../../docs/advanced.md" />
   <LinkCard title="Diagnostics" description="Every IM diagnostic: what it points to, why, and how to fix it." href="../../docs/diagnostics.md" />
+  <LinkCard title="Benchmarks" description="Against Mapperly, Mapster, AutoMapper and hand-written code; how to reproduce." href="benchmarks.mdx" />
   <LinkCard title="Changelog" description="What changed in every release." href="../../CHANGELOG.md" />
 </CardGrid>
