@@ -19,6 +19,9 @@ public sealed class IronMapperOptions
     internal List<Assembly> MappingAssemblies { get; } = new();
     internal List<Action<IServiceCollection>> ServiceRegistrations { get; } = new();
 
+    internal const string AddConverterObsoleteMessage =
+        "AddConverter<T>() does nothing for mapping: the generated code creates the converter itself (new T() or one cached instance), not from DI. Remove the call. It will be removed in 3.0.0.";
+
     /// <summary>
     /// Registers the generated mappings of the assembly that contains <typeparamref name="TProfile"/>.
     /// The profile itself is not added to the container: profiles are read by the source generator at compile time.
@@ -51,13 +54,14 @@ public sealed class IronMapperOptions
     }
 
     /// <summary>
-    /// Registers <typeparamref name="TConverter"/> in the DI container as a transient service. This does not affect
-    /// mapping: the generated mapping code does not resolve converters from DI, it creates them itself (one instance of a
-    /// converter without state, a new instance per call otherwise), so converters still need a public or internal
-    /// parameterless constructor (IM0015 otherwise).
+    /// Obsolete: does nothing for mapping. It only registers <typeparamref name="TConverter"/> in the DI container as a
+    /// transient service; the generated mapping code does not resolve converters from DI, it creates them itself (one
+    /// instance of a converter without state, a new instance per call otherwise), so converters need a public or internal
+    /// parameterless constructor (IM0015 otherwise). Remove the call. Removed in 3.0.0.
     /// </summary>
     /// <typeparam name="TConverter">A concrete type implementing <see cref="ITypeConverter"/>.</typeparam>
     /// <returns>This <see cref="IronMapperOptions"/> instance for method chaining.</returns>
+    [Obsolete(AddConverterObsoleteMessage)]
     public IronMapperOptions AddConverter<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TConverter>()
         where TConverter : class, ITypeConverter
     {

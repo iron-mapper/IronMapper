@@ -743,19 +743,24 @@ public class DateToStringConverter : ITypeConverter<DateTime, string>
 `tests/IronMapper.Tests/ConverterCacheTests.cs` (один экземпляр; новый экземпляр на вызов при поле в классе, в базовом
 классе или автосвойстве; конструктор с кодом; первое использование из 16 потоков).
 
-### `AddConverter<T>()` не влияет на маппинг
+### Converters из DI не поддерживаются (`AddConverter<T>()` устарел)
 
-`IronMapperOptions.AddConverter<T>()` регистрирует тип converter в DI-контейнере как transient-сервис, и больше ничего не
-делает: сгенерированный код не получает converters из DI (см. [Экземпляры converter](#экземпляры-converter)), поэтому
-зарегистрированный так converter с его зависимостями **не** используется при маппинге. Converter, у которого все
-конструкторы принимают параметры, получает `IM0015` независимо от регистрации. `AddProfilesFromAssembly` и
-`AddProfile<T>()` регистрируют сгенерированные маппинги сборки для `IMapper`; сами профили в контейнер не добавляются
-(до 1.1.4 включительно добавлялись как singleton).
+Converter не может получать сервисы из DI-контейнера. Сгенерированный код создаёт converter сам: `new T()` или один
+закэшированный экземпляр (см. [Экземпляры converter](#экземпляры-converter)). Поэтому converter нужен конструктор без
+параметров. Converter, у которого все конструкторы принимают параметры, получает
+[`IM0015`](diagnostics.ru.md#im0015--converter-нельзя-создать-в-сгенерированном-коде), и его маппинг не генерируется.
+
+Если для значения нужен сервис, получите его вне маппинга:
+
+- посчитайте значение до маппинга и положите его в source;
+- или сначала выполните маппинг (свойство в нём проигнорировано), а потом задайте его сами.
 
 ```csharp
-services.AddIronMapper(opt =>
-{
-    opt.AddProfilesFromAssembly(typeof(Program).Assembly);
-    opt.AddConverter<DateToStringConverter>();
-});
+var dto = order.MapToOrderDto();
+dto.Price = priceFormatter.Format(order.Price, order.Currency);   // значение, которому нужен сервис
 ```
+
+`AddConverter<T>()` на маппинг не влияет. Он только регистрирует тип в контейнере, а маппинг оттуда его никогда не берёт.
+С 2.1.0 метод помечен `[Obsolete]` (предупреждение `CS0618`, с `TreatWarningsAsErrors` — ошибка) и будет удалён в 3.0.0.
+Удалите вызов. Если ваш собственный код получает converter из контейнера, зарегистрируйте его сами:
+`services.AddTransient<DateToStringConverter>()`.

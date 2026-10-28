@@ -418,9 +418,10 @@ generated.
 Before this diagnostic the build failed with `CS7036`, `CS1729`, `CS0122` or `CS0144` inside the generated file.
 
 **Fix:** give the converter a public or internal parameterless constructor and make it a non-abstract class or a
-struct the generated class can access. A converter that needs services from DI cannot be used yet:
-`AddConverter<T>()` does not change how converters are created (see
-[Converter instances](configuration.md#converter-instances)). Only the affected mapping is skipped; other mappings are
+struct the generated class can access. A converter that needs services from DI is not supported: compute the value
+before mapping or set it after (see
+[Converters from DI are not supported](configuration.md#converters-from-di-are-not-supported-addconvertert-is-obsolete)).
+`AddConverter<T>()` does not change how converters are created; it is obsolete from 2.1.0. Only the affected mapping is skipped; other mappings are
 generated. A property marked `[Ignore]` does not use its converter, so its converter is not checked.
 
 ---
