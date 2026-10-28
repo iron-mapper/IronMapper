@@ -30,7 +30,9 @@ The script takes the `# Title` of a doc as the page title, drops the language ba
 (`configuration.md#anchor` → `/configuration/#anchor`, `diagnostics.md#im0002--…` → `/diagnostics/im0002/`,
 `../CHANGELOG.md` → `/changelog/`, other repository files → GitHub) and fails the build when a link points to a missing file or heading, when a doc exists in one language only,
 or when the format contract in `CLAUDE.md` ("Site") is broken. Links in `site/pages/` are written as relative paths to
-the repository files (`../../docs/configuration.md`), so they are checked the same way.
+the repository files (`../../docs/configuration.md`), so they are checked the same way. Every generated page carries an
+"Edit page" link to its source file on GitHub (a visitor without write access is offered a fork and a pull request, as
+on GitHub itself); the hand-written home pages set `editUrl: false`.
 
 ## Benchmark numbers
 
