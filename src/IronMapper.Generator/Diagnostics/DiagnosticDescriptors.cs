@@ -208,6 +208,23 @@ internal static class DiagnosticDescriptors
         description: "ConvertUsing takes a lambda (s => …) or a static method group (ConvertUsing(UserId.From)), read at compile time: the generated method calls it with the source. A delegate in a variable or an instance method cannot be called by the generated class; the method must be public or internal. The message says what is wrong. Other mappings in the project are still generated.");
 
     /// <summary>
+    /// IM0024 — The argument of a profile setting that the generated code calls — <c>MapFrom(…)</c> (in <c>ForMember</c>,
+    /// <c>ForCtorParam</c>), <c>When(…)</c>, <c>BeforeMap(…)</c>, <c>AfterMap(…)</c> — cannot be used: not a lambda or a static
+    /// method group written in the call (a delegate in a variable, an instance method, a local function, a method the
+    /// generated code cannot call); the mapping is not generated. Up to 2.0.0 such an argument, and a static method group
+    /// too, was silently ignored: the member was mapped by name (or CS1061 in the generated file), the mapping had no
+    /// condition, the hook was not called.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InvalidProfileMethod = new(
+        id: "IM0024",
+        title: "Method of a profile setting cannot be used",
+        messageFormat: "Mapping from '{0}' to '{1}' was not generated: {2} cannot be used: {3}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "MapFrom, When, BeforeMap and AfterMap take a lambda or a static method group (MapFrom(Helper.Compute), When(Rules.IsActive), AfterMap(Audit.Stamp)), read at compile time: the generated method calls it with the source (and the destination for a hook). A delegate in a variable, a local function or an instance method cannot be called by the generated class; the method must be public or internal. The message says what is wrong. Other mappings in the project are still generated.");
+
+    /// <summary>
     /// IM0023 — A value that can be <see langword="null"/> (a nullable reference type) goes where the generated code needs
     /// a non-nullable one: a non-nullable destination property or parameter (<c>string?</c> → <c>string</c>), a converter,
     /// a transformer or an element mapping that takes a non-nullable value. Up to 2.0.0 the compiler reported it inside

@@ -32,6 +32,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0023`. 
 | IM0021 | Warning | Init property cannot be set after the factory | Yes — profiles (from 2.1.0) |
 | IM0022 | Error | Converter of `ConvertUsing` cannot be used | Yes — profiles (from 2.1.0) |
 | IM0023 | Warning | Nullable value mapped to a non-nullable member | Yes — attributes and profiles (from 2.1.0) |
+| IM0024 | Error | Method of a profile setting cannot be used | Yes — profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -621,3 +622,38 @@ configuration of the compiler warning it replaces when it is set for every file 
 `s.Email ?? ""`), declare the destination nullable, or ignore the member. The severity is set the standard way:
 `dotnet_diagnostic.IM0023.severity` in `.editorconfig`, `#pragma warning disable IM0023` around the `CreateMap` line,
 `<NoWarn>`.
+
+---
+
+## IM0024 — Method of a profile setting cannot be used
+
+**Severity:** Error (from 2.1.0; issue [#59](https://github.com/iron-mapper/IronMapper/issues/59))
+
+**Points to:** the argument of `MapFrom` (in `ForMember` or `ForCtorParam`), `When`, `BeforeMap` or `AfterMap`.
+
+**Message:** `Mapping from '{0}' to '{1}' was not generated: {2} cannot be used: {3}` — `{2}` names the setting:
+`MapFrom for 'Title'` (the property, or the parameter of `ForCtorParam`), `When`, `BeforeMap` or `AfterMap`; `{3}` says
+what is wrong and what to write, for example
+`'Formats.Title' is an instance method, which the generated class cannot call. Pass a static method, or a lambda that does not capture an instance.`
+
+**Cause:** the generated method calls the argument with the source (a hook: with the source and the destination), so it
+must be a lambda (`MapFrom(s => s.First + "!")`, `AfterMap((s, d) => …)`) or a static method group written in the call
+(`MapFrom(Helper.Compute)`, `When(Rules.IsActive)`, `AfterMap(Audit.Stamp)`). Reported for:
+
+- an instance method or a local function (the generated class has no instance to call it on);
+- a private or protected method, or a method of a private type;
+- a delegate in a variable, a field or a property, or an anonymous method (`delegate (Row r) { … }`): it cannot be read at
+  compile time.
+
+Up to 2.0.0 such an argument, and a static method group too, was silently ignored: `MapFrom` mapped the member by name,
+as if it had no `ForMember` (or the generated file did not compile, `CS1061`, when the source had no property of that
+name), `When` added no condition, a hook was never called. A static method group is called from 2.1.0; the return type of
+a `MapFrom` method is checked like the type of a lambda
+([`IM0002`](#im0002--property-types-are-incompatible-or-have-no-mapping),
+[`IM0023`](#im0023--nullable-value-mapped-to-a-non-nullable-member) at the argument).
+
+**Behavior:** the mapping is not generated; other mappings in the project are.
+
+**Fix:** pass a public or internal static method, or a lambda that does not use locals or the profile instance:
+`MapFrom(s => formats.Title(s))` is not allowed either (it captures `formats`), `MapFrom(s => Formats.Title(s))` with a
+static `Title` is.

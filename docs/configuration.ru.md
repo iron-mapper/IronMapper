@@ -314,7 +314,7 @@ issue [#22](https://github.com/iron-mapper/IronMapper/issues/22)), и включ
 - его настраивает `ForMember`: `opt.MapFrom(...)`, `opt.Ignore()`, `opt.UseConverter<T>()` (и отдельный
   `.Ignore(d => d.X)`);
 - его даёт `IncludeMembers` или source-свойство с тем же именем (без учёта регистра);
-- на нём стоит `[Ignore]` (как в маппингах атрибутами).
+- на нём стоит `[Ignore]` (как в маппингах атрибутами; с 2.1.0 оно и не заполняется, см. [`[Ignore]`](#ignore)).
 
 Маппинг с `ConvertUsing<T>()` или `ConvertUsing(src => ...)` IM0001 не получает: converter создаёт весь объект
 destination. Обратный маппинг `ReverseMap()` не проверяется: он сопоставляет только по именам, и `ForMember` к нему не
@@ -399,7 +399,13 @@ public class PersonDto
 
 Применяется к **свойству source-типа** или **свойству destination-типа**. Свойство исключается из обоих вариантов mapping — создающего и in-place; на свойстве destination оно также подавляет `IM0001`.
 
-`[Ignore]` учитывается только в маппингах `[MapTo]`/`[MapFrom]`. В профилях используйте `ForMember(d => d.X, o => o.Ignore())`.
+С 2.1.0 маппинги профилей (`CreateMap`) тоже учитывают `[Ignore]` на свойстве **destination**: свойство не
+заполняется ни в новом объекте, ни in-place, а параметр конструктора с тем же именем получает значение по умолчанию. До
+2.0.0 включительно профиль только не выдавал для него `IM0001` и всё равно копировал одноимённое свойство источника
+([#61](https://github.com/iron-mapper/IronMapper/issues/61); см. [Переход на 2.1](upgrading-to-2.1.ru.md#7-ignore-учитывается-в-профилях)).
+`[Ignore]` на свойстве **source** тоже учитывается: свойство не читается (параметр с тем же именем получает значение по
+умолчанию). `ForMember` свойства destination (`MapFrom`, `UseConverter`) важнее обоих. `[Ignore]` действует на все
+маппинги типа; чтобы исключить свойство только из одного маппинга профиля, используйте `ForMember(d => d.X, o => o.Ignore())`.
 
 ```csharp
 [MapTo(typeof(OrderDto))]
@@ -470,6 +476,19 @@ public class OrderProfile : MappingProfile
 ```csharp
 CreateMap<Employee, EmployeeDto>()
     .ForMember(d => d.FullName, opt => opt.MapFrom(s => s.FirstName + " " + s.LastName));
+```
+
+С 2.1.0 принимается и группа методов статического метода — он вызывается с источником (и в `ForCtorParam`). До 2.0.0
+включительно она молча игнорировалась: свойство маппилось по имени, а если у источника нет свойства с таким именем —
+сгенерированный файл не компилировался (`CS1061`) ([#59](https://github.com/iron-mapper/IronMapper/issues/59)). Метод
+должен быть public или internal; метод экземпляра, локальная функция или делегат в переменной —
+[`IM0024`](diagnostics.ru.md#im0024--метод-настройки-профиля-нельзя-использовать).
+
+```csharp
+public static class EmployeeFormat { public static string FullName(Employee e) => e.FirstName + " " + e.LastName; }
+
+CreateMap<Employee, EmployeeDto>()
+    .ForMember(d => d.FullName, opt => opt.MapFrom(EmployeeFormat.FullName));   // FullName = EmployeeFormat.FullName(source)
 ```
 
 ---
@@ -583,6 +602,11 @@ CreateMap<OrderRow, Order>().ConstructUsing(s => new Order("#" + s.Code));
 CreateMap<UserEntity, UserDto>()
     .When(src => src.IsActive);
 ```
+
+С 2.1.0 `When`, `BeforeMap` и `AfterMap` принимают и группу методов статического метода — он вызывается с source (хук — с
+source и destination): `.When(UserRules.IsActive)`, `.AfterMap(Audit.Stamp)`. До 2.0.0 включительно группа методов молча
+игнорировалась (условия нет, хук не вызывается). Аргумент, который сгенерированный код вызвать не может, —
+[`IM0024`](diagnostics.ru.md#im0024--метод-настройки-профиля-нельзя-использовать).
 
 ---
 

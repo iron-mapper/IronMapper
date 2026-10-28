@@ -16,7 +16,8 @@ namespace IronMapper.CodeFixes;
 /// <summary>
 /// Code fix for IM0001 — unmapped destination property. The diagnostic points to the destination property of an
 /// attribute mapping (the fix adds <c>[Ignore]</c> to it) or to the <c>CreateMap</c> call of a profile mapping (the fix
-/// adds <c>.ForMember(dest =&gt; dest.X, opt =&gt; opt.Ignore())</c>: <c>[Ignore]</c> is not read in profiles).
+/// adds <c>.ForMember(dest =&gt; dest.X, opt =&gt; opt.Ignore())</c>: a profile reads <c>[Ignore]</c> from 2.1.0, but it would
+/// apply to every mapping to the type, while <c>ForMember</c> ignores the property in this mapping only).
 /// </summary>
 [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(IM0001CodeFixProvider))]
 [Shared]

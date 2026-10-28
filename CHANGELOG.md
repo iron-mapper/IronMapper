@@ -175,6 +175,32 @@
   build error `IM0022` at the argument, instead of a silently wrong mapping (the converter could not be called anyway).
   Fix: pass a static method or a lambda. See
   [IM0022](docs/diagnostics.md#im0022--converter-of-convertusing-cannot-be-used).
+- **`MapFrom` with a static method group** (`ForMember(d => d.Title, o => o.MapFrom(Helper.Compute))`, also in
+  `ForCtorParam`) was silently ignored up to 2.0.0: the member was mapped by name, or the generated file did not compile
+  (`CS1061`) when the source had no property of that name ([#59](https://github.com/iron-mapper/IronMapper/issues/59)).
+  Now the method is called with the source. **The result at run time changes** where the source has a property of that
+  name: check such mappings when you upgrade. An instance method, a local function, a private method or a delegate in a
+  variable is the new build error `IM0024` at the argument. See
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#6-mapfrom-when-and-hooks-with-a-static-method-group-are-called) and
+  [IM0024](docs/diagnostics.md#im0024--method-of-a-profile-setting-cannot-be-used).
+- **`When`, `BeforeMap` and `AfterMap` with a static method group** (`.When(Rules.IsActive)`, `.AfterMap(Audit.Stamp)`)
+  were silently ignored up to 2.0.0: the mapping had no condition, the hook was never called. Now the method is called
+  (a hook with the source and the destination). **The result at run time changes:** a source for which the condition is
+  `false` now maps to `null`, and the hook runs; check such mappings when you upgrade. An argument the generated code
+  cannot call is `IM0024`, as for `MapFrom`. Same section of
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#6-mapfrom-when-and-hooks-with-a-static-method-group-are-called).
+- **`[Ignore]` on a destination property in profile mappings** only suppressed `IM0001` up to 2.0.0; the source property
+  of the same name was still copied, also in place ([#61](https://github.com/iron-mapper/IronMapper/issues/61)). Now a
+  profile mapping leaves it out, as an attribute mapping does (a constructor parameter of the same name gets its default
+  value); `ForMember` of the property still wins. **The result at run time changes:** such a property keeps its default
+  value (in place: its current value); check such mappings when you upgrade. See
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#7-ignore-applies-in-profiles).
+- **`[Ignore]` on a source property in profile mappings** was not read up to 2.0.0: the property was still copied to the
+  destination property of the same name (also in place, with `ReverseMap()` and `IncludeMembers`). Now it is not read,
+  as in attribute mappings (a constructor parameter of the same name gets its default value); `ForMember` of the
+  destination property still wins. **The result at run time changes:** the destination property keeps its default value
+  (in place: its current value); check such mappings when you upgrade. Same section of
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#7-ignore-applies-in-profiles).
 
 ### Performance
 

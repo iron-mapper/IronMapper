@@ -204,6 +204,16 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   choice. Never updated in place. `ConvertUsing` also takes a static method group (`FactoryAnalyzer.ConvertUsing`,
   `return D.From(source);`); anything else the generated code cannot call is IM0022. `ReverseMap(Func<TDest, TSource>)` (an extension in `MappingExpressionExtensions`) gives the reverse mapping that converter, read the same way. Tests: `PairConverterTests`
   (generator and runtime), `PairConverterMapperTests`, snapshot `PairConverters`.
+- **Configuration that 2.0.0 dropped** (PR 8 of 2.1.0): a method group in `MapFrom` (issue #59, `ForMember` and
+  `ForCtorParam`, the `Func<TSource, object?>` overload), `When`, `BeforeMap`, `AfterMap` — a static method is called,
+  `Helper.Compute(source)`, a hook `Audit.Stamp(source, destination);` (`FactoryAnalyzer.MapFrom`/`When`/`Hook`, sharing
+  `CallWithSource` with `ConvertUsing`; the return type of a `MapFrom` method is the type of the value for IM0002/IM0023);
+  anything else the generated code cannot call is IM0024 at the argument (`{2}` names the setting), the mapping is not
+  generated. `[Ignore]` in profile mappings (issue #61, `ProfileAnalyzer.BuildDescriptorFromProfile`), as in attribute
+  mappings: a destination property is not set, a source property (also of an `IncludeMembers` member) is not read; new
+  object, in place, the parameter of the same name gets its default value; `ForMember`/`ForCtorParam` of the destination
+  member wins. All change the result at run time (CHANGELOG Fixed, `docs/upgrading-to-2.1.md` sections 6 and 7). Tests:
+  `SilentlyIgnoredConfigTests` (generator and runtime), snapshot `SilentlyIgnoredConfig`.
 - **Nullable narrowing, IM0023** (issue #54, PR 6 of 2.1.0): `PropertyTypeCheck.CheckNullableValue` (assignments and
   arguments, collection elements assigned as is), `CheckNullableMapFrom` (flow state of the `MapFrom` expression; `!` at
   its end suppresses), `CheckNullableConverter`, `Transformer` (profile `AddTransformer` of the type), `CheckNullableElements`

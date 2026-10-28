@@ -94,11 +94,12 @@ public class CyclicMappingTests
 
     [Theory]
     [InlineData("[MapTo(typeof(EmployeeDto))] ", "[Ignore] ", null)]
+    [InlineData("", "[Ignore] ", "")]
     [InlineData("", "", ".ForMember(d => d.Manager, o => o.Ignore())")]
     [InlineData("", "", ".ForMember(d => d.Manager, o => o.MapFrom(s => s.Manager == null ? null : new EmployeeDto { Name = s.Manager.Name }))")]
     public void IgnoreOrMapFromOnThePath_BreaksTheCycle(string mapTo, string ignore, string? forMember)
     {
-        // [Ignore] in an attribute mapping; a profile does not read [Ignore] (plan item 2.6), there it is ForMember.
+        // [Ignore] in an attribute mapping and in a profile (from 2.1.0, issue #61), Ignore() or MapFrom in ForMember.
         string profile = forMember is null ? "" : $$"""
 
             public class EmployeeProfile : MappingProfile

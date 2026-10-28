@@ -172,14 +172,63 @@ internal static class FactoryAnalyzer
     /// </summary>
     public static string? ConvertUsing(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
         INamedTypeSymbol dest, string callName, List<DiagnosticInfo> problems, CancellationToken ct)
+        => CallWithSource(argument, model, callName, "s => …", $"{callName}({dest.Name}.From)", "source",
+            reason => problems.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidConverter, source.ToDisplayString(),
+                    dest.ToDisplayString(), reason)
+                .WithLocation(LocationInfo.From(argument))),
+            ct, out _);
+
+    /// <summary>
+    /// The value of <c>ForMember(…, o =&gt; o.MapFrom(<paramref name="argument"/>))</c> (or of <c>ForCtorParam</c>) written as a
+    /// method group (<c>MapFrom(Helper.Compute)</c>, the <c>Func&lt;TSource, object?&gt;</c> overload): <c>global::App.Helper.Compute(source)</c>,
+    /// with the method in <paramref name="method"/> (its return type is the type of the value), or <see langword="null"/>
+    /// with IM0024 in <paramref name="problems"/> when the generated class cannot call it. Up to 2.0.0 the argument was
+    /// dropped and <paramref name="member"/> was mapped by name (or <c>CS1061</c> in the generated file).
+    /// </summary>
+    public static string? MapFrom(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
+        INamedTypeSymbol dest, string member, List<DiagnosticInfo> problems, CancellationToken ct, out IMethodSymbol? method)
+        => ProfileMethod(argument, model, source, dest, $"MapFrom for '{member}'", "MapFrom", "s => …", "MapFrom(Helper.Compute)",
+            "source", problems, ct, out method);
+
+    /// <summary>
+    /// The condition of <c>When(<paramref name="argument"/>)</c> written as a method group (<c>When(Rules.IsActive)</c>):
+    /// <c>global::App.Rules.IsActive(source)</c>, or <see langword="null"/> with IM0024. Up to 2.0.0 it was dropped: the
+    /// mapping had no condition.
+    /// </summary>
+    public static string? When(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
+        INamedTypeSymbol dest, List<DiagnosticInfo> problems, CancellationToken ct)
+        => ProfileMethod(argument, model, source, dest, "When", "When", "s => …", "When(Rules.IsActive)", "source", problems, ct, out _);
+
+    /// <summary>
+    /// The hook <c>BeforeMap(<paramref name="argument"/>)</c> or <c>AfterMap(…)</c> (<paramref name="callName"/>) written as a
+    /// method group (<c>AfterMap(Audit.Stamp)</c>): the statement <c>global::App.Audit.Stamp(source, destination);</c>, or
+    /// <see langword="null"/> with IM0024. Up to 2.0.0 it was dropped: the hook was never called.
+    /// </summary>
+    public static string? Hook(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
+        INamedTypeSymbol dest, string callName, List<DiagnosticInfo> problems, CancellationToken ct)
+        => ProfileMethod(argument, model, source, dest, callName, callName, "(s, d) => …", $"{callName}(Audit.Stamp)",
+            "source, destination", problems, ct, out _) is { } call
+            ? call + ";"
+            : null;
+
+    // IM0024 for the argument of a profile setting (`what`: MapFrom for 'Title', When, BeforeMap, AfterMap).
+    private static string? ProfileMethod(ExpressionSyntax argument, SemanticModel model, INamedTypeSymbol source,
+        INamedTypeSymbol dest, string what, string callName, string lambdaExample, string example, string arguments,
+        List<DiagnosticInfo> problems, CancellationToken ct, out IMethodSymbol? method)
+        => CallWithSource(argument, model, callName, lambdaExample, example, arguments,
+            reason => problems.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidProfileMethod, source.ToDisplayString(),
+                    dest.ToDisplayString(), what, reason)
+                .WithLocation(LocationInfo.From(argument))),
+            ct, out method);
+
+    // A static method group in the argument, called with `arguments` (the source, and the destination for a hook); anything
+    // else goes to `invalid` with the reason. An error in the argument is the compiler's (it reports it there): null
+    // without a reason.
+    private static string? CallWithSource(ExpressionSyntax argument, SemanticModel model, string callName, string lambdaExample,
+        string example, string arguments, System.Action<string> invalid, CancellationToken ct, out IMethodSymbol? called)
     {
+        called = null;
         var compilation = model.Compilation;
-
-        void Invalid(string reason)
-            => problems.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidConverter, source.ToDisplayString(), dest.ToDisplayString(),
-                    reason)
-                .WithLocation(LocationInfo.From(argument)));
-
         var target = argument.Parent is ArgumentSyntax argumentSyntax && model.GetOperation(argumentSyntax, ct) is IArgumentOperation passed
             ? passed.Value
             : model.GetOperation(argument, ct);
@@ -190,13 +239,12 @@ internal static class FactoryAnalyzer
 
         if (target is not IMethodReferenceOperation reference)
         {
-            // An error in the argument is the compiler's (it reports it there).
             if (target is null || target.Type is IErrorTypeSymbol || model.GetSymbolInfo(argument, ct).CandidateReason != CandidateReason.None)
             {
                 return null;
             }
 
-            Invalid($"{callName} takes a lambda, such as {callName}(s => …), or a static method group, such as {callName}({dest.Name}.From), written in the call; '{argument}' is neither, so the generated method cannot call it.");
+            invalid($"{callName} takes a lambda, such as {callName}({lambdaExample}), or a static method group, such as {example}, written in the call; '{argument}' is neither, so the generated method cannot call it.");
             return null;
         }
 
@@ -204,13 +252,13 @@ internal static class FactoryAnalyzer
         string display = $"{method.ContainingType.Name}.{method.Name}";
         if (method.MethodKind == MethodKind.LocalFunction)
         {
-            Invalid($"'{method.Name}' is a local function, which the generated class cannot call. Declare it as a static method of a type, or pass a lambda.");
+            invalid($"'{method.Name}' is a local function, which the generated class cannot call. Declare it as a static method of a type, or pass a lambda.");
             return null;
         }
 
         if (!method.IsStatic || reference.Instance is not null)
         {
-            Invalid($"'{display}' is an instance method, which the generated class cannot call. Pass a static method, or a lambda that does not capture an instance.");
+            invalid($"'{display}' is an instance method, which the generated class cannot call. Pass a static method, or a lambda that does not capture an instance.");
             return null;
         }
 
@@ -219,7 +267,7 @@ internal static class FactoryAnalyzer
             var hidden = method.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal
                 ? (ISymbol?)FirstInaccessibleType(method.ContainingType, compilation) ?? method
                 : method;
-            Invalid($"'{display}' cannot be called by the generated class: '{hidden.ToDisplayString()}' is {SymbolHelpers.ToKeyword(hidden.DeclaredAccessibility)}. Make it public or internal.");
+            invalid($"'{display}' cannot be called by the generated class: '{hidden.ToDisplayString()}' is {SymbolHelpers.ToKeyword(hidden.DeclaredAccessibility)}. Make it public or internal.");
             return null;
         }
 
@@ -229,7 +277,8 @@ internal static class FactoryAnalyzer
             call += $"<{string.Join(", ", method.TypeArguments.Select(SymbolHelpers.GetFullyQualifiedName))}>";
         }
 
-        return $"{call}(source)";
+        called = method;
+        return $"{call}({arguments})";
     }
 
     private static string UntypedLambda(INamedTypeSymbol dest)
