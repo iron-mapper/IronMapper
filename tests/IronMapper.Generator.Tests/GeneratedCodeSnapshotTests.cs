@@ -607,6 +607,56 @@ public class GeneratedCodeSnapshotTests
         public struct PointDto { public int X { get; set; } }
         """, new Dictionary<string, string> { ["IronMapperRegistration"] = "false" });
 
+    // Profile configuration that 2.0.0 dropped (PR 8 of 2.1.0): MapFrom with a static method group is called with the
+    // source (#59; 2.0.0 generated Title = source.Title and Slug = source.Slug, CS1061), and so are When and AfterMap (2.0.0:
+    // no condition, no hook); [Ignore] on the destination Secret and the source Draft is applied in the new object, in place
+    // and in the registration (#61; 2.0.0 copied both).
+    [Fact]
+    public Task SilentlyIgnoredConfig() => Verify("""
+        using IronMapper.Attributes;
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public class ArticleRow
+        {
+            public bool Published { get; set; }
+            public string Headline { get; set; } = "";
+            public string Title { get; set; } = "";
+            public string Secret { get; set; } = "";
+            [Ignore] public string Draft { get; set; } = "";
+        }
+        public class ArticleCard
+        {
+            public string Title { get; set; } = "";
+            public string Slug { get; set; } = "";
+            [Ignore] public string Secret { get; set; } = "";
+            public string Draft { get; set; } = "";
+            public string Stamp { get; set; } = "";
+        }
+
+        public static class ArticleFormat
+        {
+            public static string Title(ArticleRow row) => row.Headline.ToUpperInvariant();
+            public static string Slug(ArticleRow row) => row.Headline.Replace(' ', '-');
+            public static bool IsPublished(ArticleRow row) => row.Published;
+            public static void Stamp(ArticleRow row, ArticleCard card) => card.Stamp = card.Slug;
+        }
+
+        public class ArticleProfile : MappingProfile
+        {
+            public ArticleProfile()
+            {
+                CreateMap<ArticleRow, ArticleCard>()
+                    .ForMember(d => d.Title, o => o.MapFrom(ArticleFormat.Title))
+                    .ForMember(d => d.Slug, o => o.MapFrom(ArticleFormat.Slug))
+                    .When(ArticleFormat.IsPublished)
+                    .AfterMap(ArticleFormat.Stamp)
+                    .GenerateMethods(list: false, array: false);
+            }
+        }
+        """);
+
     private static Task Verify(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

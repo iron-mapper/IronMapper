@@ -2,8 +2,9 @@
 
 English version: [upgrading-to-2.1.md](upgrading-to-2.1.md)
 
-2.1.0 выходит после 2.0.0. Два исправления `ConvertUsing` в профилях могут изменить то, что делает маппинг, который
-собирался с 2.0.0, или то, собирается ли он; предупреждения nullable переходят из сгенерированного файла в ваш код;
+2.1.0 выходит после 2.0.0. Исправления настройки, которую профили молча игнорировали (`ConvertUsing`, `MapFrom`, `When`,
+`BeforeMap` и `AfterMap` с группой методов, `[Ignore]` на свойстве), могут изменить то, что делает маппинг, который собирался с 2.0.0,
+или то, собирается ли он; предупреждения nullable переходят из сгенерированного файла в ваш код;
 in-place перегрузки, которые ничего не делают, помечены `[Obsolete]`; `IronMapperRegistration=false` теперь действует и
 на проект, в котором задано. Всё остальное в 2.1.0 — новые возможности или исправления, которые затрагивают только код,
 не собиравшийся с 2.0.0 ([CHANGELOG](../CHANGELOG.md)).
@@ -15,9 +16,14 @@ in-place перегрузки, которые ничего не делают, п
 | [Предупреждения nullable переходят из сгенерированного файла в `IM0023`](#3-предупреждения-nullable-переходят-из-сгенерированного-файла-в-im0023) | Проекты с nullable-аннотациями, у карт которых были `CS8601`/`CS8604` в файле `*.g.cs` |
 | [In-place перегрузки, которые ничего не делают, — `[Obsolete]`](#4-in-place-перегрузки-которые-ничего-не-делают--obsolete) | Вызовы `source.MapToX(existing)` для приёмника-struct, маппинга с `ConvertUsing` или приёмника только с `init`-свойствами и `IMapper.Map(source, destination)` для такой пары |
 | [`IronMapperRegistration=false` не генерирует регистрацию](#5-ironmapperregistrationfalse-не-генерирует-регистрацию) | Проекты с `<IronMapperRegistration>false</IronMapperRegistration>` |
+| [`MapFrom`, `When` и хуки с группой методов статического метода вызываются](#6-mapfrom-when-и-хуки-с-группой-методов-статического-метода-вызываются) | Профили с `MapFrom(SomeType.Method)` в `ForMember`/`ForCtorParam`, `.When(SomeType.Method)`, `.BeforeMap(SomeType.Method)` или `.AfterMap(SomeType.Method)` |
+| [`[Ignore]` учитывается в профилях](#7-ignore-учитывается-в-профилях) | Маппинги профилей между типами с `[Ignore]` на свойстве, которое есть и у другого типа |
 
 Чтобы найти первые два, поищите в профилях `ConvertUsing(`, аргумент которого не лямбда (`s => …`) и не аргумент типа
-(`ConvertUsing<TConverter>()`).
+(`ConvertUsing<TConverter>()`); как найти случаи разделов 6 и 7 — в них. Все сразу — сравнением сгенерированного кода
+2.0.0 и 2.1.0: соберите с `<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>` на каждой версии и сравните
+`obj/<configuration>/<tfm>/generated/IronMapper.Generator/` (у маппинга, который меняют эти исправления, другое
+присваивание этого свойства или его нет).
 
 ---
 
@@ -138,3 +144,72 @@ mapper.Map(guid, existing);
 
 **Что делать.** Уберите свойство из проекта, маппинги которого нужны `IMapper`; оставьте там, где вызываются только
 сгенерированные методы `MapTo…`.
+
+---
+
+## 6. `MapFrom`, `When` и хуки с группой методов статического метода вызываются
+
+**Было.** У `MapFrom` есть перегрузка с `Func<TSource, object?>`, поэтому группа методов компилируется. Генератор читал
+там только лямбду; группа методов молча игнорировалась, и член маппился так, будто `ForMember` нет
+([#59](https://github.com/iron-mapper/IronMapper/issues/59)):
+
+```csharp
+public static class Helper { public static string Compute(Row r) => r.First + "!"; }
+
+CreateMap<Row, Dto>()
+    .ForMember(d => d.Title, o => o.MapFrom(Helper.Compute))   // 2.0.0: Title = source.Title (Compute не вызывается)
+    .ForMember(d => d.Label, o => o.MapFrom(Helper.Compute));  // 2.0.0: у Row нет Label — CS1061 в сгенерированном файле
+// 2.1.0: Title = Helper.Compute(source), Label = Helper.Compute(source), и in-place тоже
+```
+
+То же с `When`, `BeforeMap` и `AfterMap` (`Func<TSource, bool>`, `Action<TSource, TDest>`):
+
+```csharp
+CreateMap<Row, Dto>().When(Rules.IsActive).AfterMap(Audit.Stamp);
+// 2.0.0: условия нет (маппится каждая строка), Audit.Stamp не вызывается
+// 2.1.0: if (!Rules.IsActive(source)) return default!; … Audit.Stamp(source, destination);
+```
+
+**Стало.** Статический метод (public или internal) вызывается с source (хук — с source и destination). `MapFrom` — в новом
+объекте и in-place (и в `ForCtorParam`); `When` и хуки — только в новом объекте, как и лямбда (in-place перегрузка не
+применяет ни то, ни другое). Всё, что сгенерированный класс вызвать не может, — метод экземпляра (`MapFrom(formats.Title)`),
+локальная функция, приватный метод, делегат в переменной или поле, анонимный метод — ошибка
+[`IM0024`](diagnostics.ru.md#im0024--метод-настройки-профиля-нельзя-использовать) на аргументе, маппинг не генерируется.
+
+**Что делать.** **Изменится результат во время выполнения.** `MapFrom`: там, где у source есть свойство с именем члена,
+теперь выполняется метод (и его исключения доходят до вызывающего), а не копируется это свойство. `When`: для source, на
+котором метод возвращает `false`, теперь возвращается `null` (`default`), а не смапленный объект. Хуки: метод теперь
+выполняется. Такие маппинги ищутся по этим вызовам, аргумент которых не лямбда, — например регулярным выражением
+`(MapFrom|When|BeforeMap|AfterMap)\(\s*[A-Za-z_][\w.<>]*\s*\)`. Если вы рассчитывали на прежний результат, уберите
+вызов. Для `IM0024` передайте статический метод или лямбду, которая не использует локальные переменные и экземпляр
+профиля.
+
+---
+
+## 7. `[Ignore]` учитывается в профилях
+
+**Было.** `[Ignore]` на свойстве работал в маппингах `[MapTo]`/`[MapFrom]`. Маппинг профиля его не учитывал: на свойстве
+destination только не выдавал `IM0001` и всё равно копировал одноимённое свойство source
+([#61](https://github.com/iron-mapper/IronMapper/issues/61)); свойство source с `[Ignore]` всё равно читалось:
+
+```csharp
+public class Dto { public string Title { get; set; } = ""; [Ignore] public string Secret { get; set; } = ""; }
+
+public class Row { public string Title { get; set; } = ""; public string Secret { get; set; } = ""; [Ignore] public string Draft { get; set; } = ""; }
+
+CreateMap<Row, Dto>();   // у Dto тоже есть Draft
+// 2.0.0: Secret = source.Secret, Draft = source.Draft (и in-place)
+// 2.1.0: не заполняется ни одно
+```
+
+**Стало.** Маппинг профиля пропускает такое свойство, как маппинг атрибутами: на destination оно не заполняется, на source
+не читается (и свойство члена `IncludeMembers`). В новом объекте остаётся значение по умолчанию, in-place перегрузка (и
+`IMapper.Map(source, destination)`) оставляет текущее значение, а параметр конструктора с тем же именем получает значение
+по умолчанию (без значения по умолчанию — `IM0009`). `ForMember` свойства destination (`MapFrom`, `UseConverter`) важнее
+`[Ignore]`. С `ReverseMap()` свойство с `[Ignore]` на любом из двух типов пропускается в обоих направлениях.
+
+**Что делать.** **Изменится результат во время выполнения:** свойство с `[Ignore]`, которое до сих пор копировалось,
+сохраняет значение по умолчанию (in-place — текущее). Как найти: типы с `[Ignore]` на свойстве, которые стоят в
+`CreateMap<TSource, TDest>()` (любым из двух, и с `.ReverseMap()` или `IncludeMembers`), если у другого типа есть свойство
+с тем же именем. Если вы рассчитывали на копирование, уберите `[Ignore]` или замапьте свойство через
+`ForMember(d => d.Secret, o => o.MapFrom(s => s.Secret))`.
