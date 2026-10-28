@@ -572,8 +572,11 @@ nothing. See [Upgrading to 2.1](upgrading-to-2.1.md#4-in-place-overloads-that-do
   that holds mappings, in particular one that the app does not otherwise use before the first mapping (profiles in
   `Application`, entities in `Domain`, the call from the web project). When a mapping is not found, `IMapper` runs the
   module initializers of all loaded assemblies (except names starting with `System.` and `Microsoft.`) and looks
-  again. Profiles are not added to the DI container: up to 1.1.4 `AddIronMapper` scanned the assemblies with
-  `GetTypes()` and added every `MappingProfile` as a singleton.
+  again.
+- **Profiles are not in the DI container.** `AddProfile<T>()` and `AddProfilesFromAssembly` register the generated
+  mappings of the assembly for `IMapper`, the same as `AddIronMapper(assembly)`. The profiles themselves are not added
+  to the container: the generator reads them at compile time, and nothing runs them. Up to 1.1.4 `AddIronMapper`
+  scanned the assemblies with `GetTypes()` and added every `MappingProfile` as a singleton.
 - **Trimmed and NativeAOT apps without the DI package.** The registration is behind the feature switch
   `IronMapper.Registration.IsSupported`: for a trimmed or NativeAOT publish in which no project references
   `IronMapper.Extensions.DI` the package turns it off and the trimmer removes the registration, so an app that only

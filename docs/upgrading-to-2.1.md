@@ -6,7 +6,7 @@
 `BeforeMap` and `AfterMap` with a method group, `[Ignore]` on a property) can change what a mapping that built with 2.0.0 does or whether it builds,
 nullable warnings move from the generated file to your code, in-place overloads that do nothing are marked `[Obsolete]`,
 the in-place overload applies `When` and hooks, `init` properties of mappings with hooks are mapped,
-and `IronMapperRegistration=false` now also applies to the project that sets it. Everything else in
+`IronMapperRegistration=false` now also applies to the project that sets it, and `AddConverter<T>()` is `[Obsolete]`. Everything else in
 2.1.0 is new functionality or a fix that only affects code that did not build with 2.0.0
 ([CHANGELOG](../CHANGELOG.md)).
 
@@ -23,6 +23,7 @@ and `IronMapperRegistration=false` now also applies to the project that sets it.
 | [`init`-only properties in place: nested objects updated, warning `IM0025`](#9-init-only-properties-in-place-nested-objects-updated-warning-im0025) | Mappings with in-place overloads to types that have `init` properties (warning `IM0025`; a build error with `TreatWarningsAsErrors`) |
 | [Hooks and `When` in the in-place overload](#10-hooks-and-when-in-the-in-place-overload) | In-place calls (`source.MapToX(existing)`, `IMapper.Map(source, existing)`) of profile mappings with `When`, `BeforeMap` or `AfterMap` |
 | [`required` and `init` properties with `BeforeMap`/`AfterMap`](#11-required-and-init-properties-with-beforemapaftermap) | Profile mappings with hooks to types with `init` properties; `required` properties without a value (`IM0026` instead of `CS9035`) |
+| [`AddConverter<T>()` is `[Obsolete]`](#12-addconvertert-is-obsolete) | Calls of `opt.AddConverter<T>()` in `AddIronMapper(...)` (warning `CS0618`; a build error with `TreatWarningsAsErrors`) |
 
 To find the first two, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type
 argument (`ConvertUsing<TConverter>()`); sections 6 and 7 say how to find theirs. For all of them at once, compare the
@@ -358,3 +359,18 @@ source's values (up to 2.0.0 they kept their defaults). `BeforeMap` sees the `re
 **What to do.** Check the `BeforeMap` hooks of such mappings that read or set a `required` or `init` property: the
 initializer has set it before the hook runs, and a hook that sets it overrides the mapped value. For `IM0026`, map the
 property, remove `required`, or create the destination with a `[SetsRequiredMembers]` constructor or a factory.
+
+## 12. `AddConverter<T>()` is `[Obsolete]`
+
+**Was.** `opt.AddConverter<T>()` in `AddIronMapper(...)` registered the converter in the DI container as a transient
+service, and nothing more. The generated code creates converters itself and never takes them from the container, so the
+call did nothing for mapping, and a converter with dependencies in its constructor did not build (`IM0015`).
+
+**Now.** The method is `[Obsolete]` and will be removed in 3.0.0. It still registers the type, as before.
+
+**What you may see.** Warning `CS0618` at the call, a build error with `TreatWarningsAsErrors`. Nothing changes at run
+time.
+
+**What to do.** Remove the call. If your own code resolves the converter from the container, register it yourself
+(`services.AddTransient<MyConverter>()`). A converter that needs a service is not supported: compute the value before
+mapping or set it after ([Converters from DI are not supported](configuration.md#converters-from-di-are-not-supported-addconvertert-is-obsolete)).

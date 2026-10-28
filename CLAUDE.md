@@ -300,7 +300,9 @@ or `[MapFrom(typeof(S))]` on the destination type; `CreateMap<S, D>();` after th
 
 ### `src/IronMapper.Extensions.DI` (netstandard2.1 + net10.0)
 Separate NuGet package. `AddIronMapper(...)` registers `IMapper` and runs the generated registration of the given
-assemblies (profiles are not added to the container); `IronMapperOptions`.
+assemblies (profiles are not added to the container); `IronMapperOptions`. `IronMapperOptions.AddConverter<T>()` is
+`[Obsolete]` (PR 13 of 2.1.0, removed in 3.0.0): it only registers the type, the generated code creates converters
+itself; converters from DI are not supported (`AddConverterObsoleteTests`).
 
 #### The DI path (`IMapper`)
 No reflection over the generated code. For every assembly with mappings the generator emits

@@ -183,6 +183,15 @@
   itself keeps the value of the project). See
   [Registration for `IMapper`](docs/configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps).
 
+### Deprecated
+
+- **`IronMapperOptions.AddConverter<T>()`** is `[Obsolete]` (warning `CS0618`) and will be removed in 3.0.0. It only
+  registered the converter in the DI container: the generated code creates converters itself (`new T()` or one cached
+  instance) and never takes them from there, so the call did nothing for mapping. Remove it. Converters with
+  dependencies from DI are not supported; compute the value before mapping or set it after. Nothing changes at run time.
+  See [Upgrading to 2.1](docs/upgrading-to-2.1.md#12-addconvertert-is-obsolete) and
+  [Converters from DI are not supported](docs/configuration.md#converters-from-di-are-not-supported-addconvertert-is-obsolete).
+
 ### Fixed
 
 - **`ConvertUsing` with a static method group** (`ConvertUsing(UserId.From)`) was silently ignored up to 2.0.0: the
