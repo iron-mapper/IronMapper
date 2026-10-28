@@ -516,8 +516,16 @@ git add -A
 git clean -xdf -e .claude/ -e IRONMAPPER_PLAN.md
 dotnet build IronMapper.slnx -c Release
 dotnet test IronMapper.slnx
-pwsh ./eng/verify-package.ps1 -PackageDir ./artifacts/packages
+pwsh -NoProfile -Command './eng/verify-package.ps1 -PackageDir ./artifacts/packages; exit $LASTEXITCODE'; echo "exit code $?"
 ```
+
+**Run the `eng/` scripts the way CI runs them, and check the exit code of the process, not only the output.** GitHub
+Actions runs a `shell: pwsh` step as the script followed by `exit $LASTEXITCODE`: the exit code of the last native
+command in the script (a build that must fail, a probe that must fail) becomes the step's result even when the script
+printed its success line (PR 9 of 2.1.0: `verify-package.ps1` printed "packages verified" and CI failed with 1). So the
+scripts reset `$global:LASTEXITCODE = 0` after checking an expected failure and end with an explicit `exit 0`; failures
+`throw`. Same for `eng/verify-aot.ps1`
+(`pwsh -NoProfile -Command './eng/verify-aot.ps1 -PackageDir ./artifacts/packages; exit $LASTEXITCODE'`).
 
 ### Snapshot tests of the generated code
 

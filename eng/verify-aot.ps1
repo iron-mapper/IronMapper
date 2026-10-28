@@ -170,6 +170,9 @@ try {
                 if ($exitCode -eq 0 -or -not $output.Contains($case.Fails)) {
                     $errors.Add("${label}: expected a failure that mentions '$($case.Fails)', got exit code $exitCode")
                 }
+
+                # The expected failure must not become the exit code of the script (GitHub Actions: `exit $LASTEXITCODE`).
+                $global:LASTEXITCODE = 0
             }
             elseif ($exitCode -ne 0) { $errors.Add("${label}: the published executable exited with $exitCode") }
         }
@@ -193,3 +196,5 @@ if ($errors.Count -gt 0) {
     throw "NativeAOT probes failed ($($errors.Count) problem(s))."
 }
 Write-Host "NativeAOT probes passed for IronMapper $Version."
+# Explicitly: the exit code of the last native command must not decide the result; failures throw above.
+exit 0

@@ -350,6 +350,9 @@ try {
                 Write-Host $buildOutput
                 throw "Variant '$($variant.Name)': the build output must not match '$($variant.BuildErrorNot)'"
             }
+            # The failed build is the expected result: its exit code must not become the script's. GitHub Actions runs a
+            # pwsh step as `& script; exit $LASTEXITCODE`, so a last variant that fails on purpose failed CI.
+            $global:LASTEXITCODE = 0
             continue
         }
         Invoke-Dotnet build $implicitConsumer --no-restore -c $Configuration --artifacts-path $artifacts @properties
@@ -391,3 +394,5 @@ finally {
 }
 
 Write-Host "IronMapper $Version packages verified."
+# Explicitly: the exit code of the last native command (an expected failure, a probe) must not decide the result.
+exit 0
