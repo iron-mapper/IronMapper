@@ -316,9 +316,13 @@ function splitDoc(repoPath, lines) {
   titleLine = h1s[0];
   const title = headingText(lines[titleLine].replace(/^#\s+/, ''));
   const body = lines.slice(titleLine + 1);
-  // Language banner: a blockquote right after the title that links to the other language.
+  // Language banner right after the title, in either form the docs use: `> 📖 **[Русская версия](x.ru.md)**` or
+  // `Русская версия: [x.ru.md](x.ru.md)`. The site has a language switcher instead.
   const bannerIndex = body.findIndex((l) => l.trim() !== '');
-  if (bannerIndex >= 0 && /^>\s.*\[(Русская версия|English version)\]\(/.test(body[bannerIndex])) {
+  const banner = body[bannerIndex] ?? '';
+  const isBanner = /^(>\s*)?[^\[]{0,20}\[(Русская версия|English version)\]\([^)]*\.md\)/u.test(banner) ||
+    /^(Русская версия|English version):\s*\[[^\]]*\]\([^)]*\.md\)\s*$/u.test(banner);
+  if (bannerIndex >= 0 && isBanner) {
     body.splice(bannerIndex, 1);
   }
   return { title, body };
@@ -417,6 +421,10 @@ function preparePages() {
         const page = pageFor(repoPath);
         if (!page) fail(repoPath, 0, 'unexpected file in site/pages (lowercase name, .md or .mdx, optionally under ru/)');
         const lines = readRepo(repoPath).split('\n');
+        // "Edit page" must point at this file, not at the generated copy under src/content/docs/ (which is not in git).
+        if (lines[0] === '---' && !lines.some((l, i) => i > 0 && /^editUrl:/.test(l))) {
+          lines.splice(1, 0, `editUrl: ${JSON.stringify(blobUrl(repoPath))}`);
+        }
         const rewritten = rewriteLinks(repoPath, lines, collectHeadings(lines), true);
         const target = join(contentDir, page.locale === 'ru' ? 'ru' : '', page.slug ? `${page.slug}${entry.name.slice(entry.name.lastIndexOf('.'))}` : entry.name);
         mkdirSync(dirname(target), { recursive: true });
