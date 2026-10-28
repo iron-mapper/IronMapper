@@ -13,7 +13,14 @@
       4. Full BenchmarkDotNet tables of every runtime scenario (results/raw/bdn/results/*-report-github.md).
       5. Feature matrix, cold start, NativeAOT, size, build time (results/*.md, embedded).
 
-    Missing inputs are reported in the document as "not measured", so the report can be built after a partial run.
+    Also writes results/summary.json next to RESULTS.md: the numbers of the summary table (and the other sizes of the
+    Collection scenario, .NET 8, the BenchmarkDotNet cold start) as plain values, for the project site and other
+    consumers that must not parse the Markdown. Same inputs, same rounding rules do not apply: values are raw
+    (nanoseconds, bytes, milliseconds, seconds). `schemaVersion` changes when a field is renamed or removed; adding a
+    field does not change it.
+
+    Missing inputs are reported in the document as "not measured", so the report can be built after a partial run;
+    in summary.json they are null.
 
 .EXAMPLE
     pwsh ./scripts/generate-report.ps1
@@ -28,6 +35,9 @@ Import-Module (Join-Path $PSScriptRoot 'BenchmarkCommon.psm1') -Force
 $resultsDir = Get-ResultsDir
 $bdnDir = Join-Path (Get-ResultsRawDir) 'bdn' 'results'
 $reportPath = Join-Path $resultsDir 'RESULTS.md'
+$summaryPath = Join-Path $resultsDir 'summary.json'
+# Bump when a field of summary.json is renamed, removed or changes its meaning (consumers check it). New fields: no bump.
+$summarySchemaVersion = 1
 $libraries = @('Manual', 'IronMapper', 'IronMapper_IMapper', 'Mapperly', 'Mapster', 'AutoMapper')
 $scenarios = [ordered]@{
     Flat         = 'One flat object, ~15 properties (`UserEntity` → `UserDto`).'
@@ -289,6 +299,138 @@ Add ('`IronMapper_IMapper` uses the same generator as `IronMapper`, so its build
     '`IronMapper_StaticFormat` exists only in CustomConfig (a workaround, see the README).')
 Add
 
+# ---------------------------------------------------------------------------------------------------------------------
+# summary.json: the same numbers as the tables above, unformatted
+# ---------------------------------------------------------------------------------------------------------------------
+
+$bdnNet8Dir = Join-Path (Get-ResultsRawDir) 'bdn-net8.0' 'results'
+$coldBdnForSummary = @(Get-BdnResults 'Startup')
+
+# Scenario rows of one library from a BenchmarkDotNet report: {name, meanNs, allocatedBytes, ratioToManual}.
+# `$results` are the rows of the class (Get-BdnResults), `$method`/`$parameters` select the benchmark.
+function Get-SummaryMeasurement($results, [string] $method, [string] $parameters = '') {
+    $r = Find-Result $results $method $parameters
+    if (-not $r) { return $null }
+    $base = Find-Result $results 'Manual' $parameters
+    [ordered]@{
+        meanNs         = $r.MeanNs
+        allocatedBytes = $r.AllocatedBytes
+        ratioToManual  = ($base -and $base.MeanNs) ? [math]::Round($r.MeanNs / $base.MeanNs, 4) : $null
+    }
+}
+
+# All runtime scenarios of one library for one framework folder (`bdn` or `bdn-net8.0`).
+function Get-SummaryRuntime([string] $dir, [string] $lib) {
+    $read = { param($class) $path = Join-Path $dir "Comparison.Benchmarks.${class}Benchmark-report-full.json"
+        if (-not (Test-Path $path)) { return @() }
+        $json = Get-Content $path -Raw | ConvertFrom-Json
+        foreach ($b in $json.Benchmarks) {
+            $alloc = if ($b.PSObject.Properties['Memory'] -and $b.Memory) { [double] $b.Memory.BytesAllocatedPerOperation } else { $null }
+            [pscustomobject]@{ Method = $b.Method; Parameters = "$($b.Parameters)"; MeanNs = ($b.Statistics ? [double] $b.Statistics.Mean : $null); AllocatedBytes = $alloc }
+        } }
+    $flat = @(& $read 'Flat'); $nested = @(& $read 'Nested'); $coll = @(& $read 'Collection')
+    $custom = @(& $read 'CustomConfig'); $inPlace = @(& $read 'InPlace'); $di = @(& $read 'DiOverhead')
+    if (-not ($flat.Count + $nested.Count + $coll.Count + $custom.Count + $inPlace.Count + $di.Count)) { return $null }
+    [ordered]@{
+        flat             = Get-SummaryMeasurement $flat $lib
+        nested           = Get-SummaryMeasurement $nested $lib
+        collection10     = Get-SummaryMeasurement $coll $lib 'Count=10'
+        collection1000   = Get-SummaryMeasurement $coll $lib 'Count=1000'
+        collection100000 = Get-SummaryMeasurement $coll $lib 'Count=100000'
+        customConfig     = Get-SummaryMeasurement $custom $lib
+        inPlace          = Get-SummaryMeasurement $inPlace $lib
+        # DiOverhead names its benchmarks Flat_<lib>/Nested_<lib>; its Manual is Flat_Manual/Nested_Manual.
+        diOverheadFlat   = (Get-SummaryDiMeasurement $di "Flat_$lib" 'Flat_Manual')
+        diOverheadNested = (Get-SummaryDiMeasurement $di "Nested_$lib" 'Nested_Manual')
+    }
+}
+
+function Get-SummaryDiMeasurement($results, [string] $method, [string] $baseline) {
+    $r = Find-Result $results $method
+    if (-not $r) { return $null }
+    $base = Find-Result $results $baseline
+    [ordered]@{
+        meanNs         = $r.MeanNs
+        allocatedBytes = $r.AllocatedBytes
+        ratioToManual  = ($base -and $base.MeanNs) ? [math]::Round($r.MeanNs / $base.MeanNs, 4) : $null
+    }
+}
+
+$summaryLibraries = foreach ($lib in $libraries) {
+    $jit = $startupJit | Where-Object Probe -eq $lib | Select-Object -First 1
+    $aot = $startupAot | Where-Object Probe -eq $lib | Select-Object -First 1
+    $jitSize = Get-PublishSize 'Jit' $lib
+    $aotSize = Get-PublishSize 'Aot' $lib
+    $build = $buildTime | Where-Object { [int] $_.N -eq $buildN -and $_.Library -eq $lib } | Select-Object -First 1
+    [ordered]@{
+        name    = $lib
+        runtime = [ordered]@{
+            'net10.0' = Get-SummaryRuntime $bdnDir $lib
+            'net8.0'  = Get-SummaryRuntime $bdnNet8Dir $lib
+        }
+        coldStart = [ordered]@{
+            # Process start + one mapping, framework-dependent: median of the probe and Δ to the Baseline console.
+            medianMs          = ($jit -and $jit.Status -eq 'ok') ? [double] $jit.MedianMs : $null
+            deltaToBaselineMs = ($jit -and $jit.Status -eq 'ok' -and $jitBaseline) ? [math]::Round([double] $jit.MedianMs - [double] $jitBaseline.MedianMs, 4) : $null
+        }
+        nativeAot = [ordered]@{
+            # works: the NativeAOT executable runs and prints the Baseline checksum; null when not measured.
+            works             = (-not $aot) ? $null : [bool] ($aot.Status -eq 'ok' -and $aotBaseline -and $aot.Checksum -eq $aotBaseline.Checksum)
+            status            = $aot ? $aot.Status : $null
+            medianMs          = ($aot -and $aot.Status -eq 'ok') ? [double] $aot.MedianMs : $null
+            deltaToBaselineMs = ($aot -and $aot.Status -eq 'ok' -and $aotBaseline) ? [math]::Round([double] $aot.MedianMs - [double] $aotBaseline.MedianMs, 4) : $null
+        }
+        size = [ordered]@{
+            # Framework-dependent publish folder (without .pdb) and the NativeAOT executable; Δ to the Baseline console.
+            publishBytes              = $jitSize
+            publishDeltaToBaselineBytes = ($null -ne $jitSize -and $null -ne $jitBaseSize) ? ($jitSize - $jitBaseSize) : $null
+            aotExecutableBytes        = $aotSize
+            aotDeltaToBaselineBytes   = ($null -ne $aotSize -and $null -ne $aotBaseSize) ? ($aotSize - $aotBaseSize) : $null
+        }
+        buildTime = [ordered]@{
+            # Median build of the probe project with $buildN entity/DTO pairs; Δ to the same project without a mapper.
+            pairs                    = $build ? [int] $buildN : $null
+            medianSeconds            = $build ? [double] $build.MedianS : $null
+            deltaToBaselineSeconds   = ($build -and $buildBaseline) ? [math]::Round([double] $build.MedianS - [double] $buildBaseline.MedianS, 4) : $null
+        }
+    }
+}
+
+$summaryBdnColdStart = foreach ($lib in $libraries) {
+    $r = Find-Result $coldBdnForSummary $lib
+    if ($r) { [ordered]@{ name = $lib; meanMs = [math]::Round($r.MeanNs / 1e6, 4) } }
+}
+
+$summary = [ordered]@{
+    schemaVersion   = $summarySchemaVersion
+    generatedUtc    = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [cultureinfo]::InvariantCulture)
+    resultsDir      = Get-ResultsDirDisplay
+    run             = $runInfo ? [ordered]@{
+        mode               = $runInfo.Mode
+        startedUtc         = $runInfo.Started
+        totalSeconds       = [double] $runInfo.TotalSeconds
+        commit             = $commit
+        uncommittedChanges = [bool] $runInfo.UncommittedChanges
+        ironMapperSource   = $localIronMapper ? 'local' : 'package'
+        localPackageVersion = ($runInfo.PSObject.Properties['LocalPackageVersion'] ? $runInfo.LocalPackageVersion : $null)
+    } : $null
+    environment     = [ordered]@{
+        machine          = Get-MachineSummary
+        benchmarkDotNet  = $bdnHost ? $bdnHost.BenchmarkDotNetVersion : $null
+        os               = $bdnHost ? $bdnHost.OsVersion : $null
+        runtime          = $bdnHost ? $bdnHost.RuntimeVersion : $null
+        architecture     = $bdnHost ? $bdnHost.Architecture : $null
+    }
+    packages        = @(foreach ($p in Get-PackageVersions) {
+        [ordered]@{ id = $p.Id; version = (($localIronMapper -and $p.Id -like 'IronMapper*') ? "local ($commit)" : $p.Version); role = $p.Label }
+    })
+    baseline        = 'Manual'
+    libraries       = @($summaryLibraries)
+    inProcessColdStart = @($summaryBdnColdStart)
+    units           = [ordered]@{ meanNs = 'nanoseconds per operation'; allocatedBytes = 'bytes per operation'; medianMs = 'milliseconds'; '*Bytes' = 'bytes (decimal prefixes in the reports)'; '*Seconds' = 'seconds' }
+}
+Write-ReportFile $summaryPath (($summary | ConvertTo-Json -Depth 8) + "`n")
+
 # Comparison with another run of the same session (scripts/compare-results.ps1), when it was made.
 if (Test-Path (Join-Path $resultsDir 'comparison.md')) {
     Add '## Compared with the previous release'
@@ -316,7 +458,7 @@ if ($coldLibs.Count -and $jitBaseline) {
     Add (New-BarChart 'Cold start (process start + one mapping, JIT): Δ ms vs empty console' 'ms' $coldLibs ([double[]] ($values | ForEach-Object { [math]::Max(0, $_) })))
     Add
 }
-$coldBdn = @(Get-BdnResults 'Startup')
+$coldBdn = $coldBdnForSummary
 if ($coldBdn.Count) {
     $labels = @($libraries | Where-Object { Find-Result $coldBdn $_ })
     $values = foreach ($lib in $labels) { (Find-Result $coldBdn $lib).MeanNs / 1e6 }
@@ -340,7 +482,6 @@ foreach ($s in $scenarios.Keys) {
 }
 
 # The same scenarios on .NET 8 (run-all.ps1, step RuntimeNet8), when they were measured.
-$bdnNet8Dir = Join-Path (Get-ResultsRawDir) 'bdn-net8.0' 'results'
 if (Test-Path $bdnNet8Dir) {
     Add '## Runtime benchmarks, .NET 8'
     Add
