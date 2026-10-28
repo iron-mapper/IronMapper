@@ -316,7 +316,7 @@ The warning points to the `CreateMap` call. A destination property counts as map
 - `ForMember` configures it: `opt.MapFrom(...)`, `opt.Ignore()`, `opt.UseConverter<T>()` (also the standalone
   `.Ignore(d => d.X)`);
 - `IncludeMembers` or a source property with the same name (case-insensitive) provides it;
-- it has `[Ignore]` (as in attribute mappings).
+- it has `[Ignore]` (as in attribute mappings; from 2.1.0 it is also left out, see [`[Ignore]`](#ignore)).
 
 A mapping with `ConvertUsing<T>()` or `ConvertUsing(src => ...)` gets no IM0001: the converter creates the whole
 destination. The reverse mapping of `ReverseMap()` is not checked: it maps by name only and `ForMember` does not apply
@@ -401,7 +401,13 @@ public class PersonDto
 
 Applied to a **source property** or a **destination property**. The property is excluded from both the creating and in-place mapping methods; on a destination property it also suppresses `IM0001`.
 
-`[Ignore]` is read only for `[MapTo]`/`[MapFrom]` mappings. In profiles use `ForMember(d => d.X, o => o.Ignore())`.
+From 2.1.0 profile (`CreateMap`) mappings read `[Ignore]` on a **destination** property too: the property is not set,
+neither in a new object nor in place, and a constructor parameter of the same name gets its default value. Up to 2.0.0
+a profile only skipped its `IM0001` and still copied the source property of the same name
+([#61](https://github.com/iron-mapper/IronMapper/issues/61); see [Upgrading to 2.1](upgrading-to-2.1.md#7-ignore-applies-in-profiles)).
+`[Ignore]` on a **source** property is read too: the property is not read (a parameter of the same name gets its default
+value). `ForMember` of the destination property (`MapFrom`, `UseConverter`) wins over both. `[Ignore]` applies to every
+mapping of the type; to leave a property out of one profile mapping only, use `ForMember(d => d.X, o => o.Ignore())`.
 
 ```csharp
 [MapTo(typeof(OrderDto))]
@@ -472,6 +478,19 @@ Customises how a specific destination property is populated. The lambda is rewri
 ```csharp
 CreateMap<Employee, EmployeeDto>()
     .ForMember(d => d.FullName, opt => opt.MapFrom(s => s.FirstName + " " + s.LastName));
+```
+
+From 2.1.0 a static method group is accepted too and called with the source (also in `ForCtorParam`). Up to 2.0.0 it was
+silently ignored: the property was mapped by name, or the generated file did not compile (`CS1061`) when the source had no
+property of that name ([#59](https://github.com/iron-mapper/IronMapper/issues/59)). The method must be public or internal;
+an instance method, a local function or a delegate in a variable is
+[`IM0024`](diagnostics.md#im0024--method-of-a-profile-setting-cannot-be-used).
+
+```csharp
+public static class EmployeeFormat { public static string FullName(Employee e) => e.FirstName + " " + e.LastName; }
+
+CreateMap<Employee, EmployeeDto>()
+    .ForMember(d => d.FullName, opt => opt.MapFrom(EmployeeFormat.FullName));   // FullName = EmployeeFormat.FullName(source)
 ```
 
 ---
@@ -585,6 +604,11 @@ Adds a guard: the mapping only executes when the predicate is true; otherwise `d
 CreateMap<UserEntity, UserDto>()
     .When(src => src.IsActive);
 ```
+
+From 2.1.0 `When`, `BeforeMap` and `AfterMap` also take a static method group, called with the source (a hook: with the
+source and the destination): `.When(UserRules.IsActive)`, `.AfterMap(Audit.Stamp)`. Up to 2.0.0 a method group was
+silently ignored (no condition, the hook never called). An argument the generated code cannot call is
+[`IM0024`](diagnostics.md#im0024--method-of-a-profile-setting-cannot-be-used).
 
 ---
 

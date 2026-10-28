@@ -231,6 +231,12 @@ internal static class ProfileAnalyzer
         var forCtorParamLocations = new Dictionary<string, LocationInfo?>(System.StringComparer.OrdinalIgnoreCase);
         LocationInfo? convertUsingLocation = null;
 
+        // BeforeMap/AfterMap: a lambda, or a static method group called with the source and the destination (up to 2.0.0
+        // a method group was dropped: the hook was never called).
+        string? Hook(ExpressionSyntax hook, string callName) => hook is LambdaExpressionSyntax
+            ? LambdaBodyRewriter.RewriteAsStatements(hook, model, HookParameters, profileName, lambdaDiagnostics, ct)
+            : FactoryAnalyzer.Hook(hook, model, sourceSymbol!, destSymbol!, callName, lambdaDiagnostics, ct);
+
         // calls[Count-1] = CreateMap, calls[0] = outermost
         for (int i = calls.Count - 2; i >= 0; i--)
         {
@@ -242,7 +248,7 @@ internal static class ProfileAnalyzer
             switch (methodName)
             {
                 case "ForMember":
-                    ParseForMember(inv, forMemberConfigs, model, profileName, lambdaDiagnostics, ct);
+                    ParseForMember(inv, forMemberConfigs, sourceSymbol, destSymbol, model, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "Ignore" when inv.ArgumentList.Arguments.Count == 1:
@@ -256,8 +262,11 @@ internal static class ProfileAnalyzer
                     break;
 
                 case "When" when inv.ArgumentList.Arguments.Count == 1:
-                    whenConditionBody = LambdaBodyRewriter.RewriteBody(
-                        inv.ArgumentList.Arguments[0].Expression, model, SourceParameter, profileName, lambdaDiagnostics, ct);
+                    // When(Rules.IsActive): a static method is called; up to 2.0.0 a method group was dropped (no condition).
+                    var condition = inv.ArgumentList.Arguments[0].Expression;
+                    whenConditionBody = condition is LambdaExpressionSyntax
+                        ? LambdaBodyRewriter.RewriteBody(condition, model, SourceParameter, profileName, lambdaDiagnostics, ct)
+                        : FactoryAnalyzer.When(condition, model, sourceSymbol, destSymbol, lambdaDiagnostics, ct);
                     break;
 
                 case "ConstructWith" when inv.ArgumentList.Arguments.Count == 1:
@@ -281,7 +290,7 @@ internal static class ProfileAnalyzer
                     break;
 
                 case "ForCtorParam":
-                    ParseForCtorParam(inv, forCtorParamConfigs, forCtorParamLocations, model, profileName, lambdaDiagnostics, ct);
+                    ParseForCtorParam(inv, forCtorParamConfigs, forCtorParamLocations, sourceSymbol, destSymbol, model, profileName, lambdaDiagnostics, ct);
                     break;
 
                 case "ConvertUsing":
@@ -302,13 +311,11 @@ internal static class ProfileAnalyzer
                     break;
 
                 case "BeforeMap" when inv.ArgumentList.Arguments.Count == 1:
-                    beforeMapBody = LambdaBodyRewriter.RewriteAsStatements(
-                        inv.ArgumentList.Arguments[0].Expression, model, HookParameters, profileName, lambdaDiagnostics, ct);
+                    beforeMapBody = Hook(inv.ArgumentList.Arguments[0].Expression, methodName);
                     break;
 
                 case "AfterMap" when inv.ArgumentList.Arguments.Count == 1:
-                    afterMapBody = LambdaBodyRewriter.RewriteAsStatements(
-                        inv.ArgumentList.Arguments[0].Expression, model, HookParameters, profileName, lambdaDiagnostics, ct);
+                    afterMapBody = Hook(inv.ArgumentList.Arguments[0].Expression, methodName);
                     break;
 
                 case "IncludeMembers":
@@ -433,6 +440,8 @@ internal static class ProfileAnalyzer
     private static void ParseForMember(
         InvocationExpressionSyntax inv,
         List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
+        INamedTypeSymbol source,
+        INamedTypeSymbol dest,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -450,7 +459,7 @@ internal static class ProfileAnalyzer
             return;
         }
 
-        ParseMemberOptions(args[1].Expression, destPropName, configs, model, profileName, lambdaDiagnostics, ct);
+        ParseMemberOptions(args[1].Expression, destPropName, configs, source, dest, model, profileName, lambdaDiagnostics, ct);
     }
 
     /// <summary>
@@ -462,6 +471,8 @@ internal static class ProfileAnalyzer
         InvocationExpressionSyntax inv,
         List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
         Dictionary<string, LocationInfo?> locations,
+        INamedTypeSymbol source,
+        INamedTypeSymbol dest,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -486,7 +497,7 @@ internal static class ProfileAnalyzer
         }
 
         locations[name] = LocationInfo.From(args[0]);
-        ParseMemberOptions(args[1].Expression, name, configs, model, profileName, lambdaDiagnostics, ct);
+        ParseMemberOptions(args[1].Expression, name, configs, source, dest, model, profileName, lambdaDiagnostics, ct);
     }
 
     // The options lambda of ForMember/ForCtorParam: o => o.MapFrom(...), o => o.Ignore(), o => o.UseConverter<T>().
@@ -494,6 +505,8 @@ internal static class ProfileAnalyzer
         ExpressionSyntax options,
         string destPropName,
         List<(string destProp, string? lambdaBody, bool isIgnore, ConverterReference? converter, MapFromType? mapFrom)> configs,
+        INamedTypeSymbol source,
+        INamedTypeSymbol dest,
         SemanticModel model,
         string profileName,
         List<DiagnosticInfo> lambdaDiagnostics,
@@ -533,6 +546,21 @@ internal static class ProfileAnalyzer
         if (optMethod == "MapFrom" && optBody.ArgumentList.Arguments.Count == 1)
         {
             var mapFromArg = optBody.ArgumentList.Arguments[0].Expression;
+            if (mapFromArg is not LambdaExpressionSyntax)
+            {
+                // MapFrom(Helper.Compute) (the Func<TSource, object?> overload): a static method is called with the source;
+                // anything else is IM0024. Up to 2.0.0 the argument was dropped and the member mapped by name (issue #59).
+                // An argument the compiler rejects (no call): the member is left out, not mapped by name.
+                string? call = FactoryAnalyzer.MapFrom(mapFromArg, model, source, dest, destPropName, lambdaDiagnostics, ct, out var method);
+                var returned = method is null
+                    ? (MapFromType?)null
+                    : new MapFromType(method.ReturnType, LocationInfo.From(mapFromArg),
+                        maybeNull: method.ReturnType.IsReferenceType && method.ReturnNullableAnnotation == NullableAnnotation.Annotated,
+                        suppressed: false);
+                configs.Add((destPropName, call, call is null, null, returned));
+                return;
+            }
+
             string? body = LambdaBodyRewriter.RewriteBody(mapFromArg, model, SourceParameter, profileName, lambdaDiagnostics, ct);
             // The type of the expression the lambda returns (IM0002 when it cannot be assigned to the property).
             var expression = (mapFromArg as LambdaExpressionSyntax)?.ExpressionBody;
@@ -833,9 +861,10 @@ internal static class ProfileAnalyzer
             var nestedProps = SymbolHelpers.GetPublicReadableProperties(memberType);
             foreach (var nestedProp in nestedProps)
             {
-                if (includedResolution.ContainsKey(nestedProp.Name))
+                // First member wins; [Ignore] on the nested property: not read, as on a property of the source itself.
+                if (includedResolution.ContainsKey(nestedProp.Name) || MappingAnalyzer.HasIgnoreAttribute(nestedProp))
                 {
-                    continue; // first member wins
+                    continue;
                 }
 
                 string access = $"source.{memberName}.{nestedProp.Name}";
@@ -917,9 +946,23 @@ internal static class ProfileAnalyzer
                     converterIsCached: converter?.IsCached ?? false,
                     nullForgiving: forgive);
             }
-            // Priority 2: direct name-match.
+            // Priority 2: direct name-match. [Ignore] on the source property: not read, as in attribute mappings (up to
+            // 2.0.0 a profile copied it).
             else if (sourcePropsByName.TryGetValue(target.Name, out var namedProp))
             {
+                if (MappingAnalyzer.HasIgnoreAttribute(namedProp))
+                {
+                    ignored = true;
+                    return new PropertyMappingDescriptor(
+                        sourcePropertyName: namedProp.Name,
+                        destPropertyName: target.Name,
+                        isIgnored: true,
+                        converterType: null,
+                        needsNullCheck: false,
+                        lambdaBody: null,
+                        isInitOnly: isInitOnly);
+                }
+
                 var collection = SymbolHelpers.DetectCollectionMapping(namedProp.Type, target.Type);
                 string typeFqn = namedProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 bool skipped = false;
@@ -1036,12 +1079,26 @@ internal static class ProfileAnalyzer
         // default value. ConvertUsing creates the object itself: no constructor is needed.
         ParameterValue Resolve(IParameterSymbol parameter, IPropertySymbol? sameNamed, bool commit)
         {
+            // [Ignore] on the property of the same name leaves the default value, as in attribute mappings, unless
+            // ForCtorParam or ForMember configures it.
+            if (sameNamed is not null && MappingAnalyzer.HasIgnoreAttribute(sameNamed)
+                && !configByParam.ContainsKey(parameter.Name) && !configByDest.ContainsKey(sameNamed.Name))
+            {
+                return ParameterValue.Ignored($"[Ignore] on '{destSymbol.Name}.{sameNamed.Name}'");
+            }
+
             var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
             var mapping = MapMember(DestinationMember.ForParameter(parameter, sameNamed), isInitOnly: false,
                 isParameter: true, found, commit, out bool ignored, out string? unusable);
             if (mapping is null)
             {
                 return ParameterValue.NoSource();
+            }
+
+            if (ignored && mapping.LambdaBody is null && mapping.ConverterType is null && !configByParam.ContainsKey(parameter.Name)
+                && (sameNamed is null || !configByDest.ContainsKey(sameNamed.Name)))
+            {
+                return ParameterValue.Ignored($"[Ignore] on '{sourceSymbol.Name}.{mapping.SourcePropertyName}'");
             }
 
             if (ignored)
@@ -1111,8 +1168,11 @@ internal static class ProfileAnalyzer
         {
             ct.ThrowIfCancellationRequested();
 
-            // Set by the constructor or the factory (a parameter of the same name, ignoring case).
-            if (construction.SetByConstructor.Contains(destProp.Name))
+            // Set by the constructor or the factory (a parameter of the same name, ignoring case); or [Ignore] on the
+            // property, as in attribute mappings, unless ForMember configures it (up to 2.0.0 a profile only skipped its
+            // IM0001 and still copied the source property of the same name, issue #61).
+            if (construction.SetByConstructor.Contains(destProp.Name)
+                || (MappingAnalyzer.HasIgnoreAttribute(destProp) && !configByDest.ContainsKey(destProp.Name)))
             {
                 continue;
             }
@@ -1146,8 +1206,7 @@ internal static class ProfileAnalyzer
             // Priority 4: nothing maps the property. IM0001 at the CreateMap call; reported only with
             // <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles> (filtered in
             // IronMapperGenerator.CollectDiagnostics, so changing the property does not re-run this analysis).
-            // [Ignore] on the destination property counts as mapped, as in attribute mappings.
-            else if (reportUnmapped && !MappingAnalyzer.HasIgnoreAttribute(destProp))
+            else if (reportUnmapped)
             {
                 diagnostics.Add(new DiagnosticInfo(
                         DiagnosticDescriptors.UnmappedDestinationProperty,
