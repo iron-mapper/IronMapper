@@ -164,6 +164,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     public bool DestIsValueType { get; }
 
     /// <summary>
+    /// The source is a value type (a struct): it cannot be <see langword="null"/>, so <c>IronMapperNullSourceReturnsNull</c>
+    /// does not change its <c>MapToX</c>.
+    /// </summary>
+    public bool SourceIsValueType { get; }
+
+    /// <summary>
     /// Why the in-place overload of this mapping changes nothing for the caller, or <see langword="null"/> when it does:
     /// the destination is a value type (passed by copy), the mapping uses <c>ConvertUsing</c> (the in-place overload does
     /// not apply it) or no property can be set (every mapped property is <c>init</c>-only, or there is none). Such an
@@ -288,6 +294,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="constructorArguments">The constructor arguments (see <see cref="ConstructorArguments"/>).</param>
     /// <param name="factory">The factory of a profile (see <see cref="Factory"/>).</param>
     /// <param name="destIsValueType">The destination is a value type (see <see cref="DestIsValueType"/>).</param>
+    /// <param name="sourceIsValueType">The source is a value type (see <see cref="SourceIsValueType"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -317,10 +324,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         bool usesConstructor = false,
         EquatableArray<PropertyMappingDescriptor> constructorArguments = default,
         FactoryDescriptor? factory = null,
-        bool destIsValueType = false)
+        bool destIsValueType = false,
+        bool sourceIsValueType = false)
     {
         Factory = factory;
         DestIsValueType = destIsValueType;
+        SourceIsValueType = sourceIsValueType;
         UsesConstructor = usesConstructor;
         ConstructorArguments = constructorArguments;
         SourceTypeName = sourceTypeName;
@@ -363,7 +372,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
                 naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation,
-                MethodOverrides, UsesConstructor, ConstructorArguments, Factory, DestIsValueType);
+                MethodOverrides, UsesConstructor, ConstructorArguments, Factory, DestIsValueType, SourceIsValueType);
 
     /// <summary>A copy with the overloads set for this mapping (see <see cref="MethodOverrides"/>).</summary>
     public MappingDescriptor WithMethodOverrides(GeneratedMethodOverrides overrides)
@@ -374,7 +383,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
                 DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides, UsesConstructor, ConstructorArguments,
-                Factory, DestIsValueType);
+                Factory, DestIsValueType, SourceIsValueType);
 
     /// <summary>
     /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
@@ -390,7 +399,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
                 DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides,
                 usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments, factory: Factory,
-                destIsValueType: DestIsValueType);
+                destIsValueType: DestIsValueType, sourceIsValueType: SourceIsValueType);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -429,6 +438,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || !MethodOverrides.Equals(other.MethodOverrides)
             || UsesConstructor != other.UsesConstructor
             || DestIsValueType != other.DestIsValueType
+            || SourceIsValueType != other.SourceIsValueType
             || !Equals(Factory, other.Factory))
         {
             return false;
@@ -473,6 +483,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + PropertyMappings.GetHashCode();
         hash = hash * 31 + UsesConstructor.GetHashCode();
         hash = hash * 31 + DestIsValueType.GetHashCode();
+        hash = hash * 31 + SourceIsValueType.GetHashCode();
         hash = hash * 31 + ConstructorArguments.GetHashCode();
         hash = hash * 31 + (Factory?.GetHashCode() ?? 0);
         hash = hash * 31 + Diagnostics.GetHashCode();

@@ -294,6 +294,59 @@ the same way leave the generated mappings out of the report from 2.0.0, also wit
 
 ---
 
+## `null` source (`IronMapperNullSourceReturnsNull`)
+
+By default a generated `MapToX(source)` throws `ArgumentNullException` for a `null` source, as since 1.0. From 2.1.0 an
+MSBuild property makes it return `null` instead, as Mapperly, Mapster and AutoMapper do
+([#27](https://github.com/iron-mapper/IronMapper/issues/27)):
+
+```xml
+<PropertyGroup>
+  <IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>
+</PropertyGroup>
+```
+
+Only `true` (case-insensitive) turns it on. It applies to the mappings of the project that sets it (put it in
+`Directory.Build.props` for a solution). It is planned to be the default in 3.0.0.
+
+```csharp
+// generated with the property:
+[return: NotNullIfNotNull("source")]
+public static OrderDto? MapToOrderDto(this Order? source)
+{
+    if (source is null) return null;
+    ...
+}
+
+Order? maybe = null;
+OrderDto? none = maybe.MapToOrderDto();   // null
+var dto = order.MapToOrderDto();          // order is not null: dto is OrderDto, no nullable warning
+```
+
+`[return: NotNullIfNotNull]` tells the compiler that the result is not `null` when the source is not, so code written for
+the default (`order.MapToOrderDto().Name`) gets no new nullable warning, also with `TreatWarningsAsErrors`. A target
+without the attribute (netstandard2.0, .NET Framework) gets an internal copy in the generated `GeneratedMappers.g.cs`
+(the compiler reads it by its full name). With PolySharp (or another generator that declares these attributes):
+`<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>` — the generator then declares neither this copy nor that of
+`ModuleInitializerAttribute` (the registration for `IMapper`), and two copies would be error `CS0101`. Only `false`
+turns the copies off; the attributes must then come from the other generator.
+
+What does not change:
+
+- a **struct source** (it cannot be `null`) and a **struct destination** (`D?` would be `Nullable<D>`, and
+  `PointDto p = row.MapToPointDto();` would stop compiling): the method is the same as without the property;
+- the **in-place overload** `MapToX(source, destination)` throws `ArgumentNullException` for a `null` source;
+- `MapToXList`/`MapToXArray` return an empty collection for a `null` source, as before; a **`null` element** of these
+  and of a nested collection still throws `ArgumentNullException` (the element type is not nullable);
+- **nested objects** are mapped by the nullable annotations, as without the property
+  ([Nested objects](advanced.md#nested-objects));
+- **`IMapper`**: `mapper.Map<TDest>(null)` (and `Map<TSource, TDest>(null)`) throws `ArgumentNullException` with the
+  property too: the runtime package does not see it, and `IMapper` is not changed by it.
+
+`ConstructWith`, `ConvertUsing`, `When`, `BeforeMap` and `AfterMap` are not called for a `null` source.
+
+---
+
 ## Unmapped properties in profiles
 
 For `[MapTo]`/`[MapFrom]` an unmatched destination property is warning

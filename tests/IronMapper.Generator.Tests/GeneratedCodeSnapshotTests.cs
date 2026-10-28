@@ -657,6 +657,34 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
+    // IronMapperNullSourceReturnsNull=true (issue #27, PR 9 of 2.1.0): MapToX(this S? source) → D? with
+    // [return: NotNullIfNotNull("source")] for a class source and destination (Order, Customer: the public check of a
+    // nested pair, its …Core unchanged); NotNullElement before each element of the List/Array loops and of a nested
+    // collection; Point (struct destination) and the in-place overloads as without the option.
+    [Fact]
+    public Task NullSourceReturnsNull() => Verify("""
+        using System.Collections.Generic;
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        [MapTo(typeof(OrderDto))]
+        public class Order { public int Id { get; set; } public Customer? Customer { get; set; } public List<Line> Lines { get; set; } = new(); }
+        public class OrderDto { public int Id { get; set; } public CustomerDto? Customer { get; set; } public List<LineDto> Lines { get; set; } = new(); }
+
+        [MapTo(typeof(CustomerDto), GenerateList = false, GenerateArray = false)]
+        public class Customer { public string Name { get; set; } = ""; }
+        public class CustomerDto { public string Name { get; set; } = ""; }
+
+        [MapTo(typeof(LineDto), GenerateInPlace = false, GenerateList = false, GenerateArray = false)]
+        public class Line { public string Sku { get; set; } = ""; }
+        public class LineDto { public string Sku { get; set; } = ""; }
+
+        [MapTo(typeof(PointDto), GenerateList = false, GenerateArray = false)]
+        public class Point { public int X { get; set; } }
+        public struct PointDto { public int X { get; set; } }
+        """, new Dictionary<string, string> { ["IronMapperNullSourceReturnsNull"] = "true" });
+
     private static Task Verify(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

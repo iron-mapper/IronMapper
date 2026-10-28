@@ -27,6 +27,11 @@
     IronMapperRegistration - false (set in the project) generates no registration for IMapper: no
     GeneratedMappers.Registration.g.cs, no module initializer, no private in-place methods for it. The value that
     buildTransitive/IronMapper.targets picks for a trimmed or NativeAOT publish goes only into the feature switch.
+    IronMapperNullSourceReturnsNull - true makes MapToX(this S? source) return null for a null source (class source and
+    destination, [return: NotNullIfNotNull("source")]); false by default (ArgumentNullException).
+    IronMapperEmitPolyfills - false stops declaring internal copies of ModuleInitializerAttribute and
+    NotNullIfNotNullAttribute on targets without them (netstandard2.0, .NET Framework), for a project where another
+    generator (PolySharp) declares them; true by default.
   -->
   <ItemGroup>
     <CompilerVisibleProperty Include="IronMapperReportUnmappedInProfiles" />
@@ -36,6 +41,8 @@
     <CompilerVisibleProperty Include="IronMapperExcludeFromCodeCoverage" />
     <CompilerVisibleProperty Include="IronMapperGeneratedCodeAttribute" />
     <CompilerVisibleProperty Include="IronMapperRegistration" />
+    <CompilerVisibleProperty Include="IronMapperNullSourceReturnsNull" />
+    <CompilerVisibleProperty Include="IronMapperEmitPolyfills" />
   </ItemGroup>
 
 </Project>

@@ -94,9 +94,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             .WithTrackingName(TrackingNames.SourcePlan);
 
         // APIs the generated code may use in this compilation (ThrowIfNull, DoesNotReturn). Recomputed for every
-        // compilation, compared by value: the outputs change only when the target framework does.
-        var codeOptions = context.CompilationProvider
+        // compilation, compared by value: the outputs change only when the target framework does. With them
+        // IronMapperNullSourceReturnsNull (the mapping files, the helpers of the class declaration) and
+        // IronMapperEmitPolyfills (the attribute copies in the class declaration and the registration).
+        var compilationOptions = context.CompilationProvider
             .Select(static (compilation, _) => GeneratedCodeOptions.From(compilation))
+            .WithTrackingName(TrackingNames.CompilationOptions);
+        var codeSettings = settings.Select(static (value, _) => (value.NullSourceReturnsNull, value.EmitPolyfills))
+            .WithTrackingName(TrackingNames.CodeSettings);
+        var codeOptions = compilationOptions.Combine(codeSettings)
+            .Select(static (item, _) => item.Left.WithSettings(item.Right.NullSourceReturnsNull, item.Right.EmitPolyfills))
             .WithTrackingName(TrackingNames.CodeOptions);
 
         // Attributes of the class declaration: [ExcludeFromCodeCoverage] (IronMapperExcludeFromCodeCoverage) and

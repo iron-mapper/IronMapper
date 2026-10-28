@@ -74,7 +74,7 @@ The package also ships `IronMapper.Generator.dll` and `IronMapper.CodeFixes.dll`
 `global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`,
 and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`,
 `IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`, `IronMapperGeneratedCodeAttribute`,
-`IronMapperRegistration`);
+`IronMapperRegistration`, `IronMapperNullSourceReturnsNull`, `IronMapperEmitPolyfills`);
 `buildTransitive/IronMapper.targets`: the feature switch `IronMapper.Registration.IsSupported` (see
 [The DI path](#the-di-path-imapper)), with `ILLink.Substitutions.xml` embedded in `IronMapper.dll`.
 
@@ -214,6 +214,20 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   object, in place, the parameter of the same name gets its default value; `ForMember`/`ForCtorParam` of the destination
   member wins. All change the result at run time (CHANGELOG Fixed, `docs/upgrading-to-2.1.md` sections 6 and 7). Tests:
   `SilentlyIgnoredConfigTests` (generator and runtime), snapshot `SilentlyIgnoredConfig`.
+- **`null` source, `IronMapperNullSourceReturnsNull`** (issue #27, PR 9 of 2.1.0, off by default, the default in 3.0.0):
+  `GeneratorSettings.NullSourceReturnsNull`, carried in `GeneratedCodeOptions.NullSourceReturnsNull` (step `CodeOptions`
+  combines `CompilationOptions` and `CodeSettings`). `MapToX(this S? source)` → `D?` with
+  `[return: NotNullIfNotNull("source")]` (a string: `nameof` of a parameter there needs C# 11) and
+  `if (source is null) return null;` for a class source and a class destination (`MapperCodeEmitter.ReturnsNullForNullSource`;
+  `MappingDescriptor.SourceIsValueType`/`DestIsValueType`: a struct destination would become `Nullable<D>`). Unchanged:
+  the in-place overload (`ArgumentNullException`), `…Core`, nested objects, `IMapper`. A `null` collection element still
+  throws: the element mappers and the nested collection helpers call `NotNullElement(item)` (`ElementCheckName`, declared
+  in `GeneratedMappers.g.cs` with the option). Without `NotNullIfNotNullAttribute` (netstandard2.0) the class declaration
+  file declares an internal copy (`GeneratedCodeOptions.HasNotNullIfNotNull`), as the registration does for
+  `ModuleInitializerAttribute`; neither with `IronMapperEmitPolyfills=false` (`GeneratorSettings.EmitPolyfills`, carried in
+  `GeneratedCodeOptions.EmitPolyfills`, step `CodeSettings`), for a project where PolySharp declares them (CS0101). Tests: `NullSourceOptionTests` (user code
+  without nullable warnings, a referenced project with the option), snapshot `NullSourceReturnsNull`, `verify-package`
+  variants (net10.0 and netstandard2.0, `TreatWarningsAsErrors`).
 - **Nullable narrowing, IM0023** (issue #54, PR 6 of 2.1.0): `PropertyTypeCheck.CheckNullableValue` (assignments and
   arguments, collection elements assigned as is), `CheckNullableMapFrom` (flow state of the `MapFrom` expression; `!` at
   its end suppresses), `CheckNullableConverter`, `Transformer` (profile `AddTransformer` of the type), `CheckNullableElements`

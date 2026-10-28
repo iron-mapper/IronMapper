@@ -99,6 +99,15 @@ helper of the generated class (`NestedObjectIsNull`, not inlined), so the mappin
 maps such a `null` to `null` without an error; Mapperly emits no check, so the mapping fails with
 `NullReferenceException`.
 
+### `null` source of the mapping itself
+
+The checks above are for nested objects. The source of `order.MapToOrderDto()` itself is checked by the public method:
+`ArgumentNullException` by default, `null` → `null` with
+[`IronMapperNullSourceReturnsNull`](configuration.md#null-source-ironmappernullsourcereturnsnull) (from 2.1.0,
+`MapToOrderDto(this Order? source)` → `OrderDto?` with `[return: NotNullIfNotNull("source")]`). The property does not
+change the nested objects: they keep the rules of the table above. Nor `IMapper`: `mapper.Map<OrderDto>(null)` throws
+`ArgumentNullException` with the property too.
+
 ### In-place update of nested objects
 
 `source.MapToOrderEntity(entity)` (and `IMapper.Map(source, destination)`) updates the nested objects that the
@@ -189,6 +198,11 @@ List<UserDto> dtos = entities.MapToUserDtoList();
 // Returns TDest[] (Array.Empty<TDest>() when source is null)
 UserDto[] arr = entities.MapToUserDtoArray();
 ```
+
+A `null` element throws `ArgumentNullException`, also with
+[`IronMapperNullSourceReturnsNull`](configuration.md#null-source-ironmappernullsourcereturnsnull): the element mapping
+then returns `null` for `null`, so the loop checks the element first (`NotNullElement`, a private helper of the
+generated class).
 
 The parameter is `IEnumerable<T>`, but the generated code checks the runtime type first: an array or a `List<T>` is
 read with a `for` loop and the result is created with the exact size; another `ICollection<T>` gives the size through
@@ -514,7 +528,9 @@ The in-place overload only assigns the mapped properties. It:
   ([Constructors and positional records](#constructors-and-positional-records));
 - ignores `ConstructUsing` (the existing object is updated);
 - skips `init`-only destination properties;
-- does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`.
+- does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`;
+- throws `ArgumentNullException` for a `null` source or destination, also with `IronMapperNullSourceReturnsNull` (which
+  changes only `MapToX(source)`).
 
 **An in-place overload that does nothing is `[Obsolete]`** (from 2.1.0; removed in 3.0.0): for a value-type destination
 (the method gets a copy), a mapping with `ConvertUsing` and a destination whose mapped properties are all `init`. Each
@@ -558,7 +574,8 @@ nothing. See [Upgrading to 2.1](upgrading-to-2.1.md#4-in-place-overloads-that-do
   `IronMapper.Generated.GeneratedMappers_MyCompany_Mappings.RegisterIronMapperMappings()` for the assembly
   `MyCompany.Mappings` (the method is `internal`, so call it from that assembly; up to 1.1.4 the class was
   `GeneratedMappers`, see [Multi-project solutions](configuration.md#multi-project-solutions)). Targets without `ModuleInitializerAttribute` (`netstandard`, .NET Framework) get an
-  internal copy of the attribute generated into the assembly.
+  internal copy of the attribute generated into the assembly. With PolySharp, which declares it too (error `CS0101`):
+  `<IronMapperEmitPolyfills>false</IronMapperEmitPolyfills>`.
 - `Map<TSource, TDest>(source)` uses the mapping of the exact pair: a static field read and a delegate call. When
   there is none, and for `Map<TDest>(object)`, the mapping is looked up by type: the runtime type of the source, then
   its base types (a `DerivedEntity` without its own mapping uses the one of `Entity`). Interfaces of the source and

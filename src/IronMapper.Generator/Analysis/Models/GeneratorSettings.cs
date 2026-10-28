@@ -34,9 +34,24 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
     /// </summary>
     public const string RegistrationProperty = "IronMapperRegistration";
 
+    /// <summary>
+    /// MSBuild property: <c>true</c> makes <c>MapToX(this S? source)</c> return <c>null</c> for a <c>null</c> source
+    /// (issue #27, item 2.14 of the plan; off by default in 2.x, the default in 3.0.0).
+    /// </summary>
+    public const string NullSourceReturnsNullProperty = "IronMapperNullSourceReturnsNull";
+
+    /// <summary>
+    /// MSBuild property: <c>false</c> stops declaring the internal copies of <c>ModuleInitializerAttribute</c> and
+    /// <c>NotNullIfNotNullAttribute</c> on targets without them (another generator, such as PolySharp, declares them).
+    /// </summary>
+    public const string EmitPolyfillsProperty = "IronMapperEmitPolyfills";
+
     public GeneratorSettings(bool reportUnmappedInProfiles, GeneratedMethods? methods = null,
-        bool excludeFromCodeCoverage = false, bool generatedCodeAttribute = true, bool registration = true)
+        bool excludeFromCodeCoverage = false, bool generatedCodeAttribute = true, bool registration = true,
+        bool nullSourceReturnsNull = false, bool emitPolyfills = true)
     {
+        EmitPolyfills = emitPolyfills;
+        NullSourceReturnsNull = nullSourceReturnsNull;
         Registration = registration;
         ReportUnmappedInProfiles = reportUnmappedInProfiles;
         Methods = methods ?? GeneratedMethods.All;
@@ -69,6 +84,22 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
     /// </summary>
     public bool Registration { get; }
 
+    /// <summary>
+    /// <c>MapToX(this S? source)</c> of a class source and a class destination returns <c>D?</c> with
+    /// <c>[return: NotNullIfNotNull("source")]</c>: <c>null</c> → <c>null</c>
+    /// (<c>&lt;IronMapperNullSourceReturnsNull&gt;true&lt;/IronMapperNullSourceReturnsNull&gt;</c>). Off by default: an
+    /// <c>ArgumentNullException</c>, as up to 2.0.0.
+    /// </summary>
+    public bool NullSourceReturnsNull { get; }
+
+    /// <summary>
+    /// Declare an internal copy of <c>ModuleInitializerAttribute</c> (the registration for <c>IMapper</c>) and of
+    /// <c>NotNullIfNotNullAttribute</c> (<see cref="NullSourceReturnsNull"/>) when the target has none (default). Off with
+    /// <c>&lt;IronMapperEmitPolyfills&gt;false&lt;/IronMapperEmitPolyfills&gt;</c>: a polyfill generator of the project
+    /// (PolySharp) declares them too, and the two copies would be CS0101; this generator cannot see that generator's output.
+    /// </summary>
+    public bool EmitPolyfills { get; }
+
     /// <summary>Reads the settings from the global analyzer config options of the project.</summary>
     public static GeneratorSettings From(AnalyzerConfigOptions options)
         => new(
@@ -79,7 +110,9 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
                 !IsFalse(options, GenerateArrayProperty)),
             IsTrue(options, ExcludeFromCodeCoverageProperty),
             !IsFalse(options, GeneratedCodeAttributeProperty),
-            !IsFalse(options, RegistrationProperty));
+            !IsFalse(options, RegistrationProperty),
+            IsTrue(options, NullSourceReturnsNullProperty),
+            !IsFalse(options, EmitPolyfillsProperty));
 
     private static bool IsTrue(AnalyzerConfigOptions options, string property) => Is(options, property, "true");
 
@@ -98,12 +131,14 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
            && Methods.Equals(other.Methods)
            && ExcludeFromCodeCoverage == other.ExcludeFromCodeCoverage
            && GeneratedCodeAttribute == other.GeneratedCodeAttribute
-           && Registration == other.Registration;
+           && Registration == other.Registration
+           && NullSourceReturnsNull == other.NullSourceReturnsNull
+           && EmitPolyfills == other.EmitPolyfills;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratorSettings);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => ((ReportUnmappedInProfiles ? 1 : 0) | (ExcludeFromCodeCoverage ? 2 : 0) | (GeneratedCodeAttribute ? 4 : 0) | (Registration ? 8 : 0)) * 31 + Methods.GetHashCode();
+        => ((ReportUnmappedInProfiles ? 1 : 0) | (ExcludeFromCodeCoverage ? 2 : 0) | (GeneratedCodeAttribute ? 4 : 0) | (Registration ? 8 : 0) | (NullSourceReturnsNull ? 16 : 0) | (EmitPolyfills ? 32 : 0)) * 31 + Methods.GetHashCode();
 }
