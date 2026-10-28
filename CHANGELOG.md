@@ -134,6 +134,10 @@
   on targets without them (netstandard2.0, .NET Framework). For projects where PolySharp or another generator declares
   them: two copies are error `CS0101`, and one generator cannot see the other's output. Without the property nothing
   changes.
+- **Help links of the diagnostics:** every `IMxxxx` diagnostic links to its page on the project site,
+  `https://iron-mapper.ru/diagnostics/im0001/` (the code in lowercase; the same text as
+  [Diagnostics](docs/diagnostics.md)): the code in the error list of the IDE opens it (`helpLinkUri` of the
+  diagnostic).
 
 ### Changed
 
