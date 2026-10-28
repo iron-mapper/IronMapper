@@ -81,9 +81,27 @@ for (const file of htmlFiles) {
   }
 }
 
+// /llms.txt and /llms-full.txt (starlight-llms-txt): both exist, llms.txt names the project, and every absolute link
+// into the site in llms.txt points to a page that exists.
+let llmsLinks = 0;
+for (const name of ['llms.txt', 'llms-full.txt']) {
+  const file = join(dist, name);
+  if (!existsSync(file) || statSync(file).size === 0) { broken.push(`/${name}: missing or empty`); continue; }
+  const text = readFileSync(file, 'utf8');
+  if (!text.startsWith(`# ${project.name}`) && !text.includes(`# ${project.name}\n`)) broken.push(`/${name}: does not start with "# ${project.name}"`);
+  if (name === 'llms.txt') {
+    for (const m of text.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)) {
+      const url = new URL(m[1]);
+      if (url.origin !== new URL(project.site).origin) continue;
+      llmsLinks++;
+      if (!fileFor(url.pathname)) broken.push(`/llms.txt: no page for ${m[1]}`);
+    }
+  }
+}
+
 if (broken.length) {
   console.error(`check-links: ${broken.length} broken link(s) in ${htmlFiles.length} pages:`);
   for (const b of broken) console.error('  ' + b);
   process.exit(1);
 }
-console.log(`check-links: ${checked} internal links in ${htmlFiles.length} pages are fine`);
+console.log(`check-links: ${checked} internal links in ${htmlFiles.length} pages and ${llmsLinks} site links in llms.txt are fine; llms-full.txt present`);
