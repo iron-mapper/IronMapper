@@ -24,7 +24,8 @@
        The feature switch IronMapper.Registration.IsSupported (buildTransitive/IronMapper.targets) is checked in the
        runtimeconfig.json of every executable variant: not set by default and with the DI package, false with
        PublishTrimmed and without the DI package, true with IronMapperRegistration=true; a framework-dependent publish
-       without the DI package keeps the registration (the registry finds the mapping by type).
+       without the DI package keeps the registration (the registry finds the mapping by type). IronMapperRegistration=false
+       set in the project generates no registration (no RegisterIronMapperMappings, no private MapInto).
        IronMapperReportUnmappedInProfiles (CompilerVisibleProperty in buildTransitive/IronMapper.props): a profile
        with an unmapped property builds without it; with it the build fails with IM0001 at the CreateMap line
        (TreatWarningsAsErrors), and .editorconfig dotnet_diagnostic.IM0001.severity applies (error without
@@ -267,6 +268,9 @@ try {
            Properties = @('-p:PublishTrimmed=true', '-p:IronMapperPackage=IronMapper.Extensions.DI') }
         @{ Name = 'PublishTrimmed=true, IronMapperRegistration=true'; Source = "$sources/Registry.cs"; GlobalUsing = $true
            Output = 'Registry: OK'; Switch = 'true'; Properties = @('-p:PublishTrimmed=true', '-p:IronMapperRegistration=true') }
+        # IronMapperRegistration=false in the project: no registration generated (item 2.16), the switch off.
+        @{ Name = 'IronMapperRegistration=false (no registration generated)'; Source = "$sources/RegistrationOff.cs"
+           GlobalUsing = $true; Output = 'RegistrationOff: OK'; Switch = 'false'; Properties = @('-p:IronMapperRegistration=false') }
         # Libraries on targets without ArgumentNullException.ThrowIfNull and ModuleInitializerAttribute: the generated
         # code uses its own throw helper, with [DoesNotReturn] on netstandard2.1 and without it on netstandard2.0, and
         # declares an internal ModuleInitializerAttribute for the IMapper registration; with C# 8 the registration has

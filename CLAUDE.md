@@ -73,7 +73,8 @@ The package also ships `IronMapper.Generator.dll` and `IronMapper.CodeFixes.dll`
 (see `src/IronMapper/IronMapper.csproj`, target `IncludeAnalyzersInPackage`), and `buildTransitive/IronMapper.props`:
 `global using IronMapper.Generated` for C# projects with `ImplicitUsings`, off with `IronMapperImplicitUsings=false`,
 and `CompilerVisibleProperty` for the generator's MSBuild properties (`IronMapperReportUnmappedInProfiles`,
-`IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`, `IronMapperGeneratedCodeAttribute`);
+`IronMapperGenerateInPlace/List/Array`, `IronMapperExcludeFromCodeCoverage`, `IronMapperGeneratedCodeAttribute`,
+`IronMapperRegistration`);
 `buildTransitive/IronMapper.targets`: the feature switch `IronMapper.Registration.IsSupported` (see
 [The DI path](#the-di-path-imapper)), with `ILLink.Substitutions.xml` embedded in `IronMapper.dll`.
 
@@ -89,23 +90,36 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   - `MapToX(this Source source)` — new destination object;
   - `MapToX(this Source source, X destination)` — in-place update (skips `init` properties);
   - `MapToXList(this IEnumerable<Source>? source)` and `MapToXArray(...)` — collections.
-  `MapToX(source)` checks `source` for `null` and calls the private `MapToXCore(source)` with the body
-  (`MappingPlanEntry.CoreMethodName`: `{MethodName}Core`, or `{MethodName}Core{HelperScope}` when a mapping of the same
-  source is named so); nested objects call `MapToXCore` directly. The in-place overload (or its private `MapInto{scope}`)
-  checks both arguments and calls the private in-place `MapToXCore(source, destination)`, generated for every mapping.
+  `MapToX(source)` checks `source` for `null` and maps it. **`…Core` only where something calls it** (PR 7 of 2.1.0,
+  `MappingPlanner.WithCoreUse`): `MappingPlanEntry.UsesCore` — a nested object, a converted value, a constructor or
+  factory argument of a generated mapping (`MapperCodeEmitter.FindNestedEntry`) — splits it into the public check and the
+  private `MapToXCore(source)` with the body (`MappingPlanEntry.CoreMethodName`: `{MethodName}Core`, or
+  `{MethodName}Core{HelperScope}` when a mapping of the same source is named so), which nested objects call directly.
+  `UsesInPlaceCore` — an existing nested object updated by a generated in-place body (`FindNestedInPlaceEntry`; followed
+  through parents whose in-place body exists: public overload, `MapInto` of the registration, or their own in-place
+  `…Core`) — does the same for the in-place overload (or its private `MapInto{scope}`) and
+  `MapToXCore(source, destination)`. Otherwise one method with the check and the body, the code of 2.0.0 byte for byte
+  (snapshot `NotNestedMapping_SameCodeAs200`, checked against the 2.0.0 package). The plan takes the overloads and
+  `IronMapperRegistration` for this (step `Plan` combines `MethodSettings` and `RegistrationSettings`).
   The last three are optional (`GeneratedMethods`: MSBuild `IronMapperGenerateInPlace/List/Array`, per mapping
   `GenerateInPlace/List/Array` on the attributes or `GenerateMethods(...)` in a profile, `MappingDescriptor.MethodOverrides`).
-  A turned-off in-place overload stays as `private static void MapInto{scope}(source, destination)` for the registration;
+  A turned-off in-place overload stays as `private static void MapInto{scope}(source, destination)` for the registration
+  (none with `IronMapperRegistration=false`);
   a turned-off List/Array is passed as `null` to `MapperRegistry.Register`, and the registry loops over `map` itself
-  (`MapperEntry`). `MapToX(source)` is always generated (nested collections call it). The class declaration
+  (`MapperEntry`). `MapToX(source)` is always generated (nested collections call it). **An in-place overload that
+  changes nothing** (`MappingDescriptor.InPlaceNoOpReason`: a value-type destination, `ConvertUsing`, no settable mapped
+  property; `MappingPlanEntry.InPlaceIsNoOp`) is `[Obsolete(reason)]` (removed in 3.0.0), and the registration calls a
+  private `MapInto{scope}` that throws `MappingException` (`EmitInPlaceStub`, also for a constructor or a factory); a
+  referenced assembly's `[Obsolete]` in-place overload is never called for a nested object
+  (`PropertyTypeCheck.IsUpdatedByExistingMethod`). Tests: `GeneratedCodeSizeTests`, `NoOpInPlaceMapperTests`. The class declaration
   (`EmitClassDeclaration`) carries `[GeneratedCode("IronMapper", <generator informational version>)]` (off with
   `IronMapperGeneratedCodeAttribute=false`) and, with `IronMapperExcludeFromCodeCoverage`, `[ExcludeFromCodeCoverage]` —
   once, for all partial parts. Snapshot tests scrub the
   version. Tests: `GeneratedMethodsTests`, `tests/IronMapper.Integration.Tests/TurnedOffOverloadsTests.cs`.
 - **Code shape** (`CodeGeneration/MapperCodeEmitter.cs`): no LINQ and no delegates. The public `MapToX(source)`,
   `MapToX(source, destination)` and the private `MapInto{scope}` carry `[MethodImpl(AggressiveInlining)]` (constant
-  `AggressiveInlining`): they only check the arguments and call `…Core`, and the .NET 8 JIT did not inline them (a call
-  plus a jump on the hot path; .NET 10 did). `…Core` never gets it: its size is the mapping's, so the JIT decides
+  `AggressiveInlining`) when they only check the arguments and call `…Core`: the .NET 8 JIT did not inline them (a call
+  plus a jump on the hot path; .NET 10 did). `…Core` and a method with the body never get it: its size is the mapping's, so the JIT decides
   (`IRONMAPPER_PLAN.md`, п.5.2, "AggressiveInlining на публичных методах"). `MapToXList`/`MapToXArray` are
   one-line calls of the generic `MapElementsToList`/`MapElementsToArray<TSource, TDest, TMapper>` declared once in
   `GeneratedMappers.g.cs` (`EmitElementLoops`, only when a mapping has the overload), with a private
@@ -217,7 +231,11 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   mapping leaves the source outputs cached. Diagnostics are collected into one value (step `Diagnostics`) and reported
   by a separate output combined with the compilation: `LocationInfo.ToLocation(trees)` makes a location in the current
   syntax tree (a `Location.Create(path, …)` location has no tree, so `.editorconfig` severities and code fixes would not
-  apply to it). That output runs for every compilation; `GeneratorCachingTests` exempts it. Where each diagnostic points:
+  apply to it). That output runs for every compilation; `GeneratorCachingTests` exempts it. **`IronMapperRegistration=false`** (item
+  2.16, `GeneratorSettings.Registration`, only an explicit `false` of the project: `buildTransitive/IronMapper.targets`
+  puts its automatic value for a trimmed/AOT publish into `_IronMapperRegistrationSwitch` only): no registration output,
+  no `MapInto`; `MapperRegistry.NoMappingException` mentions the property. No assembly marker: reading an attribute there
+  pulled the custom attribute search into NativeAOT apps with `IMapper` (+7–15 KB, `tests/IronMapper.AotProbe.DI`). Where each diagnostic points:
   `docs/diagnostics.md`, `DiagnosticLocationTests`. MSBuild properties come through `GeneratorSettings`
   (`build_property.*`, `CompilerVisibleProperty` in `buildTransitive/IronMapper.props`): `IronMapperReportUnmappedInProfiles`
   (IM0001 for profiles; filtered in `CollectDiagnostics`, not in the analysis), `IronMapperGenerate*` (step

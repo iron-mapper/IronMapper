@@ -9,32 +9,24 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.MemberId"/> to a new <see cref="global::System.Guid"/>.</summary>
         /// <param name="source">The source <see cref="global::App.MemberId"/> instance to map.</param>
         /// <returns>A new <see cref="global::System.Guid"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::System.Guid MapToGuid(this global::App.MemberId source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToGuidCore(source);
-        }
-
-        private static global::System.Guid MapToGuidCore(global::App.MemberId source)
-        {
             return source.Value;
         }
 
         /// <summary>Maps <see cref="global::App.MemberId"/> into an existing <see cref="global::System.Guid"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.MemberId"/> to read from.</param>
         /// <param name="destination">The <see cref="global::System.Guid"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [global::System.Obsolete("MapToGuid(source, destination) does nothing: Guid is a value type, so the destination is passed by copy and the caller's value does not change. Map to a new object instead (destination = source.MapToGuid()), or turn this overload off (GenerateInPlace = false, GenerateMethods(inPlace: false), IronMapperGenerateInPlace). It will be removed in IronMapper 3.0.0.")]
         public static void MapToGuid(this global::App.MemberId source, global::System.Guid destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToGuidCore(source, destination);
         }
 
-        private static void MapToGuidCore(global::App.MemberId source, global::System.Guid destination)
-        {
-        }
+        private static void MapInto_MemberId_Guid(global::App.MemberId source, global::System.Guid destination)
+            => throw new global::IronMapper.Exceptions.MappingException("No in-place mapping from MemberId to Guid: Guid is a value type, so the destination is passed by copy and the caller's value does not change. Map to a new object instead.");
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::System.Guid"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::System.Guid> MapToGuidList(this global::System.Collections.Generic.IEnumerable<global::App.MemberId>? source)

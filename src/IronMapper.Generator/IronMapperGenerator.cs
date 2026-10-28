@@ -67,8 +67,24 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         var all = fromMapTo.Collect()
             .Combine(fromMapFrom.Collect())
             .Combine(fromProfiles.Collect());
-        var plan = all
-            .Select(static (all, _) => MappingPlanner.Create(all.Left.Left, all.Left.Right, all.Right))
+
+        // MSBuild properties (build_property.*). Each output takes only the part it uses, so changing one property
+        // re-emits only what depends on it: the overloads (IronMapperGenerate*) and IronMapperRegistration the plan, the
+        // mapping files and the registration, IronMapperExcludeFromCodeCoverage and IronMapperGeneratedCodeAttribute the
+        // class declaration, IronMapperReportUnmappedInProfiles the diagnostics.
+        var settings = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
+            .WithTrackingName(TrackingNames.Settings);
+        var methods = settings.Select(static (value, _) => value.Methods)
+            .WithTrackingName(TrackingNames.MethodSettings);
+        var registration = settings.Select(static (value, _) => value.Registration)
+            .WithTrackingName(TrackingNames.RegistrationSettings);
+
+        // The overloads and the registration take part in the plan: an in-place body that updates nested objects (and so
+        // needs their in-place …Core) exists only when the overload or the registration is generated.
+        var plan = all.Combine(methods.Combine(registration))
+            .Select(static (item, _) => MappingPlanner.Create(item.Right.Left, item.Right.Right,
+                item.Left.Left.Left, item.Left.Left.Right, item.Left.Right))
             .WithTrackingName(TrackingNames.Plan);
 
         // The generated code does not depend on diagnostics, and diagnostics carry locations, which change whenever a
@@ -83,15 +99,6 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
             .Select(static (compilation, _) => GeneratedCodeOptions.From(compilation))
             .WithTrackingName(TrackingNames.CodeOptions);
 
-        // MSBuild properties (build_property.*). Each output takes only the part it uses, so changing one property
-        // re-emits only what depends on it: the overloads (IronMapperGenerate*) the mapping files and the registration,
-        // IronMapperExcludeFromCodeCoverage and IronMapperGeneratedCodeAttribute the class declaration,
-        // IronMapperReportUnmappedInProfiles the diagnostics.
-        var settings = context.AnalyzerConfigOptionsProvider
-            .Select(static (options, _) => GeneratorSettings.From(options.GlobalOptions))
-            .WithTrackingName(TrackingNames.Settings);
-        var methods = settings.Select(static (value, _) => value.Methods)
-            .WithTrackingName(TrackingNames.MethodSettings);
         // Attributes of the class declaration: [ExcludeFromCodeCoverage] (IronMapperExcludeFromCodeCoverage) and
         // [GeneratedCode] (IronMapperGeneratedCodeAttribute). A value tuple: compared by value.
         var classAttributes = settings
@@ -99,16 +106,19 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                 GeneratedCode: value.GeneratedCodeAttribute))
             .WithTrackingName(TrackingNames.CoverageSettings);
 
-        var planAndOptions = sourcePlan.Combine(codeOptions.Combine(methods));
+        var planAndOptions = sourcePlan.Combine(codeOptions.Combine(methods.Combine(registration)));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromMapTo, TrackingNames.MapToSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right.Left,
+                item.Right.Right.Right.Right));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromMapFrom, TrackingNames.MapFromSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right.Left,
+                item.Right.Right.Right.Right));
 
         context.RegisterSourceOutput(WithoutDiagnostics(fromProfiles, TrackingNames.ProfilesSource).Combine(planAndOptions),
-            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right));
+            static (spc, item) => EmitDescriptor(spc, item.Left, item.Right.Left, item.Right.Right.Left, item.Right.Right.Right.Left,
+                item.Right.Right.Right.Right));
 
         // Diagnostics of all mappings and of the plan, as one value (compared by value: cached until a diagnostic or its
         // location changes). The output resolves the locations in the current compilation's syntax trees: a location
@@ -185,9 +195,12 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         });
 
         // Registration of the generated mappings for IMapper (module initializer → MapperRegistry). Re-emitted only
-        // when the set of generated mappings, their method names, their overloads or the options change.
-        var registrations = sourcePlan.Combine(methods)
-            .Select(static (item, _) => GetRegistrations(item.Left, item.Right))
+        // when the set of generated mappings, their method names, their overloads or the options change. None with
+        // IronMapperRegistration=false (item 2.16 of the plan).
+        var registrations = sourcePlan.Combine(methods.Combine(registration))
+            .Select(static (item, _) => item.Right.Right
+                ? GetRegistrations(item.Left, item.Right.Left)
+                : EquatableArray<MappingRegistration>.Empty)
             .WithTrackingName(TrackingNames.Registrations);
 
         context.RegisterSourceOutput(registrations.Combine(codeOptions), static (spc, item) =>
@@ -292,8 +305,16 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         {
             if (entry.Emit)
             {
+                // An in-place overload that changes nothing is [Obsolete]: the registration calls the private MapInto,
+                // which throws (MapperCodeEmitter.Emit).
+                var generated = methods.With(entry.MethodOverrides);
+                if (entry.InPlaceIsNoOp && generated.InPlace)
+                {
+                    generated = new GeneratedMethods(inPlace: false, generated.List, generated.Array);
+                }
+
                 builder.Add(new MappingRegistration(entry.SourceFullName, entry.DestFullName, entry.MethodName,
-                    entry.HelperScope, methods.With(entry.MethodOverrides)));
+                    entry.HelperScope, generated));
             }
         }
 
@@ -397,7 +418,7 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
     /// collision) produce no source. Diagnostics are reported by their own output (see <see cref="CollectDiagnostics"/>).
     /// </summary>
     private static void EmitDescriptor(SourceProductionContext spc, MappingDescriptor descriptor, MappingPlan plan,
-        GeneratedCodeOptions options, GeneratedMethods methods)
+        GeneratedCodeOptions options, GeneratedMethods methods, bool registration)
     {
         if (descriptor.SourceTypeName.Length == 0 || plan.Find(descriptor.Origin) is not { Emit: true } entry)
         {
@@ -405,6 +426,6 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
         }
 
         spc.AddSource(entry.HintName,
-            MapperCodeEmitter.Emit(descriptor, entry, plan, options, methods.With(entry.MethodOverrides)));
+            MapperCodeEmitter.Emit(descriptor, entry, plan, options, methods.With(entry.MethodOverrides), registration));
     }
 }

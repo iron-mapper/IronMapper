@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -528,10 +529,91 @@ public class GeneratedCodeSnapshotTests
         }
         """);
 
-    private static Task Verify(string source)
+    // The shape of a mapping of a real project (closed: only the shape, neutral names), measured when 2.0.0 was replaced by
+    // 2.1.0-alpha.1: eight properties, one of them the .Value of a value object, the in-place overload, List and Array
+    // turned off, used as a nested object nowhere. The generated file must be the one of 2.0.0 byte for byte (checked
+    // against the IronMapper 2.0.0 package when this snapshot was accepted): item 7 of the 2.1.0 PR order.
+    [Fact]
+    public Task NotNestedMapping_SameCodeAs200() => Verify("""
+        using System;
+        using IronMapper.Configuration;
+
+        namespace App.Requests
+        {
+            public readonly record struct OwnerId(Guid Value);
+
+            internal sealed class ClosureRequest
+            {
+                public Guid Id { get; init; }
+                public OwnerId OwnerId { get; init; }
+                public string EmailHash { get; init; } = "";
+                public string? NotifyEmail { get; init; }
+                public string Locale { get; init; } = "";
+                public DateTimeOffset RequestedAt { get; init; }
+                public string? Ip { get; init; }
+                public string? UserAgent { get; init; }
+            }
+        }
+
+        namespace App.Storage
+        {
+            internal sealed class ClosureRequestRecord
+            {
+                public Guid Id { get; set; }
+                public Guid OwnerId { get; set; }
+                public string EmailHash { get; set; } = "";
+                public string? NotifyEmail { get; set; }
+                public string Locale { get; set; } = "";
+                public DateTimeOffset RequestedAt { get; set; }
+                public string? Ip { get; set; }
+                public string? UserAgent { get; set; }
+            }
+
+            internal sealed class StorageProfile : MappingProfile
+            {
+                public StorageProfile()
+                {
+                    CreateMap<App.Requests.ClosureRequest, ClosureRequestRecord>()
+                        .ForMember(d => d.OwnerId, o => o.MapFrom(s => s.OwnerId.Value))
+                        .GenerateMethods(inPlace: false, list: false, array: false);
+                }
+            }
+        }
+        """);
+
+    // IronMapperRegistration=false (item 2.16 of the plan): no GeneratedMappers.Registration.g.cs, no private MapInto (the
+    // in-place overload of Order is turned off, so it has no in-place code at all, and CustomerDto, nested in it, no in-place
+    // …Core), no throwing stub for Badge (created by its constructor) and Point (a value type, [Obsolete] in-place overload).
+    [Fact]
+    public Task RegistrationTurnedOff() => Verify("""
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        [MapTo(typeof(OrderDto), GenerateInPlace = false, GenerateList = false, GenerateArray = false)]
+        public class Order { public int Id { get; set; } public Customer Customer { get; set; } = new(); }
+        public class OrderDto { public int Id { get; set; } public CustomerDto Customer { get; set; } = new(); }
+
+        [MapTo(typeof(CustomerDto), GenerateList = false, GenerateArray = false)]
+        public class Customer { public string Name { get; set; } = ""; }
+        public class CustomerDto { public string Name { get; set; } = ""; }
+
+        [MapTo(typeof(Badge), GenerateList = false, GenerateArray = false)]
+        public class BadgeRow { public string Name { get; set; } = ""; }
+        public record Badge(string Name);
+
+        [MapTo(typeof(PointDto), GenerateList = false, GenerateArray = false)]
+        public class Point { public int X { get; set; } }
+        public struct PointDto { public int X { get; set; } }
+        """, new Dictionary<string, string> { ["IronMapperRegistration"] = "false" });
+
+    private static Task Verify(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
+        GeneratorDriver driver = buildProperties is null
+            ? CSharpGeneratorDriver.Create(new IronMapperGenerator())
+            : CSharpGeneratorDriver.Create(new[] { new IronMapperGenerator().AsSourceGenerator() },
+                optionsProvider: TestOptionsProvider.FromBuildProperties(buildProperties));
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
 
         var errors = output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();

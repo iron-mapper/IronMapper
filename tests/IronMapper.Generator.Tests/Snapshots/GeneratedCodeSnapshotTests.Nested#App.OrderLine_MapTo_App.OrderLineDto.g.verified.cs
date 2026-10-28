@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.OrderLine"/> to a new <see cref="global::App.OrderLineDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.OrderLine"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.OrderLineDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.OrderLineDto MapToOrderLineDto(this global::App.OrderLine source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToOrderLineDtoCore(source);
-        }
-
-        private static global::App.OrderLineDto MapToOrderLineDtoCore(global::App.OrderLine source)
-        {
             return new global::App.OrderLineDto
             {
                 Product = MapToProductDtoCore(source.Product ?? NestedObjectIsNull<global::App.Product>("OrderLine.Product is null, but OrderLineDto.Product is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.")),
@@ -28,16 +22,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.OrderLine"/> into an existing <see cref="global::App.OrderLineDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.OrderLine"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.OrderLineDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToOrderLineDto(this global::App.OrderLine source, global::App.OrderLineDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToOrderLineDtoCore(source, destination);
-        }
-
-        private static void MapToOrderLineDtoCore(global::App.OrderLine source, global::App.OrderLineDto destination)
-        {
             if (source.Product is null) NestedObjectIsNull<global::App.Product>("OrderLine.Product is null, but OrderLineDto.Product is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.");
             else if (destination.Product is null) destination.Product = MapToProductDtoCore(source.Product);
             else MapToProductDtoCore(source.Product, destination.Product);

@@ -117,13 +117,13 @@ public class NullableNarrowingTests
             d => Assert.StartsWith("CreateMap<", source.Substring(d.Location.SourceSpan.Start, d.Location.SourceSpan.Length)));
         Assert.Equal("s.Email", source.Substring(im0023.Single(d => Message(d).Contains("MapFrom expression")).Location.SourceSpan.Start, "s.Email".Length));
 
-        string user = generated.Single(s => s.Contains("MapToUserCore(global::App.UserRow source)"));
+        string user = generated.Single(s => s.Contains("MapToUser(this global::App.UserRow source)"));
         Assert.Contains("Email = source.Email!,", user);
         Assert.Contains("destination.Email = source.Email!;", user);   // the in-place overload too
         Assert.Contains("Tags = source.Tags!,", user);                  // List<string?> assigned as is (was IM0002)
         Assert.Contains("result.Add(source[i]!.MapToLineDto());", user);
-        Assert.Contains("Email: source.Email!,", generated.Single(s => s.Contains("MapToUserCardCore(")));
-        Assert.Contains("login: source.Email!)", generated.Single(s => s.Contains("MapToAccountCore(")));
+        Assert.Contains("Email: source.Email!,", generated.Single(s => s.Contains("MapToUserCard(this ")));
+        Assert.Contains("login: source.Email!)", generated.Single(s => s.Contains("MapToAccount(this ")));
     }
 
     [Theory]
@@ -149,7 +149,7 @@ public class NullableNarrowingTests
 
         AssertNoWarningsInGeneratedCode(compilation);
         Assert.Empty(diagnostics);
-        string user = generated.Single(s => s.Contains("MapToUserCore("));
+        string user = generated.Single(s => s.Contains("MapToUser(this "));
         if (expected is null)
         {
             Assert.DoesNotContain("Email =", user);
@@ -199,7 +199,7 @@ public class NullableNarrowingTests
         // The destination Code accepts null, but the converter does not: a converter of string? (Safe) is fine.
         Assert.Equal("Property 'Code' of 'App.TagDto' can receive null: 'Tag.Code' is 'string?' and the converter 'App.Upper' takes 'string'. Implement ITypeConverter<string?, …> to handle null, or declare the source property non-nullable.",
             Message(im0023[1]));
-        string code = generated.Single(s => s.Contains("MapToTagDtoCore("));
+        string code = generated.Single(s => s.Contains("MapToTagDto(this "));
         Assert.Contains("Code = ConverterCache<global::App.Upper>.Instance.Convert(source.Code!),", code);
         Assert.Contains("Label = ConverterCache<global::App.Safe>.Instance.Convert(source.Label),", code);
     }
@@ -230,7 +230,7 @@ public class NullableNarrowingTests
         AssertNoWarningsInGeneratedCode(compilation);
         Assert.Equal("Property 'Note' of 'App.Dto' can receive null: 'Row.Note' is 'string?' and the transformer of 'string' (AddTransformer<string>) takes a non-null 'string': null is passed to it. Declare the source property non-nullable, or configure the member with ForMember(d => d.Note, o => o.MapFrom(...)) (transformers do not apply to MapFrom).",
             Message(Assert.Single(diagnostics)));
-        Assert.Contains("Note = TransformValue_String_Row_Dto(source.Note!),", generated.Single(s => s.Contains("MapToDtoCore(")));
+        Assert.Contains("Note = TransformValue_String_Row_Dto(source.Note!),", generated.Single(s => s.Contains("MapToDto(this ")));
     }
 
     [Fact]

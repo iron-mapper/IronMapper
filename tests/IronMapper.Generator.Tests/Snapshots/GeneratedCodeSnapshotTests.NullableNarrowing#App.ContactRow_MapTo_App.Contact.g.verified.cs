@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.ContactRow"/> to a new <see cref="global::App.Contact"/>.</summary>
         /// <param name="source">The source <see cref="global::App.ContactRow"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.Contact"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.Contact MapToContact(this global::App.ContactRow source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToContactCore(source);
-        }
-
-        private static global::App.Contact MapToContactCore(global::App.ContactRow source)
-        {
             return new global::App.Contact
             {
                 Email = source.Email!,
@@ -30,16 +24,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.ContactRow"/> into an existing <see cref="global::App.Contact"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.ContactRow"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.Contact"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToContact(this global::App.ContactRow source, global::App.Contact destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToContactCore(source, destination);
-        }
-
-        private static void MapToContactCore(global::App.ContactRow source, global::App.Contact destination)
-        {
             destination.Email = source.Email!;
             destination.Phone = source.Phone;
             destination.Tags = source.Tags!;

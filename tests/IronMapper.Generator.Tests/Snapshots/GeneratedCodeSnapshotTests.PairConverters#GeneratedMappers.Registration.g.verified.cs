@@ -19,12 +19,12 @@ namespace IronMapper.Generated
         {
             global::IronMapper.Registration.MapperRegistry.Register<global::System.Guid, global::App.MemberId>(
                 source => MapToMemberId(source),
-                (source, destination) => MapToMemberId(source, destination),
+                (source, destination) => MapInto_Guid_MemberId(source, destination),
                 source => MapToMemberIdList(source),
                 source => MapToMemberIdArray(source));
             global::IronMapper.Registration.MapperRegistry.Register<global::App.MemberId, global::System.Guid>(
                 source => MapToGuid(source),
-                (source, destination) => MapToGuid(source, destination),
+                (source, destination) => MapInto_MemberId_Guid(source, destination),
                 source => MapToGuidList(source),
                 source => MapToGuidArray(source));
             global::IronMapper.Registration.MapperRegistry.Register<global::App.TeamRow, global::App.Team>(

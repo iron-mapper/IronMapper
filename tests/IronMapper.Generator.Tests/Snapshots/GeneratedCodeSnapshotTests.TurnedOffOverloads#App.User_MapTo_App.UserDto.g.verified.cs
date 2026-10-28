@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.User"/> to a new <see cref="global::App.UserDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.User"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.UserDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.UserDto MapToUserDto(this global::App.User source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToUserDtoCore(source);
-        }
-
-        private static global::App.UserDto MapToUserDtoCore(global::App.User source)
-        {
             return new global::App.UserDto
             {
                 Id = source.Id,
@@ -25,16 +19,10 @@ namespace IronMapper.Generated
             };
         }
 
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static void MapInto_User_UserDto(global::App.User source, global::App.UserDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToUserDtoCore(source, destination);
-        }
-
-        private static void MapToUserDtoCore(global::App.User source, global::App.UserDto destination)
-        {
             destination.Id = source.Id;
             destination.Name = source.Name;
         }

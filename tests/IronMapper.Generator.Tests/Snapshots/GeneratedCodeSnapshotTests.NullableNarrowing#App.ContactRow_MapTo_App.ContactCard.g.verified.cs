@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.ContactRow"/> to a new <see cref="global::App.ContactCard"/>.</summary>
         /// <param name="source">The source <see cref="global::App.ContactRow"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.ContactCard"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.ContactCard MapToContactCard(this global::App.ContactRow source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToContactCardCore(source);
-        }
-
-        private static global::App.ContactCard MapToContactCardCore(global::App.ContactRow source)
-        {
             return new global::App.ContactCard(
                 Email: source.Email!,
                 Phone: source.Phone);

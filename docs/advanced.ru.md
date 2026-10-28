@@ -30,9 +30,12 @@ private static CustomerDto MapToCustomerDtoCore(Customer source)
 }
 ```
 
-У каждого маппинга есть публичный `MapToX(source)`, который, как и раньше, проверяет `source` на `null`, и закрытый
-`MapToXCore` с тем же телом без проверки. Вложенный объект вызывает `MapToXCore` напрямую, после своей проверки: одно
-сравнение, во вложенном маппинге нет второй проверки и броска исключения, и JIT может его встроить.
+У маппинга, который используется как вложенный объект (или как [преобразование значения](#преобразование-значений-карты-пар), аргумент
+конструктора или фабрики), есть публичный `MapToX(source)`, который, как и раньше, проверяет `source` на `null`, и
+закрытый `MapToXCore` с тем же телом без проверки. Вложенный объект вызывает `MapToXCore` напрямую, после своей
+проверки: одно сравнение, во вложенном маппинге нет второй проверки и броска исключения, и JIT может его встроить.
+Маппинг, который так никто не использует, остаётся одним публичным методом с проверкой и телом — код 2.0.0 (разбиение
+только добавило бы текст: около 30 % на маппинг и второй вызов на .NET 8).
 
 Обработка `null` следует nullable-аннотациям (без `null!` для destination, который не допускает `null`):
 
@@ -136,10 +139,12 @@ In-place перегрузка проекта-зависимости вызыва
 которые маппинг не задаёт (`Id` с `[Ignore]` или `Ignore()`), сохраняют значения. Как и сама in-place перегрузка,
 обновление вложенного объекта игнорирует `When`, `ConvertUsing` и хуки маппинга пары.
 
-Обновляет закрытый in-place `MapToXCore(source, destination)` маппинга пары. Он генерируется для каждого маппинга, в
-том числе с выключенной in-place перегрузкой (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`,
-`GenerateMethods(inPlace: false)`): тогда публичного in-place `MapToX` нет, а `IMapper.Map(source, destination)`
-по-прежнему обновляет вложенные объекты. Коллекции не сливаются: вложенная коллекция, как и раньше, маппится в новый
+Обновляет закрытый in-place `MapToXCore(source, destination)` маппинга пары. Он генерируется для пары, существующие
+объекты которой обновляет in-place другого маппинга (его публичная перегрузка или закрытый метод, который вызывает
+`IMapper.Map(source, destination)`), в том числе с выключенной in-place перегрузкой пары
+(`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`): тогда публичного
+in-place `MapToX` нет, а `IMapper.Map(source, destination)` по-прежнему обновляет вложенные объекты. Иначе тело in-place
+остаётся в самой in-place перегрузке. Коллекции не сливаются: вложенная коллекция, как и раньше, маппится в новый
 список или массив.
 
 ### Циклы (IM0004)
@@ -482,7 +487,8 @@ public class ProjectProfile : MappingProfile
   `IMapper` тоже.
 - Карта пары — обычный маппинг: работают `guid.MapToUserId()`, `guids.MapToUserIdList()` и
   `mapper.Map<Guid, UserId>(guid)`. Её in-place-перегрузка `guid.MapToUserId(existing)` ничего не делает (in-place
-  `ConvertUsing` не использует, а destination — значение); если она мешает, выключите её:
+  `ConvertUsing` не использует, а destination — значение): с 2.1.0 она `[Obsolete]` (удаляется в 3.0.0), а
+  `mapper.Map(guid, existing)` бросает `MappingException`, см. [In-place маппинг](#in-place-mapping); выключите её:
   `.ConvertUsing(UserId.From).GenerateMethods(inPlace: false)`.
 - Сгенерированный код передаёт значение в закрытый `…Core` пары (без проверки на `null`, как у вложенных объектов);
   делегатов на горячем пути нет.
@@ -509,6 +515,13 @@ In-place перегрузка только присваивает замапле
 - не использует `ConstructUsing` (обновляется существующий объект);
 - пропускает свойства destination с `init`;
 - **не** применяет `When`, `ConvertUsing`, `BeforeMap` и `AfterMap`.
+
+**In-place перегрузка, которая ничего не делает, помечена `[Obsolete]`** (с 2.1.0; удаляется в 3.0.0): для destination —
+value-типа (метод получает копию), маппинга с `ConvertUsing` и destination, у которого все сопоставленные свойства `init`.
+Каждый вызов получает предупреждение `CS0618` с причиной и исправлением (маппить в новый объект или выключить перегрузку:
+`GenerateInPlace = false`, `GenerateMethods(inPlace: false)` или `IronMapperGenerateInPlace=false`), а
+`IMapper.Map(source, destination)` для такой пары вместо бездействия бросает `MappingException` с той же причиной. См.
+[Переход на 2.1](upgrading-to-2.1.ru.md#4-in-place-перегрузки-которые-ничего-не-делают--obsolete).
 
 ---
 

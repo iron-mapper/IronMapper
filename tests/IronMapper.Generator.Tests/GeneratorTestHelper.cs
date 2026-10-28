@@ -55,11 +55,11 @@ internal static class GeneratorTestHelper
     /// warning reported inside a generated file (e.g. CS0050/CS0051, invalid <c>cref</c>).
     /// </summary>
     public static (IReadOnlyList<string> generatedSources, IReadOnlyList<Diagnostic> generatorDiagnostics, IReadOnlyList<Diagnostic> compilationErrors)
-        RunGeneratorAndCompile(string source)
+        RunGeneratorAndCompile(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = CreateCompilation(source);
 
-        CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
+        CSharpGeneratorDriver driver = CreateDriver(buildProperties);
         driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(
             compilation, out var outputCompilation, out _);
 
@@ -82,11 +82,11 @@ internal static class GeneratorTestHelper
     /// <paramref name="source"/>. <c>runResult</c> is <see langword="null"/> when the code does not compile.
     /// </summary>
     public static (IReadOnlyList<string> generatedSources, IReadOnlyList<Diagnostic> generatorDiagnostics, IReadOnlyList<Diagnostic> compilationErrors, string? runResult)
-        RunGeneratorCompileAndRun(string source)
+        RunGeneratorCompileAndRun(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = CreateCompilation(source);
 
-        CSharpGeneratorDriver driver = CSharpGeneratorDriver.Create(new IronMapperGenerator());
+        CSharpGeneratorDriver driver = CreateDriver(buildProperties);
         driver = (CSharpGeneratorDriver)driver.RunGeneratorsAndUpdateCompilation(
             compilation, out var outputCompilation, out _);
 
@@ -134,6 +134,15 @@ internal static class GeneratorTestHelper
     /// </summary>
     public static (CSharpCompilation compilation, IReadOnlyList<Diagnostic> warningsAndErrors)
         CompileProject(string assemblyName, string source, params MetadataReference[] references)
+        => CompileProject(assemblyName, source, buildProperties: null, references);
+
+    /// <summary>
+    /// <see cref="CompileProject(string, string, MetadataReference[])"/> with MSBuild properties of the project
+    /// (<paramref name="buildProperties"/>: name → value, as <c>CompilerVisibleProperty</c> passes them).
+    /// </summary>
+    public static (CSharpCompilation compilation, IReadOnlyList<Diagnostic> warningsAndErrors)
+        CompileProject(string assemblyName, string source, IReadOnlyDictionary<string, string>? buildProperties,
+            params MetadataReference[] references)
     {
         var compilation = CSharpCompilation.Create(
             assemblyName,
@@ -146,7 +155,7 @@ internal static class GeneratorTestHelper
                 // Missing XML comments on user types are not what these tests check (CS1591 is NoWarn in the repo).
                 .WithSpecificDiagnosticOptions(new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Suppress }));
 
-        CSharpGeneratorDriver.Create(new IronMapperGenerator())
+        CreateDriver(buildProperties)
             .RunGeneratorsAndUpdateCompilation(compilation, out var outputCompilation, out var generatorDiagnostics);
 
         var warningsAndErrors = generatorDiagnostics
@@ -174,6 +183,13 @@ internal static class GeneratorTestHelper
     // ------------------------------------------------------------------
     // Private helpers
     // ------------------------------------------------------------------
+
+    // The generator with the MSBuild properties of the project (none: the defaults).
+    private static CSharpGeneratorDriver CreateDriver(IReadOnlyDictionary<string, string>? buildProperties)
+        => buildProperties is null
+            ? CSharpGeneratorDriver.Create(new IronMapperGenerator())
+            : CSharpGeneratorDriver.Create(new[] { new IronMapperGenerator().AsSourceGenerator() },
+                optionsProvider: TestOptionsProvider.FromBuildProperties(buildProperties));
 
     private static readonly CSharpParseOptions ParseOptions =
         CSharpParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose);

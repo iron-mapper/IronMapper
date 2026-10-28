@@ -21,7 +21,7 @@ public class FactoryMappingTests
 
     // Line endings of the generated code (Environment.NewLine) and of this file may differ.
     private static string Generated(IEnumerable<string> sources, string mapping)
-        => sources.Single(s => s.Contains($"private static global::App.{mapping} MapTo{mapping}Core(")).ReplaceLineEndings("\n");
+        => sources.Single(s => s.Contains($" global::App.{mapping} MapTo{mapping}(this ")).ReplaceLineEndings("\n");
 
     private static void AssertCode(string expected, string code) => Assert.Contains(expected.ReplaceLineEndings("\n"), code);
 
@@ -276,7 +276,7 @@ public class FactoryMappingTests
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
         Assert.Equal("50,fr|10,it", run);
-        var accounts = generated.Where(s => s.Contains("private static global::App.Account MapToAccountCore(")).Select(s => s.ReplaceLineEndings("\n")).ToList();
+        var accounts = generated.Where(s => s.Contains(" global::App.Account MapToAccount(this ")).Select(s => s.ReplaceLineEndings("\n")).ToList();
         Assert.Contains(accounts, code => code.Contains("settings: MapToSettingsCore(source.Settings ?? NestedObjectIsNull<global::App.SettingsRow>("));
         Assert.Contains(accounts, code => code.Contains("settings: global::App.Settings.Create(source.PageSize, source.Locale));"));
     }

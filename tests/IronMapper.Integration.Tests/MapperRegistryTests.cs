@@ -440,7 +440,11 @@ namespace IronMapper.Integration.Tests
             var exception = WithRegistrationTurnedOff(() => MapperRegistry.NoMappingException(typeof(Parcel), typeof(ParcelDto)));
 
             Assert.Contains("<IronMapperRegistration>true</IronMapperRegistration>", exception.Message);
-            Assert.DoesNotContain("<IronMapperRegistration>", MapperRegistry.NoMappingException(typeof(Parcel), typeof(ParcelDto)).Message);
+            // With the switch on: no word about the switch, only the hint about a project built without the registration
+            // (IronMapperRegistration=false in a library generates none, item 2.16 of the plan).
+            string switchOn = MapperRegistry.NoMappingException(typeof(Parcel), typeof(ParcelDto)).Message;
+            Assert.DoesNotContain("<IronMapperRegistration>true</IronMapperRegistration>", switchOn);
+            Assert.Contains("A project built with <IronMapperRegistration>false</IronMapperRegistration> has no registration", switchOn);
         }
 
         [Fact]

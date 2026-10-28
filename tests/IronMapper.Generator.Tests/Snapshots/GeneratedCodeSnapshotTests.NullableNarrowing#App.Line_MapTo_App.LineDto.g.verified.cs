@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Line"/> to a new <see cref="global::App.LineDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Line"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.LineDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.LineDto MapToLineDto(this global::App.Line source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToLineDtoCore(source);
-        }
-
-        private static global::App.LineDto MapToLineDtoCore(global::App.Line source)
-        {
             return new global::App.LineDto
             {
                 Sku = source.Sku,
@@ -27,16 +21,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Line"/> into an existing <see cref="global::App.LineDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Line"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.LineDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToLineDto(this global::App.Line source, global::App.LineDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToLineDtoCore(source, destination);
-        }
-
-        private static void MapToLineDtoCore(global::App.Line source, global::App.LineDto destination)
-        {
             destination.Sku = source.Sku;
         }
 

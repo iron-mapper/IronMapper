@@ -30,9 +30,12 @@ private static CustomerDto MapToCustomerDtoCore(Customer source)
 }
 ```
 
-Every mapping has a public `MapToX(source)`, which checks `source` for `null` as before, and a private `MapToXCore`
+A mapping used as a nested object (or as a [value conversion](#value-conversions-pair-mappings), a constructor or
+factory argument) has a public `MapToX(source)`, which checks `source` for `null` as before, and a private `MapToXCore`
 with the same body without the check. A nested object calls `MapToXCore` directly, after its own check: one comparison,
-no second check and no throw inside the nested mapping, so the JIT can inline it.
+no second check and no throw inside the nested mapping, so the JIT can inline it. A mapping that nothing uses so keeps
+one public method with the check and the body, the code of 2.0.0 (the split would only add text: about 30 % more per
+mapping, and a second call on .NET 8).
 
 The `null` handling follows the nullable annotations (no `null!` for a non-nullable destination):
 
@@ -135,10 +138,12 @@ overload, item 2.15 of the plan). Properties of the
 nested object that the mapping does not set (an `Id` with `[Ignore]` or `Ignore()`) keep their values. Like the in-place
 overload itself, the update of a nested object ignores `When`, `ConvertUsing` and the hooks of the pair's mapping.
 
-The update uses the private in-place `MapToXCore(source, destination)` of the pair's mapping. It is generated for every
-mapping, also with the in-place overload turned off (`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`,
-`GenerateMethods(inPlace: false)`): then there is no public in-place `MapToX`, and `IMapper.Map(source, destination)`
-still updates the nested objects. Collections are not merged: a nested collection is mapped to a new list or array, as
+The update uses the private in-place `MapToXCore(source, destination)` of the pair's mapping. It is generated for a
+pair whose existing objects the in-place update of another mapping updates (its public overload, or the private method
+that `IMapper.Map(source, destination)` calls), also with the in-place overload of the pair turned off
+(`IronMapperGenerateInPlace=false`, `GenerateInPlace = false`, `GenerateMethods(inPlace: false)`): then there is no
+public in-place `MapToX`, and `IMapper.Map(source, destination)` still updates the nested objects. Otherwise the
+in-place body stays in the in-place overload itself. Collections are not merged: a nested collection is mapped to a new list or array, as
 before.
 
 ### Cycles (IM0004)
@@ -482,8 +487,9 @@ public class ProjectProfile : MappingProfile
   `IMapper`.
 - A pair mapping is an ordinary mapping: `guid.MapToUserId()`, `guids.MapToUserIdList()` and
   `mapper.Map<Guid, UserId>(guid)` work. Its in-place overload `guid.MapToUserId(existing)` does nothing (the in-place
-  overload does not use `ConvertUsing`, and the destination is a value); turn it off with
-  `.ConvertUsing(UserId.From).GenerateMethods(inPlace: false)` if it is in the way.
+  overload does not use `ConvertUsing`, and the destination is a value): from 2.1.0 it is `[Obsolete]` (removed in
+  3.0.0) and `mapper.Map(guid, existing)` throws `MappingException`, see [In-place mapping](#in-place-mapping); turn it
+  off with `.ConvertUsing(UserId.From).GenerateMethods(inPlace: false)`.
 - The generated code passes the value to the private `…Core` of the pair (no null check, as for nested objects); there
   is no delegate in the hot path.
 
@@ -509,6 +515,13 @@ The in-place overload only assigns the mapped properties. It:
 - ignores `ConstructUsing` (the existing object is updated);
 - skips `init`-only destination properties;
 - does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`.
+
+**An in-place overload that does nothing is `[Obsolete]`** (from 2.1.0; removed in 3.0.0): for a value-type destination
+(the method gets a copy), a mapping with `ConvertUsing` and a destination whose mapped properties are all `init`. Each
+call gets warning `CS0618` with the reason and the fix (map to a new object, or turn the overload off with
+`GenerateInPlace = false`, `GenerateMethods(inPlace: false)` or `IronMapperGenerateInPlace=false`), and
+`IMapper.Map(source, destination)` for such a pair throws `MappingException` with the same reason instead of doing
+nothing. See [Upgrading to 2.1](upgrading-to-2.1.md#4-in-place-overloads-that-do-nothing-are-obsolete).
 
 ---
 

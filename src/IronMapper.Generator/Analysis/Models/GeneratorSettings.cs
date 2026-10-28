@@ -27,9 +27,17 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
     /// <summary>MSBuild property: <c>false</c> leaves <c>[GeneratedCode]</c> off the generated class (on by default).</summary>
     public const string GeneratedCodeAttributeProperty = "IronMapperGeneratedCodeAttribute";
 
+    /// <summary>
+    /// MSBuild property: <c>false</c> set in the project generates no registration for <c>IMapper</c> (item 2.16 of the
+    /// plan). The automatic <c>false</c> of a trimmed or NativeAOT publish goes only into the feature switch
+    /// (<c>buildTransitive/IronMapper.targets</c>), so it does not reach the generator.
+    /// </summary>
+    public const string RegistrationProperty = "IronMapperRegistration";
+
     public GeneratorSettings(bool reportUnmappedInProfiles, GeneratedMethods? methods = null,
-        bool excludeFromCodeCoverage = false, bool generatedCodeAttribute = true)
+        bool excludeFromCodeCoverage = false, bool generatedCodeAttribute = true, bool registration = true)
     {
+        Registration = registration;
         ReportUnmappedInProfiles = reportUnmappedInProfiles;
         Methods = methods ?? GeneratedMethods.All;
         ExcludeFromCodeCoverage = excludeFromCodeCoverage;
@@ -55,6 +63,12 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
     /// </summary>
     public bool GeneratedCodeAttribute { get; }
 
+    /// <summary>
+    /// Generate the registration for <c>IMapper</c> (default): <c>GeneratedMappers.Registration.g.cs</c> and the private
+    /// in-place methods it calls. Off with <c>&lt;IronMapperRegistration&gt;false&lt;/IronMapperRegistration&gt;</c>.
+    /// </summary>
+    public bool Registration { get; }
+
     /// <summary>Reads the settings from the global analyzer config options of the project.</summary>
     public static GeneratorSettings From(AnalyzerConfigOptions options)
         => new(
@@ -64,7 +78,8 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
                 !IsFalse(options, GenerateListProperty),
                 !IsFalse(options, GenerateArrayProperty)),
             IsTrue(options, ExcludeFromCodeCoverageProperty),
-            !IsFalse(options, GeneratedCodeAttributeProperty));
+            !IsFalse(options, GeneratedCodeAttributeProperty),
+            !IsFalse(options, RegistrationProperty));
 
     private static bool IsTrue(AnalyzerConfigOptions options, string property) => Is(options, property, "true");
 
@@ -82,12 +97,13 @@ internal sealed class GeneratorSettings : IEquatable<GeneratorSettings>
            && ReportUnmappedInProfiles == other.ReportUnmappedInProfiles
            && Methods.Equals(other.Methods)
            && ExcludeFromCodeCoverage == other.ExcludeFromCodeCoverage
-           && GeneratedCodeAttribute == other.GeneratedCodeAttribute;
+           && GeneratedCodeAttribute == other.GeneratedCodeAttribute
+           && Registration == other.Registration;
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as GeneratorSettings);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => ((ReportUnmappedInProfiles ? 1 : 0) | (ExcludeFromCodeCoverage ? 2 : 0) | (GeneratedCodeAttribute ? 4 : 0)) * 31 + Methods.GetHashCode();
+        => ((ReportUnmappedInProfiles ? 1 : 0) | (ExcludeFromCodeCoverage ? 2 : 0) | (GeneratedCodeAttribute ? 4 : 0) | (Registration ? 8 : 0)) * 31 + Methods.GetHashCode();
 }

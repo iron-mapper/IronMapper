@@ -134,14 +134,37 @@
   argument is `default!`, so the generated file compiles). See
   [IM0009](docs/diagnostics.md#im0009--constructor-parameter-not-mapped).
 
-- **Generated code:** every `MapToX(source)` is split into the public method, which checks `source` for `null` as
-  before, and a private `MapToXCore(source)` with the body (`{MethodName}Core{HelperScope}` when a mapping of the same
-  source type is already named `{MethodName}Core`). Nested objects call `MapToXCore` directly. Elements of nested
-  collections still call the public `MapToX`: a `null` element throws `ArgumentNullException`, as documented in 2.0.0.
-  The in-place overload is split the same way: the public method (or the private `MapInto…` of a turned-off overload)
-  checks both arguments and calls the private `MapToXCore(source, destination)`. A mapping that checks a nested object
-  uses one throw helper of the generated class, `NestedObjectIsNull<T>` (not inlined). The behavior of existing
-  mappings does not change; the snapshots of all scenarios change by the split.
+- **Generated code:** the `MapToX(source)` of a pair used as a nested object, a converted value or a constructor or
+  factory argument is split into the public method, which checks `source` for `null` as before, and a private
+  `MapToXCore(source)` with the body (`{MethodName}Core{HelperScope}` when a mapping of the same source type is already
+  named `{MethodName}Core`). Nested objects call `MapToXCore` directly. Elements of nested collections still call the
+  public `MapToX`: a `null` element throws `ArgumentNullException`, as documented in 2.0.0. The in-place overload of a
+  pair whose existing nested objects another in-place update updates is split the same way: the public method (or the
+  private `MapInto…` of a turned-off overload) checks both arguments and calls the private
+  `MapToXCore(source, destination)`. **A mapping that nothing uses so keeps the code of 2.0.0** — one method with the
+  check and the body, without `AggressiveInlining` — byte for byte, except the version in `[GeneratedCode]` (checked
+  against the 2.0.0 package; snapshot `NotNestedMapping_SameCodeAs200`). On a real project the 2.1.0 alpha, which split
+  every mapping, made each generated file 730–840 bytes (≈30 %) longer with the same mapping logic. A mapping that
+  checks a nested object uses one throw helper of the generated class, `NestedObjectIsNull<T>` (not inlined). The
+  behavior of existing mappings does not change.
+- **In-place overloads that do nothing are `[Obsolete]`** (removing them would break the code that calls them; they are
+  removed in 3.0.0): a value-type destination (the method gets a copy: a struct, a `readonly record struct` value object,
+  `Guid`), a mapping with `ConvertUsing` (the in-place overload does not apply it) and a destination whose mapped
+  properties are all `init` (they are skipped). Each call gets `CS0618` with the reason and the fix (map to a new
+  object, or turn the overload off) — an error with `TreatWarningsAsErrors`. **`IMapper.Map(source, destination)` for
+  such a pair throws `MappingException`** with the same reason instead of silently doing nothing (the registration calls
+  a private `MapInto…` that throws). The in-place update of a parent no longer calls such an overload of a referenced
+  project: the nested object gets a new instance, as for such a mapping of the same project. See
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#4-in-place-overloads-that-do-nothing-are-obsolete).
+- **`<IronMapperRegistration>false</IronMapperRegistration>` set in a project generates no registration for
+  `IMapper`** (application or library): no `GeneratedMappers.Registration.g.cs`, no module initializer, no private
+  `MapInto…`, also no throwing `MapInto…` of a destination created by a constructor or a factory. Up to 2.0.0 the property
+  only set the feature switch of an application, and the code was removed only by the trimmer. The `MappingException`
+  of `IMapper` for a missing mapping mentions the property (it does not name the assembly: a marker read at run time
+  would add 7–15 KB to every NativeAOT app with `IMapper`). The value that the package sets automatically for a trimmed or
+  NativeAOT publish without the DI package goes only into the feature switch, as before (`IronMapperRegistration`
+  itself keeps the value of the project). See
+  [Registration for `IMapper`](docs/configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps).
 
 ### Fixed
 
@@ -157,22 +180,34 @@
 
 - Not measured (no benchmark run for 2.1.0): a nested object calls `MapToXCore` after one comparison with `null` (the
   throw is in a helper that is not inlined), without a second check and without a throw inside, so the JIT can inline the
-  nested mapping (aimed at the Nested gap of 2.0.0, ×1.07 on .NET 10). The in-place overload is a check and a call of
-  its `…Core` (one more call per in-place mapping than in 2.0.0; InPlace scenario).
+  nested mapping (aimed at the Nested gap of 2.0.0, ×1.07 on .NET 10). A top-level mapping that is not nested anywhere
+  (the Flat and InPlace scenarios) has the machine code of 2.0.0: one call of the mapping method (checked with
+  `DisassemblyDiagnoser` on .NET 8 and .NET 10).
   The Nested scenario of the benchmark suite maps the nested objects automatically (local sources or a package 2.1 or
   later; `ForMember(... MapFrom(...))` before). The published numbers stay those of 2.0.0.
 - Quick A/B only (`run-quick.ps1` against 2.0.0, one session; no benchmark run for 2.1.0, the published numbers stay
   those of 2.0.0): the public `MapToX(source)` and `MapToX(source, destination)`, and the private `MapInto…`
-  of a turned-off in-place overload, are marked `[MethodImpl(MethodImplOptions.AggressiveInlining)]`. They only check
+  of a turned-off in-place overload, are marked `[MethodImpl(MethodImplOptions.AggressiveInlining)]` when they only check
   the arguments and call `…Core`, so the checks move to the call site and one call remains. The .NET 10 JIT already
   inlined them; the .NET 8 JIT did not (a call and a jump to `…Core` on the hot path of a top-level mapping; seen with
-  `DisassemblyDiagnoser` in the InPlace, Flat and Nested scenarios). `…Core` is not marked. Generated code: one attribute
-  line per method, in every snapshot. On .NET 8 the extra call is gone: InPlace ×0.92 of `Manual` (×1.01 before this
-  change, 2.0.0 ×0.93); Flat, Nested and Collection are not slower. On .NET 10 the machine code is the same and the
-  differences are within the noise of the session. NativeAOT: the same size on .NET 10, 512 bytes smaller on .NET 8.
+  `DisassemblyDiagnoser` in the InPlace, Flat and Nested scenarios). `…Core` and a method with the body (a mapping not
+  used as a nested object, as in 2.0.0) are not marked. On .NET 8 the extra call is gone: InPlace ×0.92 of `Manual`
+  (×1.01 before this change, 2.0.0 ×0.93); Flat, Nested and Collection are not slower. On .NET 10 the machine code is the
+  same and the differences are within the noise of the session.
 
 ### Build
 
+- Tests of the volume of the generated code (`GeneratedCodeSizeTests`): `…Core` only for a pair used as a nested object
+  (also of itself, `Employee.Manager`), the in-place `…Core` of a nested pair only when an in-place body of the parent is
+  generated, `[Obsolete]` on the in-place overloads that do nothing (`CS0618` at each call and none in the generated
+  files; the messages), `MappingException` of the registry for such a pair (also `NoOpInPlaceMapperTests` through
+  `IMapper`), a referenced project's `[Obsolete]` in-place overload not called, `IronMapperRegistration` values (only
+  `false` turns the registration off), the `MappingException` that mentions the property, a changed
+  property in the IDE; snapshots `NotNestedMapping_SameCodeAs200` (identical to the output of the 2.0.0 package) and
+  `RegistrationTurnedOff`; the snapshots of the scenarios of 2.0.0 are identical to 2.0.0 again, except the `[Obsolete]`
+  in-place overload of a `ConvertUsing` mapping. `eng/verify-package.ps1`: a variant with
+  `IronMapperRegistration=false` (no registration method, no `MapInto…`, the switch off);
+  `eng/verify-aot.ps1` prints the size of every case.
 - Tests: `NestedObjectTests` (generator: null handling by annotations, structs and records, base types and interfaces,
   referenced assemblies, qualified names and a `…Core` name collision, hooks, `IncludeMembers`, collections of objects
   with nested objects — arrays, `IEnumerable<T>`, `IReadOnlyList<T>` —, a mapping added or removed in another file in the

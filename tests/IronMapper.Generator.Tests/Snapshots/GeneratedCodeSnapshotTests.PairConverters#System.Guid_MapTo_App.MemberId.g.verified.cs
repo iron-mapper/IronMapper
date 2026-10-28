@@ -24,17 +24,15 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::System.Guid"/> into an existing <see cref="global::App.MemberId"/> instance.</summary>
         /// <param name="source">The source <see cref="global::System.Guid"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.MemberId"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [global::System.Obsolete("MapToMemberId(source, destination) does nothing: MemberId is a value type, so the destination is passed by copy and the caller's value does not change. Map to a new object instead (destination = source.MapToMemberId()), or turn this overload off (GenerateInPlace = false, GenerateMethods(inPlace: false), IronMapperGenerateInPlace). It will be removed in IronMapper 3.0.0.")]
         public static void MapToMemberId(this global::System.Guid source, global::App.MemberId destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToMemberIdCore(source, destination);
         }
 
-        private static void MapToMemberIdCore(global::System.Guid source, global::App.MemberId destination)
-        {
-        }
+        private static void MapInto_Guid_MemberId(global::System.Guid source, global::App.MemberId destination)
+            => throw new global::IronMapper.Exceptions.MappingException("No in-place mapping from Guid to MemberId: MemberId is a value type, so the destination is passed by copy and the caller's value does not change. Map to a new object instead.");
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.MemberId"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>
         public static global::System.Collections.Generic.List<global::App.MemberId> MapToMemberIdList(this global::System.Collections.Generic.IEnumerable<global::System.Guid>? source)
