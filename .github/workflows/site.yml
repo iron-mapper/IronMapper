@@ -1,0 +1,89 @@
+name: Site
+
+# Builds and publishes the project website (site/, Astro Starlight) to GitHub Pages. Separate from ci.yml, and only
+# when something the site is built from changes (see site/README.md, "Where the content comes from"): the path
+# filters below keep the minutes down. A pull request gets the same build without the deploy (not a required check:
+# PRs outside these paths do not run it). Pages settings: Source = GitHub Actions, custom domain iron-mapper.ru.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'benchmarks/results/**'
+      - 'benchmarks/README.md'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'README.ru.md'
+      - '.github/workflows/site.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'benchmarks/results/**'
+      - 'benchmarks/README.md'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'README.ru.md'
+      - '.github/workflows/site.yml'
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push on main cancels a build that is still queued.
+concurrency:
+  group: site-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # prepare.mjs runs first (npm run build): docs/, README, CHANGELOG, benchmarks/results/summary.json → pages;
+      # it fails the build on a broken link, a missing translation or an unsupported summary.json schema.
+      - name: Build
+        run: npm run build
+
+      - name: Check links
+        run: npm run check-links
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

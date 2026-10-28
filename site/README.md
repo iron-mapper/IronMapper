@@ -1,7 +1,7 @@
 # Site
 
-The project website: Astro + [Starlight](https://starlight.astro.build/), static, published to GitHub Pages.
-English at `/`, Russian at `/ru/`.
+The project website: Astro + [Starlight](https://starlight.astro.build/), static, published to GitHub Pages at
+[iron-mapper.ru](https://iron-mapper.ru). English at `/`, Russian at `/ru/`.
 
 ```bash
 cd site
@@ -66,6 +66,14 @@ site/
     ├── content/docs/       generated, git-ignored
     └── generated/          generated, git-ignored
 ```
+
+## Publishing
+
+`.github/workflows/site.yml`: a push to `main` that changes `site/**`, `docs/**`, `benchmarks/results/**`,
+`benchmarks/README.md`, `CHANGELOG.md`, the READMEs or the workflow runs `npm ci`, `npm run build`, `npm run check-links`
+and deploys `site/dist` to GitHub Pages (repository settings: Pages → Source = GitHub Actions, custom domain
+`iron-mapper.ru`, Enforce HTTPS). A pull request with the same paths gets the build and the link check only. Nothing
+is deployed from any other branch; a broken link or a contract violation fails the build before the deploy.
 
 No analytics and no third-party scripts; search is Pagefind, a static index built with the site. Dependencies are
 pinned in `package-lock.json` and updated about once a quarter.

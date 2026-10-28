@@ -54,7 +54,7 @@ IronMapper/
 ├── eng/verify-aot.ps1                # dotnet pack + NativeAOT publish of the AOT probes (net8.0, net10.0)
 ├── Directory.Build.props              # Shared MSBuild props (version, nullable, warnings-as-errors, code style in the build)
 ├── .editorconfig                      # C# code style (checked in the build, see "Code style")
-└── .github/workflows/                 # ci.yml (build, test, pack & verify, NativeAOT probes, benchmarks smoke), bench-cli.yml (PRs touching benchmarks/** or root .editorconfig/global.json/Directory.*), publish.yml (tag v* → NuGet)
+└── .github/workflows/                 # ci.yml (build, test, pack & verify, NativeAOT probes, benchmarks smoke), bench-cli.yml (PRs touching benchmarks/** or root .editorconfig/global.json/Directory.*), publish.yml (tag v* → NuGet), site.yml (site build on PR, build + Pages deploy on main; path-filtered)
 ```
 
 ---
@@ -458,9 +458,11 @@ analytics, no third-party scripts. `cd site && npm ci && npm run dev` for a loca
   the benchmarks page embeds the sections "Methodology and fairness rules", "How to read the results", "Caveats",
   "What is not here, and why" of `benchmarks/README.md` by their headings.
 
-The site gets its own workflow (`.github/workflows/site.yml`, path-filtered: `site/**`, `docs/**`,
-`benchmarks/results/**`, `CHANGELOG.md`, `README*.md`; not written yet); `ci.yml` stays untouched, and the PR check of
-the site is not a required check.
+The site has its own workflow, `.github/workflows/site.yml`: on a push to `main` that touches `site/**`, `docs/**`,
+`benchmarks/results/**`, `benchmarks/README.md`, `CHANGELOG.md`, `README*.md` or the workflow itself it builds
+(`npm ci`, `npm run build`, `npm run check-links`) and deploys to GitHub Pages (Source = GitHub Actions, custom domain
+`iron-mapper.ru`); a pull request with the same paths gets the build without the deploy. `ci.yml` stays untouched, and
+the PR check of the site is not a required check (PRs outside those paths do not run it).
 
 ---
 
