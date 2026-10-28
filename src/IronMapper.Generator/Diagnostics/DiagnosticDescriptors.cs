@@ -227,6 +227,18 @@ internal static class DiagnosticDescriptors
         description: "An init-only destination property cannot be set on an existing object, so source.MapToX(destination) and IMapper.Map(source, destination) leave it as it is; an init-only nested object is updated through its getter when the destination has one. Ignore the properties if they need not be mapped (a new object then does not get them either), or turn the in-place overload off if it is not needed. The overload is still generated: it updates the other properties.");
 
     /// <summary>
+    /// IM0026 — A <c>required</c> destination property gets no value from the mapping (ignored, nothing maps it, or its
+    /// value cannot be used), and the object initializer must set it: the mapping is not generated. Up to 2.0.0 the
+    /// compiler reported CS9035 inside the generated file (PR 11 of 2.1.0, issue #60).
+    /// </summary>
+    public static readonly DiagnosticDescriptor RequiredPropertyNotMapped = Create(
+        id: "IM0026",
+        title: "Required property is not mapped",
+        messageFormat: "Mapping from '{0}' to '{1}' is not generated: required property '{2}' gets no value, {3}. {4}.",
+        defaultSeverity: DiagnosticSeverity.Error,
+        description: "A required property must be set by the object initializer that creates the destination (CS9035 otherwise). When the mapping gives it no value, the mapping is not generated, so the generated file has no CS9035. Map the property, or create the destination with a constructor that has [SetsRequiredMembers] or with a factory (ConstructWith).");
+
+    /// <summary>
     /// IM0023 — A value that can be <see langword="null"/> (a nullable reference type) goes where the generated code needs
     /// a non-nullable one: a non-nullable destination property or parameter (<c>string?</c> → <c>string</c>), a converter,
     /// a transformer or an element mapping that takes a non-nullable value. Up to 2.0.0 the compiler reported it inside

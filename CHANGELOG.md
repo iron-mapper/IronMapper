@@ -227,6 +227,24 @@
   in-place overload that is turned off, or one that is `[Obsolete]`); with `TreatWarningsAsErrors` it is a build error.
   See [Upgrading to 2.1](docs/upgrading-to-2.1.md#9-init-only-properties-in-place-nested-objects-updated-warning-im0025)
   and [IM0025](docs/diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties).
+- **Hooks and `When` in the in-place overload** ([#62](https://github.com/iron-mapper/IronMapper/issues/62)):
+  `source.MapToX(destination)` and `IMapper.Map(source, destination)` did not evaluate `When` and did not call
+  `BeforeMap`/`AfterMap` up to 2.0.0. They now do, as a new object and AutoMapper's `Map(source, destination)` do:
+  `When` first (`false` leaves the destination as it is), then `BeforeMap`, the properties and `AfterMap`; also for an
+  existing nested object updated in place. **The result at run time changes** for in-place calls of such mappings; check
+  them when you upgrade. `ConvertUsing` stays unapplied in place (`[Obsolete]`); a destination with only `init`
+  properties and a hook is no longer `[Obsolete]`. Mappings without hooks and `When` get the same code. See
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#10-hooks-and-when-in-the-in-place-overload).
+- **`required` and `init` properties with `BeforeMap`/`AfterMap`** ([#60](https://github.com/iron-mapper/IronMapper/issues/60)):
+  a mapping with a hook created the destination with `new D()` and assigned the properties one by one, so a `required`
+  property failed the build inside the generated file (`CS9035`) and an `init` property was silently not mapped. The
+  object initializer now sets them, then `BeforeMap`, the other properties and `AfterMap` run (also after the arguments
+  of a constructor). **The result at run time changes** for `init` properties of such mappings: they get the source's
+  values; `BeforeMap` sees the `required` and `init` properties already set. A `required` property that the mapping gives
+  no value (ignored, nothing maps it), with or without hooks, is the new error `IM0026` at the mapping (the mapping is not
+  generated) instead of `CS9035` in the generated file. See
+  [Upgrading to 2.1](docs/upgrading-to-2.1.md#11-required-and-init-properties-with-beforemapaftermap) and
+  [IM0026](docs/diagnostics.md#im0026--required-property-is-not-mapped).
 
 ### Performance
 

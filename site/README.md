@@ -77,5 +77,15 @@ and deploys `site/dist` to GitHub Pages (repository settings: Pages → Source =
 `iron-mapper.ru`, Enforce HTTPS). A pull request with the same paths gets the build and the link check only. Nothing
 is deployed from any other branch; a broken link or a contract violation fails the build before the deploy.
 
+## llms.txt
+
+For AI tools a user points at the site, [`starlight-llms-txt`](https://github.com/delucis/starlight-llms-txt) (pinned
+in `package.json`, configured in `astro.config.mjs`) writes three files at build time, English only:
+`/llms.txt` (the project in a paragraph and links to the key pages), `/llms-full.txt` (every English page as Markdown
+without the site navigation, in reading order: home, guides, diagnostics, benchmarks, then release notes) and
+`/llms-small.txt` (the same with asides and details collapsed). They are built from the rendered pages, so the
+benchmark numbers in them are the `summary.json` values like everywhere else. `npm run check-links` checks that the
+first two exist and that every site link in `llms.txt` has a page.
+
 No analytics and no third-party scripts; search is Pagefind, a static index built with the site. Dependencies are
 pinned in `package-lock.json` and updated about once a quarter.

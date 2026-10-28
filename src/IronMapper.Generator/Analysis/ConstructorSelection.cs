@@ -73,8 +73,10 @@ internal sealed class ConstructorChoice
         ImmutableArray<DiagnosticInfo>.Empty, new HashSet<string>(StringComparer.OrdinalIgnoreCase), ImmutableArray<string>.Empty);
 
     public ConstructorChoice(bool usesConstructor, bool failed, ImmutableArray<PropertyMappingDescriptor> arguments,
-        ImmutableArray<DiagnosticInfo> diagnostics, HashSet<string> setByConstructor, ImmutableArray<string> parameterNames)
+        ImmutableArray<DiagnosticInfo> diagnostics, HashSet<string> setByConstructor, ImmutableArray<string> parameterNames,
+        bool setsRequiredMembers = false)
     {
+        SetsRequiredMembers = setsRequiredMembers;
         UsesConstructor = usesConstructor;
         Failed = failed;
         Arguments = arguments;
@@ -106,6 +108,10 @@ internal sealed class ConstructorChoice
     /// accessible constructor. <c>ForCtorParam</c> must name one of them (IM0019).
     /// </summary>
     public ImmutableArray<string> ParameterNames { get; }
+
+    /// <summary>The chosen constructor has <c>[SetsRequiredMembers]</c>: the initializer need not set the <c>required</c>
+    /// properties (<see cref="ConstructorSelection.SetsRequiredMembers"/>).</summary>
+    public bool SetsRequiredMembers { get; }
 }
 
 /// <summary>
@@ -127,6 +133,19 @@ internal static class ConstructorSelection
     public static bool UsesInitializer(INamedTypeSymbol dest, Compilation compilation)
         => dest.IsValueType
            || dest.InstanceConstructors.Any(c => c.Parameters.Length == 0 && IsAccessible(c, compilation));
+
+    /// <summary>
+    /// The constructor that creates the destination has <c>[SetsRequiredMembers]</c> (the chosen one, or the parameterless
+    /// one of an object initializer), so a <c>required</c> property the mapping gives no value is not CS9035 (IM0026).
+    /// </summary>
+    public static bool SetsRequiredMembers(INamedTypeSymbol dest, ConstructorChoice construction)
+        => construction.UsesConstructor
+            ? construction.SetsRequiredMembers
+            : dest.InstanceConstructors.Any(c => c.Parameters.Length == 0 && HasSetsRequiredMembers(c));
+
+    private static bool HasSetsRequiredMembers(IMethodSymbol method)
+        => method.GetAttributes().Any(a =>
+            a.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
 
     /// <param name="compilation">The compilation (accessibility).</param>
     /// <param name="source">The source type (messages).</param>
@@ -299,8 +318,7 @@ internal static class ConstructorSelection
         var arguments = ImmutableArray.CreateBuilder<PropertyMappingDescriptor>();
         var found = ImmutableArray.CreateBuilder<DiagnosticInfo>();
         var setByConstructor = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        bool setsRequiredMembers = !isConstructor || method.GetAttributes().Any(a =>
-            a.AttributeClass?.ToDisplayString() == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute");
+        bool setsRequiredMembers = !isConstructor || HasSetsRequiredMembers(method);
         foreach (var parameter in method.Parameters)
         {
             var sameNamed = sameNamedOf(parameter);
@@ -318,7 +336,7 @@ internal static class ConstructorSelection
         }
 
         return new ConstructorChoice(true, false, arguments.ToImmutable(), found.ToImmutable(), setByConstructor,
-            method.Parameters.Select(p => p.Name).ToImmutableArray());
+            method.Parameters.Select(p => p.Name).ToImmutableArray(), setsRequiredMembers);
     }
 
     /// <summary>The parameter gets a value: a source value, or its default value when nothing maps it or it is ignored.</summary>

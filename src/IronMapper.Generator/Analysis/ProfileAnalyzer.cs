@@ -1164,6 +1164,9 @@ internal static class ProfileAnalyzer
             return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
 
+        // A required property that gets no value (IM0026): CS9035 inside the generated file otherwise. Not after a
+        // factory or with ConvertUsing (they create the object), nor with a constructor that has [SetsRequiredMembers].
+        var unsetRequired = new List<(string Name, string Reason)>();
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
@@ -1171,9 +1174,18 @@ internal static class ProfileAnalyzer
             // Set by the constructor or the factory (a parameter of the same name, ignoring case); or [Ignore] on the
             // property, as in attribute mappings, unless ForMember configures it (up to 2.0.0 a profile only skipped its
             // IM0001 and still copied the source property of the same name, issue #61).
-            if (construction.SetByConstructor.Contains(destProp.Name)
-                || (MappingAnalyzer.HasIgnoreAttribute(destProp) && !configByDest.ContainsKey(destProp.Name)))
+            if (construction.SetByConstructor.Contains(destProp.Name))
             {
+                continue;
+            }
+
+            if (MappingAnalyzer.HasIgnoreAttribute(destProp) && !configByDest.ContainsKey(destProp.Name))
+            {
+                if (destProp.IsRequired)
+                {
+                    unsetRequired.Add((destProp.Name, "it is marked [Ignore]"));
+                }
+
                 continue;
             }
 
@@ -1201,12 +1213,29 @@ internal static class ProfileAnalyzer
                     continue;
                 }
 
-                propertyMappings.Add(mapping);
+                if (destProp.IsRequired && mapping.IsIgnored)
+                {
+                    unsetRequired.Add((destProp.Name, !ignoredProperty
+                        ? "its value cannot be used (see the other diagnostic of the property)"
+                        : configByDest.ContainsKey(destProp.Name)
+                            ? $"ForMember(d => d.{destProp.Name}, o => o.Ignore()) ignores it"
+                            : $"[Ignore] on '{sourceSymbol.Name}.{mapping.SourcePropertyName}' leaves the source property unread"));
+                }
+
+                // required: set in the object initializer, also with BeforeMap/AfterMap (issue #60).
+                propertyMappings.Add(destProp.IsRequired ? mapping.AsRequired() : mapping);
+                continue;
             }
+
+            if (destProp.IsRequired)
+            {
+                unsetRequired.Add((destProp.Name, $"'{sourceSymbol.Name}' has no property of that name"));
+            }
+
             // Priority 4: nothing maps the property. IM0001 at the CreateMap call; reported only with
             // <IronMapperReportUnmappedInProfiles>true</IronMapperReportUnmappedInProfiles> (filtered in
             // IronMapperGenerator.CollectDiagnostics, so changing the property does not re-run this analysis).
-            else if (reportUnmapped)
+            if (reportUnmapped)
             {
                 diagnostics.Add(new DiagnosticInfo(
                         DiagnosticDescriptors.UnmappedDestinationProperty,
@@ -1228,6 +1257,24 @@ internal static class ProfileAnalyzer
         if (!converters.CanGenerate)
         {
             return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(ImmutableArray.CreateRange(converters.Diagnostics));
+        }
+
+        // IM0026: a required property without a value, the mapping is not generated (issue #60).
+        if (unsetRequired.Count > 0 && factory is null && wholeObjectConverter is null && wholeObjectLambdaBody is null
+            && !ConstructorSelection.SetsRequiredMembers(destSymbol, construction))
+        {
+            foreach (var (name, reason) in unsetRequired)
+            {
+                string hint = checkOrigin == PropertyTypeCheck.Origin.ReverseMap
+                    ? $"The reverse mapping of ReverseMap() maps by name only: declare it with CreateMap<{sourceSymbol.Name}, {destSymbol.Name}>() and map '{name}' there"
+                    : $"Map it with ForMember(d => d.{name}, o => o.MapFrom(...)), or remove 'required'";
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.RequiredPropertyNotMapped, sourceSymbol.ToDisplayString(),
+                        destSymbol.ToDisplayString(), name, reason, hint)
+                    .WithLocation(origin)
+                    .WithProperty(MappingAnalyzer.PropertyNameKey, name));
+            }
+
+            return MappingAnalyzer.CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
 
         return new MappingDescriptor(

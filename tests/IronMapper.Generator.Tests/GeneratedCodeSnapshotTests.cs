@@ -714,6 +714,40 @@ public class GeneratedCodeSnapshotTests
         public class CustomerDto { public string Name { get; set; } = ""; }
         """);
 
+    // Hooks and When (issues #60 and #62, PR 11 of 2.1.0): with BeforeMap/AfterMap the required and init properties are set
+    // by an object initializer, then the hooks and the other properties; the in-place overload evaluates When and calls
+    // the hooks. A required property without a value: IM0026, the mapping is not generated (no CS9035).
+    [Fact]
+    public Task HooksAndWhen() => Verify("""
+        using IronMapper.Configuration;
+
+        namespace App;
+
+        public class Row { public bool Active { get; set; } public string Code { get; set; } = ""; public string Name { get; set; } = ""; public int Id { get; set; } }
+        public class Dto
+        {
+            public required string Code { get; set; }
+            public string Name { get; init; } = "";
+            public int Id { get; set; }
+        }
+
+        public class Note { public string Text { get; set; } = ""; }
+        public class NoteDto { public required string Text { get; set; } public required string Author { get; set; } }
+
+        public class RowProfile : MappingProfile
+        {
+            public RowProfile()
+            {
+                CreateMap<Row, Dto>()
+                    .When(s => s.Active)
+                    .BeforeMap((s, d) => d.Id = -1)
+                    .AfterMap((s, d) => d.Id++)
+                    .GenerateMethods(list: false, array: false);
+                CreateMap<Note, NoteDto>();
+            }
+        }
+        """);
+
     private static Task Verify(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

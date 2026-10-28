@@ -416,6 +416,8 @@ internal static class MappingAnalyzer
             return CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
 
+        // A required property that gets no value (IM0026): CS9035 inside the generated file otherwise.
+        var unsetRequired = new System.Collections.Generic.List<(string Name, string Reason)>();
         foreach (var destProp in destProps)
         {
             ct.ThrowIfCancellationRequested();
@@ -423,6 +425,11 @@ internal static class MappingAnalyzer
             // Destination property explicitly ignored via [Ignore], or set by the constructor — skip silently.
             if (HasIgnoreAttribute(destProp) || construction.SetByConstructor.Contains(destProp.Name))
             {
+                if (destProp.IsRequired && !construction.SetByConstructor.Contains(destProp.Name))
+                {
+                    unsetRequired.Add((destProp.Name, "it is marked [Ignore]"));
+                }
+
                 continue;
             }
 
@@ -433,9 +440,22 @@ internal static class MappingAnalyzer
             if (sourceByDestName.TryGetValue(destProp.Name, out var sourceProp)
                 || sourcePropsByName.TryGetValue(destProp.Name, out sourceProp))
             {
-                propertyMappings.Add(MapSourceProperty(sourceProp, DestinationMember.ForProperty(destProp), isInitOnly, LocationInfo.From(destProp) ?? origin,
-                    diagnostics, commit: true, out _));
+                var mapped = MapSourceProperty(sourceProp, DestinationMember.ForProperty(destProp), isInitOnly, LocationInfo.From(destProp) ?? origin,
+                    diagnostics, commit: true, out _);
+                if (destProp.IsRequired && mapped.IsIgnored)
+                {
+                    unsetRequired.Add((destProp.Name, HasIgnoreAttribute(sourceProp)
+                        ? $"[Ignore] on '{sourceSymbol.Name}.{sourceProp.Name}' leaves the source property unread"
+                        : "its value cannot be used (see the other diagnostic of the property)"));
+                }
+
+                propertyMappings.Add(destProp.IsRequired ? mapped.AsRequired() : mapped);
                 continue;
+            }
+
+            if (destProp.IsRequired)
+            {
+                unsetRequired.Add((destProp.Name, $"'{sourceSymbol.Name}' has no property of that name"));
             }
 
             // Priority 3: no match → IM0001 warning, at the destination property (the code fix adds [Ignore] there),
@@ -459,6 +479,21 @@ internal static class MappingAnalyzer
         if (!converters.CanGenerate)
         {
             diagnostics.AddRange(converters.Diagnostics);
+            return CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
+        }
+
+        // IM0026: a required property without a value, the mapping is not generated (issue #60).
+        if (unsetRequired.Count > 0 && !ConstructorSelection.SetsRequiredMembers(destSymbol, construction))
+        {
+            foreach (var (name, reason) in unsetRequired)
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.RequiredPropertyNotMapped, sourceSymbol.ToDisplayString(),
+                        destSymbol.ToDisplayString(), name, reason,
+                        $"Add the property to '{sourceSymbol.Name}', or put [MapProperty(\"{name}\")] on the source property that holds the value, or remove 'required'")
+                    .WithLocation(origin)
+                    .WithProperty(PropertyNameKey, name));
+            }
+
             return CreateDiagnosticOnlyDescriptor(diagnostics.ToImmutable());
         }
 

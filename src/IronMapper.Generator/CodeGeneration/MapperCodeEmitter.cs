@@ -174,10 +174,49 @@ internal static class MapperCodeEmitter
         }
         else if (hasHooks)
         {
-            // Two-step pattern required when BeforeMap or AfterMap hooks are present.
+            // Two-step pattern required when BeforeMap or AfterMap hooks are present: the object (an initializer with the
+            // required and init-only properties, which cannot be set later, issue #60), BeforeMap, the other properties,
+            // AfterMap. After a factory only assignments: ConstructWith has no init properties (IM0021), and a required
+            // property with a set may be assigned after the call.
+            var initialized = new System.Collections.Generic.List<PropertyMappingDescriptor>();
+            if (descriptor.Factory is null)
+            {
+                foreach (var prop in descriptor.PropertyMappings)
+                {
+                    if (SetInInitializer(prop) && !IsMappingMissing(prop, plan))
+                    {
+                        initialized.Add(prop);
+                    }
+                }
+            }
+
             sb.Append("            var destination = ");
-            EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
-            sb.AppendLine(";");
+            if (initialized.Count > 0 && !descriptor.UsesConstructor)
+            {
+                // `new D { … }`, as the initializer of a mapping without hooks.
+                sb.Append($"new {destFullName}");
+            }
+            else
+            {
+                EmitCreation(sb, descriptor, destFullName, scopedTransformers, scope, plan, "            ");
+            }
+
+            if (initialized.Count == 0)
+            {
+                sb.AppendLine(";");
+            }
+            else
+            {
+                sb.AppendLine();
+                sb.AppendLine("            {");
+                foreach (var prop in initialized)
+                {
+                    sb.Append("                ");
+                    sb.AppendLine(BuildPropertyInitializer(descriptor, prop, scopedTransformers, scope, plan) + ",");
+                }
+
+                sb.AppendLine("            };");
+            }
 
             if (descriptor.BeforeMapLambdaBody is not null)
             {
@@ -186,7 +225,8 @@ internal static class MapperCodeEmitter
 
             foreach (var prop in descriptor.PropertyMappings)
             {
-                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan)
+                    || (descriptor.Factory is null && SetInInitializer(prop)))
                 {
                     continue;
                 }
@@ -877,6 +917,14 @@ internal static class MapperCodeEmitter
         }
     }
 
+    /// <summary>
+    /// With <c>BeforeMap</c>/<c>AfterMap</c>, a property set in the object initializer before the hooks run: <c>required</c>
+    /// (CS9035 otherwise) or <c>init</c>-only (it cannot be assigned later). The other properties are assigned between the
+    /// hooks.
+    /// </summary>
+    private static bool SetInInitializer(PropertyMappingDescriptor prop)
+        => !prop.IsIgnored && (prop.IsInitOnly || prop.IsRequired);
+
     /// <summary>A parameter name as a named argument: <c>@</c> before a keyword (<c>@class</c>).</summary>
     private static string ArgumentName(string name)
         => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) == Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
@@ -997,10 +1045,24 @@ internal static class MapperCodeEmitter
     /// The assignments of the in-place update: every mapped property except <c>init</c>-only ones; an existing nested object
     /// is updated in place (<see cref="EmitNestedUpdate"/>), also an <c>init</c>-only one (<see cref="EmitInitNestedUpdate"/>).
     /// The other <c>init</c>-only properties are skipped, and IM0025 lists them (<see cref="InPlaceSkippedProperties"/>).
+    /// As for a new object (issue #62, PR 11 of 2.1.0): <c>When</c> first (false: the destination is left as it is), then
+    /// <c>BeforeMap</c>, the properties and <c>AfterMap</c>. Not with <c>ConvertUsing</c>, which a new object does not run
+    /// them with either (its in-place overload is <c>[Obsolete]</c>). A mapping without them gets the code of 2.0.0.
     /// </summary>
     private static void EmitInPlaceBody(StringBuilder sb, MappingDescriptor descriptor, MappingPlan plan,
         ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
     {
+        bool converts = descriptor.WholeObjectConverterType is not null || descriptor.WholeObjectLambdaBody is not null;
+        if (!converts && descriptor.WhenConditionBody is not null)
+        {
+            sb.AppendLine($"            if (!({descriptor.WhenConditionBody})) return;");
+        }
+
+        if (!converts && descriptor.BeforeMapLambdaBody is not null)
+        {
+            sb.AppendLine($"            BeforeMap{scope}(source, destination);");
+        }
+
         foreach (var prop in descriptor.PropertyMappings)
         {
             if (prop.IsIgnored || IsMappingMissing(prop, plan))
@@ -1020,6 +1082,11 @@ internal static class MapperCodeEmitter
             }
 
             sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, transformers, scope, plan)};");
+        }
+
+        if (!converts && descriptor.AfterMapLambdaBody is not null)
+        {
+            sb.AppendLine($"            AfterMap{scope}(source, destination);");
         }
     }
 

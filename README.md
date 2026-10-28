@@ -275,8 +275,8 @@ AutoMapper's `IMapper` from the same container: 34.5 ns). Up to 1.1.4
 - **`ProjectTo` / `IQueryable` projection** is not supported ([#9](https://github.com/iron-mapper/IronMapper/issues/9)).
 
 Also: up to 1.1.4 diagnostics have no source location (from 2.0.0 they point to the line); `IMapper` has no per-call context
-([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `When`, `ConvertUsing` and hooks
-(from 2.1.0 it updates existing nested objects; a nested record with `init` properties gets a new instance); a nested
+([#7](https://github.com/iron-mapper/IronMapper/issues/7)); the in-place overload ignores `ConvertUsing` and, up to 2.0.0,
+`When` and hooks (from 2.1.0 it applies them and updates existing nested objects; a nested record with `init` properties gets a new instance); a nested
 property declared non-nullable that holds `null` (an EF navigation without `Include`) throws `InvalidOperationException`
 naming both properties (from 2.1.0);
 `ReverseMap()` maps by name only; converters are created by the generated code, not resolved from DI, and need a public

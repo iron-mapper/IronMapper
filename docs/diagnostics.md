@@ -2,7 +2,7 @@
 
 > 📖 **[Русская версия](diagnostics.ru.md)**
 
-IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0023`. They are declared in
+IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0026`. They are declared in
 [`DiagnosticDescriptors.cs`](../src/IronMapper.Generator/Diagnostics/DiagnosticDescriptors.cs).
 
 **Current status** (`main`, unreleased 2.1.0):
@@ -34,6 +34,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0023`. 
 | IM0023 | Warning | Nullable value mapped to a non-nullable member | Yes — attributes and profiles (from 2.1.0) |
 | IM0024 | Error | Method of a profile setting cannot be used | Yes — profiles (from 2.1.0) |
 | IM0025 | Warning | In-place overload does not update init-only properties | Yes — attributes and profiles (from 2.1.0) |
+| IM0026 | Error | Required property is not mapped | Yes — attributes and profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -681,8 +682,12 @@ silently. Not reported:
 
 - for a property that is ignored (`[Ignore]`, `ForMember(..., o => o.Ignore())`);
 - when the in-place overload is turned off (`GenerateInPlace = false`, `GenerateMethods(inPlace: false)`,
-  `IronMapperGenerateInPlace=false`);
-- when every mapped property is `init`-only: that overload changes nothing and is `[Obsolete]` instead
+  `IronMapperGenerateInPlace=false`). **`IMapper.Map(source, destination)` still updates such a type in part, without a
+  warning:** the registration keeps a private in-place method with the same body, which skips the same properties. If
+  you call `IMapper.Map(source, destination)` for the pair, check it as if the warning were there (or leave the overload
+  on, so that it is reported);
+- when every mapped property is `init`-only and the mapping has no `BeforeMap`/`AfterMap`: that overload changes nothing
+  and is `[Obsolete]` instead
   ([Upgrading to 2.1](upgrading-to-2.1.md#4-in-place-overloads-that-do-nothing-are-obsolete));
 - for a destination created by a constructor or a factory (no in-place overload).
 
@@ -692,3 +697,27 @@ silently. Not reported:
 update is not needed, turn the overload off; or make the properties settable. To keep everything as it is, suppress the
 warning (`#pragma warning disable IM0025` around the attribute or the `CreateMap` line, or
 `dotnet_diagnostic.IM0025.severity = none`).
+
+---
+
+## IM0026 — Required property is not mapped
+
+**Severity:** Error (from 2.1.0; issue [#60](https://github.com/iron-mapper/IronMapper/issues/60))
+
+**Points to:** the mapping: the `[MapTo]`/`[MapFrom]` attribute, the `CreateMap` call, or `ReverseMap()`.
+
+**Message:** `Mapping from '{0}' to '{1}' is not generated: required property '{2}' gets no value, {3}. {4}.` — `{3}` says
+why (`it is marked [Ignore]`, `ForMember(d => d.Code, o => o.Ignore()) ignores it`, `'Row' has no property of that name`,
+`its value cannot be used`), `{4}` is the fix for the kind of mapping.
+
+**Cause:** a `required` destination property must be set by the object initializer that creates the destination, and
+the mapping gives it no value: it is ignored, nothing maps it, or its value cannot be used (another diagnostic of the
+property says why). Up to 2.0.0 the build failed with `CS9035` inside the generated file, which you cannot fix there.
+Not reported when the destination is created by a constructor with `[SetsRequiredMembers]` or by a factory
+(`ConstructWith`, `ConstructUsing`), or with `ConvertUsing`.
+
+**Behavior:** the mapping is not generated (the generated file compiles; calls of `MapToX` do not).
+
+**Fix:** map the property (`ForMember(d => d.Code, o => o.MapFrom(...))`, `[MapProperty]`, a source property of the same
+name), remove `required`, or create the destination with a constructor that has `[SetsRequiredMembers]` or with a
+factory.
