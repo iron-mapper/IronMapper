@@ -19,6 +19,7 @@ Nothing on the site is written twice. `scripts/prepare.mjs` runs before `dev` an
 | Source in the repository | Page |
 |---|---|
 | `docs/<name>.md`, `docs/<name>.ru.md` | `/<name>/`, `/ru/<name>/` |
+| `docs/diagnostics.md`, `.ru.md` | `/diagnostics/` (the intro, codes of its table linked) and one page per `## IMxxxx — Title`: `/diagnostics/imxxxx/`, the address for `helpLinkUri` |
 | `CHANGELOG.md` | `/changelog/` (English; the Russian locale shows it with a "not translated" notice) |
 | `README.md`, `README.ru.md`: the block between `<!-- quickstart:begin -->` and `<!-- quickstart:end -->` | the Quick Start on the home page (`src/generated/quickstart.*.md`) |
 | `benchmarks/results/summary.json` (written by `benchmarks/scripts/generate-report.ps1`) | the metric tiles of the home page, every table and chart of `/benchmarks/`, the Open Graph image `public/og/og.png` |
@@ -26,8 +27,8 @@ Nothing on the site is written twice. `scripts/prepare.mjs` runs before `dev` an
 | `site/pages/**`: the hand-written pages, home (`index.mdx`), `benchmarks.mdx`, `roadmap.md`, with their `ru/` versions | `/`, `/benchmarks/`, `/roadmap/`, … |
 
 The script takes the `# Title` of a doc as the page title, drops the language banner, rewrites relative links
-(`configuration.md#anchor` → `/configuration/#anchor`, `../CHANGELOG.md` → `/changelog/`, other repository files →
-GitHub) and fails the build when a link points to a missing file or heading, when a doc exists in one language only,
+(`configuration.md#anchor` → `/configuration/#anchor`, `diagnostics.md#im0002--…` → `/diagnostics/im0002/`,
+`../CHANGELOG.md` → `/changelog/`, other repository files → GitHub) and fails the build when a link points to a missing file or heading, when a doc exists in one language only,
 or when the format contract in `CLAUDE.md` ("Site") is broken. Links in `site/pages/` are written as relative paths to
 the repository files (`../../docs/configuration.md`), so they are checked the same way.
 
