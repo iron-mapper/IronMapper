@@ -449,7 +449,9 @@ page, the benchmarks page, the Open Graph image) and the methodology sections of
 `npm run dev`/`npm run build`; hand-written pages (home, roadmap, benchmarks) are in `site/pages/`.
 `site/project.config.mjs` is the only place with the library's name, the address (`https://iron-mapper.ru`) and the
 choice of home-page metrics (`homeMetrics`: keys of `src/lib/benchmarks.mjs`; the values come from the JSON). No
-analytics, no third-party scripts. `cd site && npm ci && npm run dev` for a local preview; details in `site/README.md`.
+analytics, no third-party scripts. `/llms.txt`, `/llms-full.txt` and `/llms-small.txt` (English only, for AI tools) are
+written at build time by the `starlight-llms-txt` plugin from the rendered pages. `cd site && npm ci && npm run dev`
+for a local preview; details in `site/README.md`.
 
 **Format contract** (`prepare.mjs` fails the build when it is broken):
 - every `docs/<name>.md` has a `docs/<name>.ru.md` and vice versa; a doc starts with one `# Title` (the page title)
