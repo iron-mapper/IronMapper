@@ -1,0 +1,42 @@
+---
+// Metric tiles of the home page. Which tiles: project.config.mjs → homeMetrics. Values: summary.json only.
+import summary from '../generated/benchmarks.json';
+import { project } from '../../project.config.mjs';
+import { model, homeMetrics } from '../lib/benchmarks.mjs';
+
+interface Props { locale: 'en' | 'ru' }
+const { locale } = Astro.props;
+const m = model(summary);
+const tiles = homeMetrics(m, project.homeMetrics, locale);
+const base = project.base.replace(/\/+$/, '');
+const benchmarksHref = `${base}${locale === 'ru' ? '/ru' : ''}/benchmarks/`;
+const caption = locale === 'ru'
+  ? `Прогон ${m.runLabel}, ${m.runDate}, ${m.machineShort}; относительно ручного кода. Числа из воспроизводимых бенчмарков, не вводятся руками.`
+  : `Run ${m.runLabel}, ${m.runDate}, ${m.machineShort}; relative to hand-written code. Numbers come from the reproducible benchmarks and are never typed in.`;
+const notMeasured = locale === 'ru' ? 'не измерено' : 'not measured';
+---
+<section class="metrics" aria-labelledby="metrics-heading">
+  <h2 id="metrics-heading">{locale === 'ru' ? 'В цифрах' : 'In numbers'}</h2>
+  <ul class="metrics-grid">
+    {tiles.map((t) => (
+      <li class="metric">
+        <span class="metric-value">{t.value ?? notMeasured}</span>
+        <span class="metric-label">{t.label}</span>
+        <span class="metric-note">{t.note}</span>
+      </li>
+    ))}
+  </ul>
+  <p class="metrics-caption">{caption} <a href={benchmarksHref}>{locale === 'ru' ? 'Все бенчмарки →' : 'All benchmarks →'}</a></p>
+</section>
+
+<style>
+  .metrics-grid { list-style: none; padding: 0; margin: 1rem 0 0.5rem; display: grid; gap: 0.75rem;
+    grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 50rem) { .metrics-grid { grid-template-columns: repeat(3, 1fr); } }
+  .metric { display: flex; flex-direction: column; gap: 0.2rem; padding: 1rem 1.1rem; border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.6rem; background: var(--sl-color-bg-nav); }
+  .metric-value { font-size: 2rem; font-weight: 700; line-height: 1.1; color: var(--sl-color-white); letter-spacing: -0.01em; }
+  .metric-label { font-size: 0.95rem; color: var(--sl-color-text); }
+  .metric-note { font-size: 0.8rem; color: var(--sl-color-gray-3); }
+  .metrics-caption { font-size: 0.85rem; color: var(--sl-color-gray-3); margin-top: 0.5rem; }
+</style>

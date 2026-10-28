@@ -3,7 +3,7 @@ title: Roadmap
 description: What the next releases of IronMapper are about.
 ---
 
-_Updated 2026-10-27. This page is a short summary written by hand; the working plan with every item and its status is
+_Updated 2026-10-28. This page is a short summary written by hand; the working plan with every item and its status is
 [IRONMAPPER_PLAN.md](../../IRONMAPPER_PLAN.md) (in Russian), and open work is tracked in
 [GitHub milestones](https://github.com/iron-mapper/IronMapper/milestones)._
 
@@ -31,7 +31,5 @@ Breaking changes that were decided but wait for a major version:
 
 - `null` in, `null` out as the default behaviour.
 - Unmapped destination properties in profiles (`IM0001`) reported by default.
-
-A rename of the library is planned (the new name is not chosen yet); the packages and this site move with it.
 
 See [Upgrading to 2.1](../../docs/upgrading-to-2.1.md) and the [Changelog](../../CHANGELOG.md) for what has shipped.

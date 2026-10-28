@@ -1,0 +1,56 @@
+---
+// Every runtime scenario × library for one framework: mean, ratio, allocated.
+import summary from '../generated/benchmarks.json';
+import { model, formatNs, formatRatio, formatBytes, scenarios, SUBJECT } from '../lib/benchmarks.mjs';
+
+interface Props { locale: 'en' | 'ru'; framework: 'net10.0' | 'net8.0' }
+const { locale, framework } = Astro.props;
+const ru = locale === 'ru';
+const m = model(summary);
+const libs = summary.libraries.filter((l) => l.runtime?.[framework]);
+const hasData = libs.length > 0;
+---
+{hasData ? (
+<table class="scenarios">
+  <thead>
+    <tr>
+      <th>{ru ? 'Сценарий' : 'Scenario'}</th>
+      {libs.map((l) => <th>{l.name}</th>)}
+    </tr>
+  </thead>
+  <tbody>
+    {scenarios.map((s) => (
+      <tr>
+        <th scope="row">{s.label[locale]}</th>
+        {libs.map((l) => {
+          const x = l.runtime[framework]?.[s.key];
+          return (
+            <td class={l.name === SUBJECT ? 'subject' : undefined}>
+              {x?.meanNs == null ? '—' : (<>
+                <span class="mean">{formatNs(x.meanNs)}</span>
+                <span class="ratio"> {formatRatio(x.ratioToManual)}</span>
+                <span class="alloc">{formatBytes(x.allocatedBytes)}</span>
+              </>)}
+            </td>
+          );
+        })}
+      </tr>
+    ))}
+  </tbody>
+</table>
+) : (
+<p>{ru ? `Для ${framework} в этом прогоне нет измерений.` : `No measurements for ${framework} in this run.`}</p>
+)}
+<p class="table-note">
+  {ru
+    ? `Среднее время на операцию, отношение к ${m.baseline} и выделенная память на операцию. «Через DI» — вызов IMapper из контейнера; строки AutoMapper и Mapster этого сценария названы иначе в отчёте и показаны только там. «—» — библиотека в сценарии не участвует.`
+    : `Mean time per operation, ratio to ${m.baseline}, and allocated bytes per operation. "DI overhead" calls IMapper from the container; the AutoMapper and Mapster rows of that scenario are named differently in the report and shown there only. "—": not part of the scenario.`}
+</p>
+<style>
+  .scenarios th[scope="row"] { white-space: nowrap; text-align: left; }
+  .scenarios td { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; vertical-align: top; }
+  .scenarios td.subject { font-weight: 600; }
+  .scenarios .ratio { color: var(--sl-color-gray-3); font-size: 0.85em; }
+  .scenarios .alloc { display: block; color: var(--sl-color-gray-3); font-size: 0.8em; font-weight: 400; }
+  .table-note { font-size: 0.85rem; color: var(--sl-color-gray-3); }
+</style>
