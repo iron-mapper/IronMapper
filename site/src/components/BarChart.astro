@@ -1,0 +1,49 @@
+---
+// One measure across the libraries as horizontal bars: static SVG, no script. One series, so no legend; the mapper
+// under test is the darker step of the same hue and its value is labeled like every other (the values are the
+// point). Values and labels use text tokens, never the bar color.
+import { SUBJECT } from '../lib/benchmarks.mjs';
+
+interface Item { name: string; value: number | null; label: string }
+interface Props { title: string; unit: string; items: Item[]; note?: string }
+const { title, unit, items, note } = Astro.props;
+
+const rows = items.filter((i) => i.value != null);
+const max = Math.max(...rows.map((r) => r.value as number), 0) || 1;
+const labelW = 150, valueW = 90, plotW = 420, rowH = 30, barH = 18, padTop = 8;
+const W = labelW + plotW + valueW;
+const H = padTop + rows.length * rowH + 8;
+const x = (v: number) => (Math.max(v, 0) / max) * plotW;
+const notMeasured = items.filter((i) => i.value == null).map((i) => i.name);
+---
+<figure class="bar-chart">
+  <figcaption><strong>{title}</strong> <span class="unit">· {unit}</span></figcaption>
+  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title} width="100%" style={`max-width:${W}px`}>
+    <line x1={labelW} y1={padTop} x2={labelW} y2={H - 8} class="axis" />
+    {rows.map((r, i) => {
+      const y = padTop + i * rowH + (rowH - barH) / 2;
+      const w = Math.max(x(r.value as number), 2);
+      return (<g>
+        <title>{`${r.name}: ${r.label}`}</title>
+        <text x={labelW - 8} y={y + barH / 2} dominant-baseline="middle" text-anchor="end" class={`name${r.name === SUBJECT ? ' subject' : ''}`}>{r.name}</text>
+        <path d={`M${labelW},${y} h${Math.max(w - 4, 0)} a4,4 0 0 1 4,4 v${barH - 8} a4,4 0 0 1 -4,4 h-${Math.max(w - 4, 0)} z`} class={r.name === SUBJECT ? 'bar subject' : 'bar'} />
+        <text x={labelW + w + 8} y={y + barH / 2} dominant-baseline="middle" class="value">{r.label}</text>
+      </g>);
+    })}
+  </svg>
+  {(note || notMeasured.length > 0) && (
+    <p class="chart-note">{note}{notMeasured.length > 0 ? ` ${notMeasured.join(', ')}: —` : ''}</p>
+  )}
+</figure>
+<style>
+  .bar-chart { margin: 1.25rem 0; }
+  .bar-chart figcaption { font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .bar-chart .unit { color: var(--sl-color-gray-3); }
+  .bar-chart svg { display: block; font-size: 13px; }
+  .bar-chart .axis { stroke: var(--sl-color-hairline); stroke-width: 1; }
+  .bar-chart .bar { fill: var(--sl-color-accent-high); opacity: 0.55; }
+  .bar-chart .bar.subject { fill: var(--sl-color-accent); opacity: 1; }
+  .bar-chart .name, .bar-chart .value { fill: var(--sl-color-text); font-variant-numeric: tabular-nums; }
+  .bar-chart .name.subject { font-weight: 600; }
+  .chart-note { font-size: 0.8rem; color: var(--sl-color-gray-3); margin: 0.25rem 0 0; }
+</style>

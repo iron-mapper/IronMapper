@@ -1,0 +1,54 @@
+---
+// One row per library: the summary table of RESULTS.md, from summary.json.
+import summary from '../generated/benchmarks.json';
+import { model, formatNs, formatRatio, formatBytes, formatMs, formatSeconds, SUBJECT } from '../lib/benchmarks.mjs';
+
+interface Props { locale: 'en' | 'ru'; framework?: 'net10.0' | 'net8.0' }
+const { locale, framework = 'net10.0' } = Astro.props;
+const ru = locale === 'ru';
+const m = model(summary);
+const dash = '—';
+const cell = (meas) => (meas?.meanNs == null ? dash : `${formatNs(meas.meanNs)} (${formatRatio(meas.ratioToManual) ?? '?'})`);
+const rows = summary.libraries.map((l) => {
+  const r = l.runtime?.[framework];
+  const coll = r?.collection100000;
+  return {
+    name: l.name,
+    flat: cell(r?.flat),
+    nested: cell(r?.nested),
+    collection: cell(coll),
+    allocated: coll?.allocatedBytes == null ? dash : formatBytes(coll.allocatedBytes),
+    coldStart: formatMs(l.coldStart?.deltaToBaselineMs, true) ?? dash,
+    aot: l.nativeAot?.works == null ? dash : l.nativeAot.works ? (ru ? 'да' : 'yes') : (ru ? 'нет' : 'no'),
+    publish: formatBytes(l.size?.publishDeltaToBaselineBytes, true) ?? dash,
+    aotSize: formatBytes(l.size?.aotDeltaToBaselineBytes, true) ?? dash,
+    build: formatSeconds(l.buildTime?.deltaToBaselineSeconds, true) ?? dash,
+  };
+});
+const h = ru
+  ? ['Библиотека', 'Flat', 'Nested', 'Коллекция (100k)', 'Аллокации (100k)', 'Холодный старт, Δ', 'NativeAOT', 'Δ publish (JIT)', 'Δ exe (AOT)', 'Δ сборки']
+  : ['Library', 'Flat', 'Nested', 'Collection (100k)', 'Allocated (100k)', 'Cold start, Δ', 'NativeAOT', 'Δ publish (JIT)', 'Δ executable (AOT)', 'Δ build'];
+---
+<table class="summary">
+  <thead><tr>{h.map((x) => <th>{x}</th>)}</tr></thead>
+  <tbody>
+    {rows.map((r) => (
+      <tr class={r.name === SUBJECT ? 'subject' : undefined}>
+        <th scope="row">{r.name}</th>
+        <td>{r.flat}</td><td>{r.nested}</td><td>{r.collection}</td><td>{r.allocated}</td>
+        <td>{r.coldStart}</td><td>{r.aot}</td><td>{r.publish}</td><td>{r.aotSize}</td><td>{r.build}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+<p class="table-note">
+  {ru
+    ? `${framework}; время — среднее BenchmarkDotNet, в скобках отношение к ${m.baseline} (ручной код). Коллекция и аллокации — для 100 000 заказов. Холодный старт — медиана запуска процесса с одним маппингом минус консоль без маппера. Размеры в десятичных единицах.`
+    : `${framework}; times are BenchmarkDotNet means with the ratio to ${m.baseline} (hand-written code) in parentheses. Collection and Allocated are for 100 000 orders. Cold start is the median process start plus one mapping, minus the console without a mapper. Decimal units.`}
+</p>
+<style>
+  .summary th[scope="row"] { white-space: nowrap; text-align: left; }
+  .summary td { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  .summary tr.subject th, .summary tr.subject td { font-weight: 600; }
+  .table-note { font-size: 0.85rem; color: var(--sl-color-gray-3); }
+</style>

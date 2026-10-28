@@ -28,6 +28,11 @@ const sidebar = [
     items: [{ slug: 'diagnostics', label: 'All diagnostics', translations: { ru: 'Все диагностики' } }],
   },
   {
+    label: 'Benchmarks',
+    translations: { ru: 'Бенчмарки' },
+    items: [{ slug: 'benchmarks', label: 'Results and methodology', translations: { ru: 'Результаты и методика' } }],
+  },
+  {
     label: 'Releases',
     translations: { ru: 'Релизы' },
     items: [
@@ -61,8 +66,14 @@ export default defineConfig({
       customCss: ['./src/styles/custom.css'],
       lastUpdated: false,
       credits: false,
-      // No analytics, no trackers, no third-party scripts: nothing is added to <head>.
-      head: [],
+      // No analytics, no trackers, no third-party scripts. Only the Open Graph image (rendered at build time from
+      // benchmarks/results/summary.json by scripts/prepare.mjs) is added to <head>.
+      head: [
+        { tag: 'meta', attrs: { property: 'og:image', content: `${project.site}${project.base}/og/og.png` } },
+        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+      ],
       expressiveCode: {
         // C# is the language of nearly every block; the themes follow the site's light/dark mode.
         themes: ['github-dark', 'github-light'],

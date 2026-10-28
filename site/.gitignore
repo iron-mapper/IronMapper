@@ -4,3 +4,5 @@ dist/
 # Written by scripts/prepare.mjs from docs/, README and CHANGELOG of the repository root and from pages/.
 src/content/docs/
 src/generated/
+# Open Graph image, rendered by scripts/prepare.mjs from benchmarks/results/summary.json.
+public/og/
