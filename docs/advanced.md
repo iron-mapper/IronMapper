@@ -334,8 +334,9 @@ parent object, a nested object of such a type is replaced by a new instance (as 
 [In-place update of nested objects](#in-place-update-of-nested-objects)).
 
 Other details: an exception thrown by the constructor reaches the caller as it is; `ConvertUsing` creates the object
-itself, so no constructor is needed; with `BeforeMap`/`AfterMap` the constructor runs first, then `BeforeMap`, the
-assignments of the settable (`set`) properties and `AfterMap`. As for a property, a nullable source for a non-nullable reference parameter
+itself, so no constructor is needed; with `BeforeMap`/`AfterMap` the constructor runs first (with an object initializer
+for the `required` and `init` properties, from 2.1.0), then `BeforeMap`, the assignments of the other settable (`set`)
+properties and `AfterMap`. As for a property, a nullable source for a non-nullable reference parameter
 (`string?` → `string`) passes `null` on with the warning
 [`IM0023`](diagnostics.md#im0023--nullable-value-mapped-to-a-non-nullable-member) at your mapping (up to 2.0.0 a
 nullable warning inside the generated file, `CS8604`; `CS8601` for a property).
@@ -534,12 +535,17 @@ The in-place overload only assigns the mapped properties. It:
   [`IM0025`](diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties) at the mapping that lists them
   (from 2.1.0; ignored properties are not listed); an existing `init`-only nested object is updated in place
   ([above](#in-place-update-of-nested-objects));
-- does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`;
+- evaluates `When` first (`false`: the destination is left as it is) and calls `BeforeMap` before the properties and
+  `AfterMap` after them, as a new object does and as AutoMapper's `Map(source, destination)` does (from 2.1.0, issue
+  [#62](https://github.com/iron-mapper/IronMapper/issues/62); up to 2.0.0 it skipped them). An existing nested object is
+  updated by the in-place body of its pair, with the `When` and hooks of that mapping;
+- does **not** apply `ConvertUsing` (that overload is `[Obsolete]`, see below);
 - throws `ArgumentNullException` for a `null` source or destination, also with `IronMapperNullSourceReturnsNull` (which
   changes only `MapToX(source)`).
 
 **An in-place overload that does nothing is `[Obsolete]`** (from 2.1.0; removed in 3.0.0): for a value-type destination
-(the method gets a copy), a mapping with `ConvertUsing` and a destination whose mapped properties are all `init`. Each
+(the method gets a copy), a mapping with `ConvertUsing` and a destination whose mapped properties are all `init` (and
+that has no `BeforeMap`/`AfterMap`, which may change it). Each
 call gets warning `CS0618` with the reason and the fix (map to a new object, or turn the overload off with
 `GenerateInPlace = false`, `GenerateMethods(inPlace: false)` or `IronMapperGenerateInPlace=false`), and
 `IMapper.Map(source, destination)` for such a pair throws `MappingException` with the same reason instead of doing

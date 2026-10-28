@@ -27,7 +27,10 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            if (!(source.Active)) return;
+            BeforeMap_Account_AccountDto(source, destination);
             destination.Name = TransformValue_String_Account_AccountDto(source.Name);
+            AfterMap_Account_AccountDto(source, destination);
         }
 
         /// <summary>Maps each element of <paramref name="source"/> to <see cref="global::App.AccountDto"/> and returns a <see cref="global::System.Collections.Generic.List{T}"/>.</summary>

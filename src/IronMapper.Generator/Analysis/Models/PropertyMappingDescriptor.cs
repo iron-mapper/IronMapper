@@ -41,6 +41,13 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     public bool IsInitOnly { get; }
 
     /// <summary>
+    /// The destination property is <c>required</c>: an object initializer must set it (CS9035 otherwise), also when the
+    /// mapping has <c>BeforeMap</c>/<c>AfterMap</c> and assigns the other properties after creating the object (issue #60).
+    /// Set by <see cref="AsRequired"/>.
+    /// </summary>
+    public bool IsRequired { get; private set; }
+
+    /// <summary>
     /// When non-null, the source property is a collection whose elements should be mapped individually.
     /// This is the name of the generated extension method to call on each element
     /// (e.g. <c>"MapToOrderDto"</c>).
@@ -226,6 +233,14 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         CollectionDestElementFqn = collection?.DestElementFqn;
     }
 
+    /// <summary>A copy of this mapping for a <c>required</c> destination property (<see cref="IsRequired"/>).</summary>
+    public PropertyMappingDescriptor AsRequired()
+    {
+        var copy = (PropertyMappingDescriptor)MemberwiseClone();
+        copy.IsRequired = true;
+        return copy;
+    }
+
     /// <inheritdoc/>
     public bool Equals(PropertyMappingDescriptor? other)
     {
@@ -247,6 +262,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
             && NeedsNullCheck == other.NeedsNullCheck
             && LambdaBody == other.LambdaBody
             && IsInitOnly == other.IsInitOnly
+            && IsRequired == other.IsRequired
             && CollectionElementMapMethod == other.CollectionElementMapMethod
             && CollectionOutputType == other.CollectionOutputType
             && SourcePropertyTypeFqn == other.SourcePropertyTypeFqn
@@ -281,6 +297,7 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
         hash = hash * 31 + NeedsNullCheck.GetHashCode();
         hash = hash * 31 + (LambdaBody?.GetHashCode() ?? 0);
         hash = hash * 31 + IsInitOnly.GetHashCode();
+        hash = hash * 31 + IsRequired.GetHashCode();
         hash = hash * 31 + (CollectionElementMapMethod?.GetHashCode() ?? 0);
         hash = hash * 31 + (CollectionOutputType?.GetHashCode() ?? 0);
         hash = hash * 31 + (SourcePropertyTypeFqn?.GetHashCode() ?? 0);

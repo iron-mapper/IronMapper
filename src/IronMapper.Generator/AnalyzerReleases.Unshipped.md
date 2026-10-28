@@ -27,3 +27,4 @@ IM0022 | IronMapper | Error | InvalidConverter
 IM0023 | IronMapper | Warning | NullableNarrowing
 IM0024 | IronMapper | Error | InvalidProfileMethod
 IM0025 | IronMapper | Warning | InPlaceSkipsInitProperties
+IM0026 | IronMapper | Error | RequiredPropertyNotMapped
