@@ -25,9 +25,12 @@ namespace IronMapper.Generator.Analysis;
 ///   <item>Helper scope (hooks, transformers): <c>_{Source}_{Dest}</c> by simple names, unless another generated
 ///   mapping has the same pair of simple names; then the full names are used.</item>
 ///   <item>Hint name: full names of both types, unique.</item>
-///   <item><c>…Core</c> (the body of <c>MapToX(source)</c> without the null check, called by nested objects and
-///   collection elements): <c>{MethodName}Core</c>, or <c>{MethodName}Core{HelperScope}</c> when a mapping of the same
-///   source type is named so (a destination type <c>XCore</c>; the same parameter would be CS0111).</item>
+///   <item><c>…Core</c> (the body of <c>MapToX(source)</c> without the null check, called by nested objects, converted
+///   values and constructor or factory arguments): <c>{MethodName}Core</c>, or <c>{MethodName}Core{HelperScope}</c> when a
+///   mapping of the same source type is named so (a destination type <c>XCore</c>; the same parameter would be CS0111).
+///   Generated only when something calls it (<see cref="MappingPlanEntry.UsesCore"/>,
+///   <see cref="MappingPlanEntry.UsesInPlaceCore"/>, item 7 of the 2.1.0 PR order): a mapping that is not used as a nested
+///   object keeps the code of 2.0.0.</item>
 /// </list>
 /// </remarks>
 internal static class MappingPlanner
@@ -37,7 +40,12 @@ internal static class MappingPlanner
     private const int ModeShortArgs = 1;
     private const int ModeFullArgs = 2;
 
-    public static MappingPlan Create(params ImmutableArray<MappingDescriptor>[] groups)
+    /// <summary>Builds the plan.</summary>
+    /// <param name="methods">The overloads of the assembly (<c>IronMapperGenerate*</c>), before the overrides of a mapping.</param>
+    /// <param name="registration">The registration for <c>IMapper</c> is generated (<c>IronMapperRegistration</c>): its
+    /// private <c>MapInto</c> methods contain the in-place body of mappings without a public in-place overload.</param>
+    /// <param name="groups">The mappings of the attributes and the profiles.</param>
+    public static MappingPlan Create(GeneratedMethods methods, bool registration, params ImmutableArray<MappingDescriptor>[] groups)
     {
         var mappings = groups
             .SelectMany(g => g)
@@ -178,12 +186,95 @@ internal static class MappingPlanner
                 : mapping.MethodOverrides;
             entries.Add(new MappingPlanEntry(mapping.Origin, mapping.PairKey, true, methodName, hintName, helperScope,
                 mapping.MethodAccessibility, mapping.SourceFullName!, mapping.DestFullName!, mapping.UsesConverterCache,
-                overrides, coreName, UsesNestedObjectCheck(mapping, generatedPairs), mapping.CanUpdateInPlace));
+                overrides, coreName, UsesNestedObjectCheck(mapping, generatedPairs), mapping.CanUpdateInPlace,
+                inPlaceIsNoOp: mapping.InPlaceNoOpReason is not null));
         }
 
-        return new MappingPlan(
+        var plan = new MappingPlan(
             entries.OrderBy(e => e.Origin, StringComparer.Ordinal).ToImmutableArray(),
             diagnostics.ToImmutableArray());
+        return WithCoreUse(plan, generated, methods, registration);
+    }
+
+    /// <summary>
+    /// Sets <see cref="MappingPlanEntry.UsesCore"/> and <see cref="MappingPlanEntry.UsesInPlaceCore"/>: which pairs the
+    /// generated code reaches through <c>…Core</c>. <c>…Core(source)</c>: a nested object, a converted value, a
+    /// constructor or factory argument of any generated mapping (the same lookup as the emitter,
+    /// <see cref="MapperCodeEmitter.FindNestedEntry(PropertyMappingDescriptor, MappingPlan)"/>). <c>…Core(source, destination)</c>: an existing nested object
+    /// updated by an in-place body that is generated — the public in-place overload, the private <c>MapInto</c> of the
+    /// registration, or the in-place <c>…Core</c> of a pair that is itself updated so (followed until nothing changes).
+    /// </summary>
+    private static MappingPlan WithCoreUse(MappingPlan plan, List<MappingDescriptor> generated, GeneratedMethods methods,
+        bool registration)
+    {
+        var usesCore = new HashSet<string>(StringComparer.Ordinal);
+        var updatedInPlace = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var inPlaceBodies = new Queue<string>();
+        var hasInPlaceBody = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mapping in generated)
+        {
+            foreach (var property in mapping.AllValueMappings)
+            {
+                if (!MapperCodeEmitter.IsMappingMissing(property, plan) && MapperCodeEmitter.FindNestedEntry(property, plan) is { } nested)
+                {
+                    usesCore.Add(nested.Origin);
+                }
+            }
+
+            if (mapping.UsesConstructor)
+            {
+                continue;
+            }
+
+            var targets = new List<string>();
+            foreach (var property in mapping.PropertyMappings)
+            {
+                if (!property.IsInitOnly && !MapperCodeEmitter.IsMappingMissing(property, plan)
+                    && MapperCodeEmitter.FindNestedInPlaceEntry(property, plan) is { } target)
+                {
+                    targets.Add(target.Origin);
+                }
+            }
+
+            updatedInPlace[mapping.Origin] = targets;
+            var entry = plan.Find(mapping.Origin)!;
+            if (methods.With(entry.MethodOverrides).InPlace || (registration && !entry.InPlaceIsNoOp))
+            {
+                hasInPlaceBody.Add(mapping.Origin);
+                inPlaceBodies.Enqueue(mapping.Origin);
+            }
+        }
+
+        var usesInPlaceCore = new HashSet<string>(StringComparer.Ordinal);
+        while (inPlaceBodies.Count > 0)
+        {
+            if (!updatedInPlace.TryGetValue(inPlaceBodies.Dequeue(), out var targets))
+            {
+                continue;
+            }
+
+            foreach (string target in targets)
+            {
+                usesInPlaceCore.Add(target);
+                if (hasInPlaceBody.Add(target))
+                {
+                    inPlaceBodies.Enqueue(target);
+                }
+            }
+        }
+
+        if (usesCore.Count == 0 && usesInPlaceCore.Count == 0)
+        {
+            return plan;
+        }
+
+        var entries = ImmutableArray.CreateBuilder<MappingPlanEntry>(plan.Entries.Length);
+        foreach (var entry in plan.Entries)
+        {
+            entries.Add(entry.WithCoreUse(usesCore.Contains(entry.Origin), usesInPlaceCore.Contains(entry.Origin)));
+        }
+
+        return new MappingPlan(entries.MoveToImmutable(), plan.Diagnostics);
     }
 
     private static string PlainName(MappingDescriptor descriptor) => $"MapTo{descriptor.DestTypeName}";

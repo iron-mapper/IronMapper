@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Order"/> to a new <see cref="global::App.OrderDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Order"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.OrderDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.OrderDto MapToOrderDto(this global::App.Order source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToOrderDtoCore(source);
-        }
-
-        private static global::App.OrderDto MapToOrderDtoCore(global::App.Order source)
-        {
             return new global::App.OrderDto
             {
                 Id = source.Id,
@@ -30,16 +24,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Order"/> into an existing <see cref="global::App.OrderDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Order"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.OrderDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToOrderDto(this global::App.Order source, global::App.OrderDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToOrderDtoCore(source, destination);
-        }
-
-        private static void MapToOrderDtoCore(global::App.Order source, global::App.OrderDto destination)
-        {
             destination.Id = source.Id;
             if (source.Customer is null) NestedObjectIsNull<global::App.Customer>("Order.Customer is null, but OrderDto.Customer is not nullable. If it is an EF navigation, check Include; otherwise declare the destination property nullable (null is then mapped to null) or configure the property explicitly.");
             else if (destination.Customer is null) destination.Customer = MapToCustomerDtoCore(source.Customer);

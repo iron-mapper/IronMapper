@@ -683,7 +683,11 @@ internal static class PropertyTypeCheck
                     if (member is IMethodSymbol { IsExtensionMethod: true, Parameters.Length: 2, IsGenericMethod: false, ReturnsVoid: true } candidate
                         && compilation.IsSymbolAccessibleWithin(candidate, compilation.Assembly)
                         && IsReceiverConversion(compilation, source, candidate.Parameters[0].Type)
-                        && IsReceiverConversion(compilation, dest, candidate.Parameters[1].Type))
+                        && IsReceiverConversion(compilation, dest, candidate.Parameters[1].Type)
+                        // [Obsolete] (2.1.0): an in-place overload that changes nothing (ConvertUsing, init-only properties).
+                        // The nested object gets a new instance, as for such a mapping of this compilation, and the
+                        // generated file has no CS0618.
+                        && !IsObsolete(candidate))
                     {
                         return true;
                     }
@@ -693,6 +697,9 @@ internal static class PropertyTypeCheck
 
         return false;
     }
+
+    private static bool IsObsolete(ISymbol symbol)
+        => symbol.GetAttributes().Any(a => a.AttributeClass is { Name: "ObsoleteAttribute", ContainingNamespace.Name: "System" });
 
     // The conversions C# allows for the receiver of an extension method call: identity, implicit reference, boxing.
     private static bool IsReceiverConversion(Compilation compilation, ITypeSymbol receiver, ITypeSymbol parameter)

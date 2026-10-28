@@ -380,7 +380,9 @@ public static class MapperRegistry
                (IsSupported
                    ? "Ensure a [MapTo], [MapFrom], or MappingProfile mapping exists, the " +
                      "IronMapper Source Generator has run on the project that owns these types, and that project's " +
-                     "assembly is passed to AddIronMapper (or used before the first mapping)."
+                     "assembly is passed to AddIronMapper (or used before the first mapping). A project built with " +
+                     "<IronMapperRegistration>false</IronMapperRegistration> has no registration: remove the property " +
+                     "there, or call the generated MapTo methods directly."
                    : NotSupportedMessage));
 
     private const string NotSupportedMessage =

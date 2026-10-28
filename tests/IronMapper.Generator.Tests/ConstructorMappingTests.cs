@@ -22,7 +22,7 @@ public class ConstructorMappingTests
 
     // Line endings of the generated code (Environment.NewLine) and of this file may differ.
     private static string Generated(IEnumerable<string> sources, string mapping)
-        => sources.Single(s => s.Contains($"private static global::App.{mapping} MapTo{mapping}Core(")).ReplaceLineEndings("\n");
+        => sources.Single(s => s.Contains($" global::App.{mapping} MapTo{mapping}(this ")).ReplaceLineEndings("\n");
 
     private static void AssertCode(string expected, string code) => Assert.Contains(expected.ReplaceLineEndings("\n"), code);
 

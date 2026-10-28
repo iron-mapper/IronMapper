@@ -176,6 +176,26 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     /// </summary>
     public string CoreMethodName { get; }
 
+    /// <summary>
+    /// Another generated mapping (or this one) creates objects of this pair through <c>…Core(source)</c>: a nested object,
+    /// a converted value, a constructor or factory argument. Otherwise <c>MapToX(source)</c> keeps the form of 2.0.0: one
+    /// method with the null check and the body, and no <c>…Core</c>.
+    /// </summary>
+    public bool UsesCore { get; }
+
+    /// <summary>
+    /// The in-place update of a generated mapping updates an existing nested object of this pair through
+    /// <c>…Core(source, destination)</c>. Otherwise the in-place body stays in the in-place overload (or in the private
+    /// <c>MapInto</c> of the registration), as in 2.0.0.
+    /// </summary>
+    public bool UsesInPlaceCore { get; }
+
+    /// <summary>
+    /// The in-place overload changes nothing for the caller (<see cref="MappingDescriptor.InPlaceNoOpReason"/>): it is
+    /// <c>[Obsolete]</c>, and the registration for <c>IMapper</c> takes a private <c>MapInto</c> that throws.
+    /// </summary>
+    public bool InPlaceIsNoOp { get; }
+
     /// <summary>The generated code of the mapping calls <c>NestedObjectIsNull&lt;T&gt;</c> (a nested object checked for <see langword="null"/>).</summary>
     public bool UsesNestedObjectCheck { get; }
 
@@ -189,9 +209,12 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
     public MappingPlanEntry(string origin, string pairKey, bool emit, string methodName, string hintName, string helperScope,
         string methodAccessibility, string sourceFullName, string destFullName, bool usesConverterCache = false,
         GeneratedMethodOverrides methodOverrides = default, string coreMethodName = "", bool usesNestedObjectCheck = false,
-        bool canUpdateInPlace = false)
+        bool canUpdateInPlace = false, bool usesCore = false, bool usesInPlaceCore = false, bool inPlaceIsNoOp = false)
     {
         CoreMethodName = coreMethodName;
+        UsesCore = usesCore;
+        UsesInPlaceCore = usesInPlaceCore;
+        InPlaceIsNoOp = inPlaceIsNoOp;
         UsesNestedObjectCheck = usesNestedObjectCheck;
         CanUpdateInPlace = canUpdateInPlace;
         Origin = origin;
@@ -223,7 +246,18 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
            && MethodOverrides.Equals(other.MethodOverrides)
            && CoreMethodName == other.CoreMethodName
            && UsesNestedObjectCheck == other.UsesNestedObjectCheck
-           && CanUpdateInPlace == other.CanUpdateInPlace;
+           && CanUpdateInPlace == other.CanUpdateInPlace
+           && UsesCore == other.UsesCore
+           && UsesInPlaceCore == other.UsesInPlaceCore
+           && InPlaceIsNoOp == other.InPlaceIsNoOp;
+
+    /// <summary>A copy with <see cref="UsesCore"/> and <see cref="UsesInPlaceCore"/> set (see <see cref="Analysis.MappingPlanner"/>).</summary>
+    public MappingPlanEntry WithCoreUse(bool usesCore, bool usesInPlaceCore)
+        => usesCore == UsesCore && usesInPlaceCore == UsesInPlaceCore
+            ? this
+            : new(Origin, PairKey, Emit, MethodName, HintName, HelperScope, MethodAccessibility, SourceFullName, DestFullName,
+                UsesConverterCache, MethodOverrides, CoreMethodName, UsesNestedObjectCheck, CanUpdateInPlace, usesCore,
+                usesInPlaceCore, InPlaceIsNoOp);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as MappingPlanEntry);
@@ -246,6 +280,9 @@ internal sealed class MappingPlanEntry : IEquatable<MappingPlanEntry>
         hash = hash * 31 + CoreMethodName.GetHashCode();
         hash = hash * 31 + UsesNestedObjectCheck.GetHashCode();
         hash = hash * 31 + CanUpdateInPlace.GetHashCode();
+        hash = hash * 31 + UsesCore.GetHashCode();
+        hash = hash * 31 + UsesInPlaceCore.GetHashCode();
+        hash = hash * 31 + InPlaceIsNoOp.GetHashCode();
         return hash;
     }
 }

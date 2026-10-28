@@ -160,6 +160,48 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// </summary>
     public GeneratedMethodOverrides MethodOverrides { get; }
 
+    /// <summary>The destination is a value type (a struct): the in-place overload gets a copy of it.</summary>
+    public bool DestIsValueType { get; }
+
+    /// <summary>
+    /// Why the in-place overload of this mapping changes nothing for the caller, or <see langword="null"/> when it does:
+    /// the destination is a value type (passed by copy), the mapping uses <c>ConvertUsing</c> (the in-place overload does
+    /// not apply it) or no property can be set (every mapped property is <c>init</c>-only, or there is none). Such an
+    /// overload is <c>[Obsolete]</c> (removed in 3.0.0), and <c>IMapper.Map(source, destination)</c> throws for the pair.
+    /// Not used for a destination created by a constructor or a factory (<see cref="UsesConstructor"/>), which has no
+    /// in-place overload.
+    /// </summary>
+    public string? InPlaceNoOpReason
+    {
+        get
+        {
+            if (UsesConstructor)
+            {
+                return null;
+            }
+
+            if (DestIsValueType)
+            {
+                return $"{DestTypeName} is a value type, so the destination is passed by copy and the caller's value does not change";
+            }
+
+            if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
+            {
+                return "the mapping uses ConvertUsing, which only creates a new object";
+            }
+
+            foreach (var property in PropertyMappings)
+            {
+                if (!property.IsIgnored && !property.IsInitOnly)
+                {
+                    return null;
+                }
+            }
+
+            return $"{DestTypeName} has no property that an existing object can be updated with (every mapped property is init-only)";
+        }
+    }
+
     /// <summary>
     /// The generated code of this mapping uses <c>ConverterCache&lt;T&gt;</c> (declared once in <c>GeneratedMappers.g.cs</c>).
     /// </summary>
@@ -245,6 +287,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// <param name="usesConstructor">The destination is created by a constructor (see <see cref="UsesConstructor"/>).</param>
     /// <param name="constructorArguments">The constructor arguments (see <see cref="ConstructorArguments"/>).</param>
     /// <param name="factory">The factory of a profile (see <see cref="Factory"/>).</param>
+    /// <param name="destIsValueType">The destination is a value type (see <see cref="DestIsValueType"/>).</param>
     public MappingDescriptor(
         string sourceTypeName,
         string? sourceNamespace,
@@ -273,9 +316,11 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         GeneratedMethodOverrides methodOverrides = default,
         bool usesConstructor = false,
         EquatableArray<PropertyMappingDescriptor> constructorArguments = default,
-        FactoryDescriptor? factory = null)
+        FactoryDescriptor? factory = null,
+        bool destIsValueType = false)
     {
         Factory = factory;
+        DestIsValueType = destIsValueType;
         UsesConstructor = usesConstructor;
         ConstructorArguments = constructorArguments;
         SourceTypeName = sourceTypeName;
@@ -318,7 +363,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, origin, originDisplay, originRank,
                 naming.Qualifier, naming.TypeArgsShort, naming.TypeArgsFull, WholeObjectConverterIsCached, originLocation,
-                MethodOverrides, UsesConstructor, ConstructorArguments, Factory);
+                MethodOverrides, UsesConstructor, ConstructorArguments, Factory, DestIsValueType);
 
     /// <summary>A copy with the overloads set for this mapping (see <see cref="MethodOverrides"/>).</summary>
     public MappingDescriptor WithMethodOverrides(GeneratedMethodOverrides overrides)
@@ -329,7 +374,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName, DestFullName,
                 MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
                 DestTypeArgsFull, WholeObjectConverterIsCached, OriginLocation, overrides, UsesConstructor, ConstructorArguments,
-                Factory);
+                Factory, DestIsValueType);
 
     /// <summary>
     /// The copy used to generate code: without <see cref="Diagnostics"/> and <see cref="OriginLocation"/>. Diagnostics
@@ -344,7 +389,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
                 WholeObjectLambdaBody, BeforeMapLambdaBody, AfterMapLambdaBody, ValueTransformers, SourceFullName,
                 DestFullName, MethodAccessibility, Origin, OriginDisplay, OriginRank, DestQualifier, DestTypeArgsShort,
                 DestTypeArgsFull, WholeObjectConverterIsCached, methodOverrides: MethodOverrides,
-                usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments, factory: Factory);
+                usesConstructor: UsesConstructor, constructorArguments: ConstructorArguments, factory: Factory,
+                destIsValueType: DestIsValueType);
 
     /// <inheritdoc/>
     public bool Equals(MappingDescriptor? other)
@@ -382,6 +428,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             || !Nullable.Equals(OriginLocation, other.OriginLocation)
             || !MethodOverrides.Equals(other.MethodOverrides)
             || UsesConstructor != other.UsesConstructor
+            || DestIsValueType != other.DestIsValueType
             || !Equals(Factory, other.Factory))
         {
             return false;
@@ -425,6 +472,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
         hash = hash * 31 + MethodOverrides.GetHashCode();
         hash = hash * 31 + PropertyMappings.GetHashCode();
         hash = hash * 31 + UsesConstructor.GetHashCode();
+        hash = hash * 31 + DestIsValueType.GetHashCode();
         hash = hash * 31 + ConstructorArguments.GetHashCode();
         hash = hash * 31 + (Factory?.GetHashCode() ?? 0);
         hash = hash * 31 + Diagnostics.GetHashCode();

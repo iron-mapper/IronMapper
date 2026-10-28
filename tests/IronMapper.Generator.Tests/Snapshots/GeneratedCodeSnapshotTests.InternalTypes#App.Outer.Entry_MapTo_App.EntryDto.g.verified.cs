@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Outer.Entry"/> to a new <see cref="global::App.EntryDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Outer.Entry"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.EntryDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         internal static global::App.EntryDto MapToEntryDto(this global::App.Outer.Entry source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToEntryDtoCore(source);
-        }
-
-        private static global::App.EntryDto MapToEntryDtoCore(global::App.Outer.Entry source)
-        {
             return new global::App.EntryDto
             {
                 Amount = source.Amount,
@@ -27,16 +21,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Outer.Entry"/> into an existing <see cref="global::App.EntryDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Outer.Entry"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.EntryDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         internal static void MapToEntryDto(this global::App.Outer.Entry source, global::App.EntryDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToEntryDtoCore(source, destination);
-        }
-
-        private static void MapToEntryDtoCore(global::App.Outer.Entry source, global::App.EntryDto destination)
-        {
             destination.Amount = source.Amount;
         }
 

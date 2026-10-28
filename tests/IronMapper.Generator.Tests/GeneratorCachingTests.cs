@@ -127,7 +127,7 @@ public class GeneratorCachingTests
         TrackingNames.Plan, TrackingNames.ClassAccessibility, TrackingNames.CodeOptions, TrackingNames.Registrations,
         TrackingNames.SourcePlan, TrackingNames.MapToSource, TrackingNames.MapFromSource, TrackingNames.ProfilesSource,
         TrackingNames.Settings, TrackingNames.Diagnostics,
-        TrackingNames.MethodSettings, TrackingNames.CoverageSettings, TrackingNames.ClassName,
+        TrackingNames.MethodSettings, TrackingNames.RegistrationSettings, TrackingNames.CoverageSettings, TrackingNames.ClassName,
     };
 
     /// <summary>Steps that only carry data used to generate code; they stay cached when a mapping only moves.</summary>
@@ -135,7 +135,7 @@ public class GeneratorCachingTests
     {
         TrackingNames.SourcePlan, TrackingNames.MapToSource, TrackingNames.MapFromSource, TrackingNames.ProfilesSource,
         TrackingNames.ClassAccessibility, TrackingNames.CodeOptions, TrackingNames.Registrations,
-        TrackingNames.MethodSettings, TrackingNames.CoverageSettings,
+        TrackingNames.MethodSettings, TrackingNames.RegistrationSettings, TrackingNames.CoverageSettings,
     };
 
     private const string MovedMappings = """

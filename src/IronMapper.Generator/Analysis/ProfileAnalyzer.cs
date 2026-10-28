@@ -1195,7 +1195,8 @@ internal static class ProfileAnalyzer
                 ? !ConstructorSelection.UsesInitializer(destSymbol, compilation)
                 : construction.UsesConstructor,
             constructorArguments: construction.Arguments,
-            factory: factory?.Descriptor);
+            factory: factory?.Descriptor,
+            destIsValueType: destSymbol.IsValueType);
     }
 
     // -----------------------------------------------------------------------

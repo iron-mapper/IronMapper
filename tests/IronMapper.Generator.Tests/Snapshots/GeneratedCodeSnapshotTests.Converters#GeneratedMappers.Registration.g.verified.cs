@@ -29,7 +29,7 @@ namespace IronMapper.Generated
                 source => MapToItemDtoArray(source));
             global::IronMapper.Registration.MapperRegistry.Register<global::App.Price, global::App.PriceDto>(
                 source => MapToPriceDto(source),
-                (source, destination) => MapToPriceDto(source, destination),
+                (source, destination) => MapInto_Price_PriceDto(source, destination),
                 source => MapToPriceDtoList(source),
                 source => MapToPriceDtoArray(source));
         }

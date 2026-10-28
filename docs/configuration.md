@@ -196,9 +196,14 @@ Set the property in the application project when the automatic choice is wrong, 
   property, and the `MappingException` of `MapperRegistry` for a missing mapping says the same, instead of a plain "No
   mapping registered".
 - The generated extension methods do not depend on the switch.
-- The property matters only in the application project (it becomes a `RuntimeHostConfigurationOption`); in a library
-  it has no effect. With project references to the IronMapper sources instead of the package nothing is set and the
-  registration is kept.
+- The switch is set only in the application project (the property becomes a `RuntimeHostConfigurationOption`). With
+  project references to the IronMapper sources instead of the package nothing is set and the registration is kept.
+- **`false` set in a project also stops generating the registration** for the mappings of that project, application or
+  library (from 2.1.0): no `GeneratedMappers.Registration.g.cs`, no module initializer, no private in-place methods for
+  it, less generated code in every build, not only after trimming. `IMapper` then finds none of these mappings; its
+  `MappingException` mentions the property. Set it in a project
+  whose mappings are only called as the generated `MapTo…` methods. The value that the package picks automatically
+  (the first row of the table) goes only into the switch and changes nothing in the generated code.
 
 ---
 
@@ -254,9 +259,11 @@ public class OrderProfile : MappingProfile
   Without `MapToXList`/`MapToXArray` the registry fills the list or array itself, calling `MapToX` once per element
   through a delegate (`IMapper` calls delegates anyway; the extension methods are not involved).
 - **In-place:** turning it off removes only the public method. Its body stays as a private method that `IMapper` calls for
-  `Map(source, destination)`, so it hardly changes the amount of generated code or the coverage. The private in-place
-  `MapToXCore(source, destination)` stays too: the in-place overloads of other mappings call it to update an existing
-  nested object of this pair ([In-place update of nested objects](advanced.md#in-place-update-of-nested-objects)). For coverage, use
+  `Map(source, destination)` (not generated with `IronMapperRegistration=false`, see
+  [Registration for `IMapper`](#registration-for-imapper-in-trimmed-and-nativeaot-apps)), so it hardly changes the
+  amount of generated code or the coverage. The private in-place `MapToXCore(source, destination)` of a pair whose
+  existing nested objects another mapping updates in place stays too
+  ([In-place update of nested objects](advanced.md#in-place-update-of-nested-objects)). For coverage, use
   `IronMapperExcludeFromCodeCoverage` (below).
 
 ### Attributes of the generated class

@@ -2,19 +2,22 @@
 
 Русская версия: [upgrading-to-2.1.ru.md](upgrading-to-2.1.ru.md)
 
-2.1.0 follows 2.0.0. 
-
-whether it builds.
-Two fixes of `ConvertUsing` in profiles can change what a mapping that built with 2.0.0 does or Everything else in 2.1.0 is new functionality or a fix that only affects code that did not build
-with 2.0.0 ([CHANGELOG](../CHANGELOG.md)).
+2.1.0 follows 2.0.0. Two fixes of `ConvertUsing` in profiles can change what a mapping that built with 2.0.0 does or
+whether it builds, nullable warnings move from the generated file to your code, in-place overloads that do nothing are
+marked `[Obsolete]`, and `IronMapperRegistration=false` now also applies to the project that sets it. Everything else in
+2.1.0 is new functionality or a fix that only affects code that did not build with 2.0.0
+([CHANGELOG](../CHANGELOG.md)).
 
 | Change | Who is affected |
 |---|---|
 | [`ConvertUsing` with a static method group is called](#1-convertusing-with-a-static-method-group-is-called) | Profiles with `ConvertUsing(SomeType.Method)` |
 | [`ConvertUsing` that cannot be called is `IM0022`](#2-convertusing-that-cannot-be-called-is-im0022) | Profiles with `ConvertUsing(instance.Method)`, a local function, a private method or a delegate in a variable |
+| [Nullable warnings move from the generated file to `IM0023`](#3-nullable-warnings-move-from-the-generated-file-to-im0023) | Projects with nullable annotations whose mappings had `CS8601`/`CS8604` in a `*.g.cs` file |
+| [In-place overloads that do nothing are `[Obsolete]`](#4-in-place-overloads-that-do-nothing-are-obsolete) | Calls of `source.MapToX(existing)` for a struct destination, a `ConvertUsing` mapping or a destination with only `init` properties, and `IMapper.Map(source, destination)` for such a pair |
+| [`IronMapperRegistration=false` generates no registration](#5-ironmapperregistrationfalse-generates-no-registration) | Projects that set `<IronMapperRegistration>false</IronMapperRegistration>` |
 
-To find them, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type argument
-(`ConvertUsing<TConverter>()`).
+To find the first two, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type
+argument (`ConvertUsing<TConverter>()`).
 
 ---
 
@@ -81,3 +84,57 @@ has no nullable warning ([#54](https://github.com/iron-mapper/IronMapper/issues/
 `Ignore()`), or set the severity of `IM0023` the way you set it for the compiler warnings (IM0023 takes the configuration of the compiler warning it replaces when it is set for the whole project: suppressed, it is not reported; an error, it is an error) (in the last case of the table,
 add `IM0023` to `WarningsNotAsErrors`). A collection whose elements differ only by `?` (`List<string?>` →
 `List<string>`) is now assigned as is with `IM0023`; before 2.1 it did not compile.
+
+---
+
+## 4. In-place overloads that do nothing are `[Obsolete]`
+
+**Was.** Every mapping got the in-place overload `source.MapToX(existing)`, also where it cannot change anything: a
+destination that is a value type (a `struct`, a `readonly record struct` value object, `Guid`; the method gets a copy),
+a mapping with `ConvertUsing` (the in-place overload does not apply the converter) and a destination whose mapped
+properties are all `init` (the in-place overload skips them). The call compiled and silently did nothing, and so did
+`IMapper.Map(source, destination)` for such a pair.
+
+**Now.** Removing a public method would break the code that calls it, so in 2.x these overloads stay and are marked
+`[Obsolete]` with the reason and what to do; they are removed in 3.0.0. `IMapper.Map(source, destination)` for such a
+pair throws `MappingException` with the same reason instead of doing nothing:
+
+```csharp
+CreateMap<Guid, UserId>().ConvertUsing(UserId.From);
+
+guid.MapToUserId(existing);
+// warning CS0618: 'MapToUserId(Guid, UserId)' is obsolete: 'MapToUserId(source, destination) does nothing: UserId is a
+// value type, so the destination is passed by copy and the caller's value does not change. Map to a new object instead
+// (destination = source.MapToUserId()), or turn this overload off (...). It will be removed in IronMapper 3.0.0.'
+
+mapper.Map(guid, existing);
+// MappingException: No in-place mapping from Guid to UserId: UserId is a value type, ...
+```
+
+The mapped values of every other call do not change. A nested object whose mapping is in a referenced project built
+with 2.1.0 and has such an overload is assigned a new instance by the in-place update of its parent, as a nested object
+of such a mapping of the same project already was (before, the referenced overload was called and kept the old values).
+
+**What you may see.** `CS0618` at each call of such an overload: with `TreatWarningsAsErrors` it is an error.
+
+**What to do.** Map to a new object (`existing = guid.MapToUserId();`), or turn the overload off for the mapping
+(`GenerateInPlace = false`, `.GenerateMethods(inPlace: false)`) or the project (`IronMapperGenerateInPlace=false`) if
+nothing calls it. To keep a call for now, suppress `CS0618` around it (`#pragma warning disable CS0618`).
+
+---
+
+## 5. `IronMapperRegistration=false` generates no registration
+
+**Was.** `IronMapperRegistration` only set the feature switch `IronMapper.Registration.IsSupported` of an application;
+the registration for `IMapper` (`GeneratedMappers.Registration.g.cs`, the module initializer, the private in-place
+methods it calls) was generated anyway and removed only by the trimmer. In a library the property had no effect.
+
+**Now.** `<IronMapperRegistration>false</IronMapperRegistration>` set in a project (application or library) also stops
+generating the registration for the mappings of that project ([Registration for `IMapper`](configuration.md#registration-for-imapper-in-trimmed-and-nativeaot-apps)).
+The value that the package picks automatically for a trimmed or NativeAOT publish without the DI package goes only into
+the feature switch, as before, and changes nothing in the generated code.
+
+**What you may see.** `IMapper` finds no mapping of such a project: the `MappingException` mentions the property.
+
+**What to do.** Remove the property from a project whose mappings `IMapper` must use; keep it where only the generated
+`MapTo…` methods are called.

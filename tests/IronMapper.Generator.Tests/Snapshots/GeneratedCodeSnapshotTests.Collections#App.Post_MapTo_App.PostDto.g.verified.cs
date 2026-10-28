@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Post"/> to a new <see cref="global::App.PostDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Post"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.PostDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.PostDto MapToPostDto(this global::App.Post source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToPostDtoCore(source);
-        }
-
-        private static global::App.PostDto MapToPostDtoCore(global::App.Post source)
-        {
             return new global::App.PostDto
             {
                 Comments = MapCollection_Comments_Post_PostDto(source.Comments),
@@ -30,16 +24,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Post"/> into an existing <see cref="global::App.PostDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Post"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.PostDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToPostDto(this global::App.Post source, global::App.PostDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToPostDtoCore(source, destination);
-        }
-
-        private static void MapToPostDtoCore(global::App.Post source, global::App.PostDto destination)
-        {
             destination.Comments = MapCollection_Comments_Post_PostDto(source.Comments);
             destination.Pinned = MapCollection_Pinned_Post_PostDto(source.Pinned);
             destination.Archived = MapCollection_Archived_Post_PostDto(source.Archived);

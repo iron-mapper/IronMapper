@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.PersonRow"/> to a new <see cref="global::App.Person"/>.</summary>
         /// <param name="source">The source <see cref="global::App.PersonRow"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.Person"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.Person MapToPerson(this global::App.PersonRow source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToPersonCore(source);
-        }
-
-        private static global::App.Person MapToPersonCore(global::App.PersonRow source)
-        {
             return ConstructWith_PersonRow_Person(
                 fullName: source.First + " " + source.Last,
                 age: source.Age);

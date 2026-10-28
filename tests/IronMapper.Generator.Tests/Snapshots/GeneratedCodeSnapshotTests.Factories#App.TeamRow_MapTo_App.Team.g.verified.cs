@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.TeamRow"/> to a new <see cref="global::App.Team"/>.</summary>
         /// <param name="source">The source <see cref="global::App.TeamRow"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.Team"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.Team MapToTeam(this global::App.TeamRow source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToTeamCore(source);
-        }
-
-        private static global::App.Team MapToTeamCore(global::App.TeamRow source)
-        {
             var destination = global::App.Team.Restore(
                 owner: global::App.MemberId.From(source.OwnerId),
                 name: source.Name,

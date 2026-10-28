@@ -150,7 +150,8 @@ try {
             $p = Publish-Probe $case $tf $i
             if ($p.ExitCode -ne 0) { $errors.Add("${label}: publish failed (exit code $($p.ExitCode))"); continue }
             foreach ($w in $p.Warnings) { $errors.Add("${label}: unexpected warning: $w") }
-            $sizes[$case.Name] = (Get-Item $p.Executable).Length
+            # Trimmed: the probe assembly (the apphost does not change); NativeAOT: the executable.
+            $sizes[$case.Name] = $case.ContainsKey('Trimmed') -and $p.Map ? $p.Map.Length : (Get-Item $p.Executable).Length
 
             if ($null -eq $p.Map) { $errors.Add("${label}: no ILC map file or trimmed probe assembly") }
             else {
@@ -176,6 +177,10 @@ try {
         if ($sizes.ContainsKey('A') -and $sizes.ContainsKey('A, IronMapperRegistration=true')) {
             Write-Host ("Probe A {0}: {1:N0} bytes; with the registration (IronMapperRegistration=true) {2:N0} bytes" -f
                 $tf, $sizes['A'], $sizes['A, IronMapperRegistration=true'])
+        }
+        # Every case, for comparing two versions of the generator.
+        foreach ($case in $cases) {
+            if ($sizes.ContainsKey($case.Name)) { Write-Host ("Size {0} {1}: {2:N0} bytes" -f $case.Name, $tf, $sizes[$case.Name]) }
         }
     }
 }

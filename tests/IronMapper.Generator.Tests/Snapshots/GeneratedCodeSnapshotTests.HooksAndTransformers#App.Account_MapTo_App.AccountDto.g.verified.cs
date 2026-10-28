@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Account"/> to a new <see cref="global::App.AccountDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Account"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.AccountDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.AccountDto MapToAccountDto(this global::App.Account source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToAccountDtoCore(source);
-        }
-
-        private static global::App.AccountDto MapToAccountDtoCore(global::App.Account source)
-        {
             if (!(source.Active)) return default!;
             var destination = new global::App.AccountDto();
             BeforeMap_Account_AccountDto(source, destination);
@@ -29,16 +23,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Account"/> into an existing <see cref="global::App.AccountDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Account"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.AccountDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToAccountDto(this global::App.Account source, global::App.AccountDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToAccountDtoCore(source, destination);
-        }
-
-        private static void MapToAccountDtoCore(global::App.Account source, global::App.AccountDto destination)
-        {
             destination.Name = TransformValue_String_Account_AccountDto(source.Name);
         }
 

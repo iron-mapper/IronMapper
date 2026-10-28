@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.UserRow"/> to a new <see cref="global::App.Account"/>.</summary>
         /// <param name="source">The source <see cref="global::App.UserRow"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.Account"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.Account MapToAccount(this global::App.UserRow source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToAccountCore(source);
-        }
-
-        private static global::App.Account MapToAccountCore(global::App.UserRow source)
-        {
             return new global::App.Account(
                 Id: source.Id,
                 Blocked: source.BlockedAt != null);

@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Change"/> to a new <see cref="global::App.ChangeDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Change"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.ChangeDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.ChangeDto MapToChangeDto(this global::App.Change source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToChangeDtoCore(source);
-        }
-
-        private static global::App.ChangeDto MapToChangeDtoCore(global::App.Change source)
-        {
             return new global::App.ChangeDto(
                 Id: source.Id,
                 NewAddress: source.NewAddress,

@@ -24,6 +24,9 @@
     IronMapperExcludeFromCodeCoverage - true marks the generated class with [ExcludeFromCodeCoverage]; false by default.
     IronMapperGeneratedCodeAttribute - false leaves [GeneratedCode] off the generated class (coverage tools that exclude
     code by that attribute, e.g. coverlet ExcludeByAttribute=GeneratedCodeAttribute, then measure it); true by default.
+    IronMapperRegistration - false (set in the project) generates no registration for IMapper: no
+    GeneratedMappers.Registration.g.cs, no module initializer, no private in-place methods for it. The value that
+    buildTransitive/IronMapper.targets picks for a trimmed or NativeAOT publish goes only into the feature switch.
   -->
   <ItemGroup>
     <CompilerVisibleProperty Include="IronMapperReportUnmappedInProfiles" />
@@ -32,6 +35,7 @@
     <CompilerVisibleProperty Include="IronMapperGenerateArray" />
     <CompilerVisibleProperty Include="IronMapperExcludeFromCodeCoverage" />
     <CompilerVisibleProperty Include="IronMapperGeneratedCodeAttribute" />
+    <CompilerVisibleProperty Include="IronMapperRegistration" />
   </ItemGroup>
 
 </Project>

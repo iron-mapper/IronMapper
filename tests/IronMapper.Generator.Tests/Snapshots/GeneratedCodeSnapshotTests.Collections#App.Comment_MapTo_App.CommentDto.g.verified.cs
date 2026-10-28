@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Comment"/> to a new <see cref="global::App.CommentDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.Comment"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.CommentDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.CommentDto MapToCommentDto(this global::App.Comment source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToCommentDtoCore(source);
-        }
-
-        private static global::App.CommentDto MapToCommentDtoCore(global::App.Comment source)
-        {
             return new global::App.CommentDto
             {
                 Text = source.Text,
@@ -27,16 +21,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.Comment"/> into an existing <see cref="global::App.CommentDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.Comment"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.CommentDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToCommentDto(this global::App.Comment source, global::App.CommentDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToCommentDtoCore(source, destination);
-        }
-
-        private static void MapToCommentDtoCore(global::App.Comment source, global::App.CommentDto destination)
-        {
             destination.Text = source.Text;
         }
 

@@ -26,7 +26,7 @@ public class NestedObjectTests
         => Assert.True(errors.Count == 0, "Errors in the compilation:\n" + string.Join("\n", errors));
 
     private static string Generated(IEnumerable<string> sources, string mapping)
-        => sources.Single(s => s.Contains($"private static global::App.{mapping} MapTo{mapping}Core("));
+        => sources.Single(s => s.Contains($" global::App.{mapping} MapTo{mapping}(this "));
 
     [Fact]
     public void Attribute_NestedObjectWithMapping_MappedThroughCore_InPlaceUpdatesTheExistingObjects()
@@ -90,8 +90,10 @@ public class NestedObjectTests
     }
 
     [Fact]
-    public void PublicMethod_ChecksNullAndCallsCore()
+    public void NotUsedAsNestedObject_OneMethodWithTheBody_AsIn200()
     {
+        // Item 7 of the 2.1.0 PR order: nothing calls MapToAddressDtoCore, so it is not generated, and the public methods
+        // keep the body and the null checks of 2.0.0, without AggressiveInlining.
         string source = """
             using IronMapper.Attributes;
 
@@ -110,11 +112,60 @@ public class NestedObjectTests
                     public static global::App.AddressDto MapToAddressDto(this global::App.Address source)
                     {
                         global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+                        return new global::App.AddressDto
+                        {
+                            City = source.City,
+                        };
+                    }
+
+                    /// <summary>Maps <see cref="global::App.Address"/> into an existing <see cref="global::App.AddressDto"/> instance.</summary>
+                    /// <param name="source">The source <see cref="global::App.Address"/> to read from.</param>
+                    /// <param name="destination">The <see cref="global::App.AddressDto"/> instance to populate. Init-only properties are not updated.</param>
+                    public static void MapToAddressDto(this global::App.Address source, global::App.AddressDto destination)
+                    {
+                        global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
+                        global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+                        destination.City = source.City;
+                    }
+            """.ReplaceLineEndings(), code.ReplaceLineEndings());
+        Assert.DoesNotContain("Core", code);
+        Assert.DoesNotContain("AggressiveInlining", code);
+        // No nested object checked for null: no throw helper.
+        Assert.DoesNotContain(generated, s => s.Contains("NestedObjectIsNull"));
+    }
+
+    [Fact]
+    public void UsedAsNestedObject_PublicMethodChecksNullAndCallsCore()
+    {
+        string source = """
+            using IronMapper.Attributes;
+
+            namespace App;
+
+            [MapTo(typeof(AddressDto))]
+            public class Address { public string City { get; set; } = ""; }
+            public class AddressDto { public string City { get; set; } = ""; }
+
+            [MapTo(typeof(CustomerDto))]
+            public class Customer { public Address Address { get; set; } = new(); }
+            public class CustomerDto { public AddressDto Address { get; set; } = new(); }
+            """;
+
+        var (generated, _, errors) = GeneratorTestHelper.RunGeneratorAndCompile(source);
+
+        AssertNoErrors(errors);
+        string code = Generated(generated, "AddressDto");
+        Assert.Contains("""
+                    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+                    public static global::App.AddressDto MapToAddressDto(this global::App.Address source)
+                    {
+                        global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
                         return MapToAddressDtoCore(source);
                     }
             """.ReplaceLineEndings(), code.ReplaceLineEndings());
         Assert.Contains("private static global::App.AddressDto MapToAddressDtoCore(global::App.Address source)", code);
         Assert.Contains("""
+                    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
                     public static void MapToAddressDto(this global::App.Address source, global::App.AddressDto destination)
                     {
                         global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
@@ -127,8 +178,11 @@ public class NestedObjectTests
                         destination.City = source.City;
                     }
             """.ReplaceLineEndings(), code.ReplaceLineEndings());
-        // No nested object checked for null: no throw helper.
-        Assert.DoesNotContain(generated, s => s.Contains("NestedObjectIsNull"));
+        // The outer mapping is not nested anywhere: the form of 2.0.0, the nested object through …Core.
+        string customer = Generated(generated, "CustomerDto");
+        Assert.DoesNotContain("MapToCustomerDtoCore", customer);
+        Assert.Contains("Address = MapToAddressDtoCore(source.Address ?? NestedObjectIsNull<global::App.Address>(", customer);
+        Assert.Contains("else MapToAddressDtoCore(source.Address, destination.Address);", customer);
     }
 
     [Fact]
@@ -706,7 +760,7 @@ public class NestedObjectTests
         var (compilation, diagnostics) = GeneratorTestHelper.CompileProject("App", app, reference);
 
         Assert.Empty(diagnostics);
-        string generated = compilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCustomerDtoCore(global::"));
+        string generated = compilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCustomerDto(this global::"));
         Assert.Contains("Address = (source.Address ?? NestedObjectIsNull<global::Lib.Address>(\"Customer.Address is null, but CustomerDto.Address is not nullable.", generated);
         Assert.Contains(")).MapToAddressDto(),", generated);
         Assert.Contains("Other = source.Other is null ? null : source.Other.MapToAddressDto(),", generated);
@@ -862,7 +916,8 @@ public class NestedObjectTests
         string customer = Generated(generated, "CustomerDto");
         Assert.DoesNotContain("public static void MapTo", order + customer);
         Assert.Contains("private static void MapInto_Order_OrderDto(global::App.Order source, global::App.OrderDto destination)", order);
-        Assert.Contains("            MapToOrderDtoCore(source, destination);", order);
+        // The outer pair is nested nowhere: its body stays in MapInto (2.0.0), and the nested object is updated in place.
+        Assert.DoesNotContain("MapToOrderDtoCore", order);
         Assert.Contains("else MapToCustomerDtoCore(source.Customer, destination.Customer);", order);
         Assert.Contains("private static void MapToCustomerDtoCore(global::App.Customer source, global::App.CustomerDto destination)", customer);
     }

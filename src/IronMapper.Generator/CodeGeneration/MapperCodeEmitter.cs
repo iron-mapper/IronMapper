@@ -13,11 +13,14 @@ namespace IronMapper.Generator.CodeGeneration;
 /// For each mapping the emitter generates four methods:
 /// <list type="bullet">
 ///   <item><c>MapToDestType(this SourceType source) → DestType</c> — creates a new instance: checks <c>source</c> for
-///   <see langword="null"/> and calls the private <c>MapToDestTypeCore(source)</c>, which nested objects call directly
-///   (after their own check when the source property is nullable).</item>
+///   <see langword="null"/> and maps it. When the pair is used as a nested object, a converted value or an argument
+///   (<see cref="MappingPlanEntry.UsesCore"/>) the body is the private <c>MapToDestTypeCore(source)</c>, which those call
+///   directly (after their own check when the source property is nullable); otherwise one method, as in 2.0.0.</item>
 ///   <item><c>MapToDestType(this SourceType source, DestType destination) → void</c> — in-place update (skips init-only
-///   properties): checks both arguments and calls the private <c>MapToDestTypeCore(source, destination)</c>, which the
-///   in-place overloads of other mappings call to update an existing nested object.</item>
+///   properties): checks both arguments and updates. When an existing nested object of the pair is updated in place
+///   (<see cref="MappingPlanEntry.UsesInPlaceCore"/>) the body is the private <c>MapToDestTypeCore(source, destination)</c>;
+///   otherwise it is in the overload itself. An overload that changes nothing (a value-type destination,
+///   <c>ConvertUsing</c>, only <c>init</c> properties) is <c>[Obsolete]</c>.</item>
 ///   <item><c>MapToDestTypeList(this IEnumerable&lt;SourceType&gt;? source) → List&lt;DestType&gt;</c> — collection shorthand (no LINQ).</item>
 ///   <item><c>MapToDestTypeArray(this IEnumerable&lt;SourceType&gt;? source) → DestType[]</c> — collection shorthand.</item>
 /// </list>
@@ -49,10 +52,10 @@ internal static class MapperCodeEmitter
     public const string ArrayHelperName = "MapElementsToArray";
 
     /// <summary>
-    /// On the public <c>MapToX</c> overloads and the private <c>MapInto</c>: they only check the arguments and call
-    /// <c>…Core</c>, so the checks move to the call site and one call remains. The .NET 10 JIT inlines them by itself;
-    /// the .NET 8 JIT did not (a call plus a jump to <c>…Core</c> on the hot path). Never on <c>…Core</c>: its size is the
-    /// mapping's, and the JIT decides.
+    /// On the public <c>MapToX</c> overloads and the private <c>MapInto</c> when they only check the arguments and call
+    /// <c>…Core</c>: the checks move to the call site and one call remains. The .NET 10 JIT inlines them by itself;
+    /// the .NET 8 JIT did not (a call plus a jump to <c>…Core</c> on the hot path). Never on <c>…Core</c> or on a method
+    /// with the body: its size is the mapping's, and the JIT decides.
     /// </summary>
     private const string AggressiveInlining =
         "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
@@ -66,9 +69,11 @@ internal static class MapperCodeEmitter
     /// <param name="plan">The whole plan, used to resolve the method names of collection element mappings.</param>
     /// <param name="options">APIs available in the user's compilation (null checks).</param>
     /// <param name="methods">The optional overloads to generate (assembly settings with the mapping's overrides).</param>
+    /// <param name="registration">The registration for <c>IMapper</c> is generated (<c>IronMapperRegistration</c>): it
+    /// calls the private <c>MapInto</c> of a mapping without a usable public in-place overload.</param>
     /// <returns>The full C# text of the generated file; add it under <see cref="MappingPlanEntry.HintName"/>.</returns>
     public static string Emit(MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan, GeneratedCodeOptions options,
-        GeneratedMethods methods)
+        GeneratedMethods methods, bool registration = true)
     {
         string sourceFullName = descriptor.SourceFullName ?? GetFullTypeName(descriptor.SourceNamespace, descriptor.SourceTypeName);
         string destFullName   = descriptor.DestFullName   ?? GetFullTypeName(descriptor.DestNamespace,   descriptor.DestTypeName);
@@ -98,23 +103,33 @@ internal static class MapperCodeEmitter
         sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> to a new <see cref=\"{EscapeXml(destFullName)}\"/>.</summary>");
         sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> instance to map.</param>");
         sb.AppendLine($"        /// <returns>A new <see cref=\"{EscapeXml(destFullName)}\"/> populated from <paramref name=\"source\"/>.</returns>");
-        sb.AppendLine($"        {AggressiveInlining}");
-        sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
-        sb.AppendLine($"            return {entry.CoreMethodName}(source);");
-        sb.AppendLine("        }");
+        if (entry.UsesCore)
+        {
+            sb.AppendLine($"        {AggressiveInlining}");
+            sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
+            sb.AppendLine($"            return {entry.CoreMethodName}(source);");
+            sb.AppendLine("        }");
 
-        // ------------------------------------------------------------------
-        // Method 1 without the null check: MapToDestTypeCore(SourceType source) → DestType
-        // ------------------------------------------------------------------
-        // Called by Method 1 and, in every mapping file of the class, by nested objects, by the nullable annotations
-        // (NullHandling): after their own check for a nullable property, without one for a non-nullable property. No
-        // second check and no throw in the nested call, so the JIT can inline it. Private: the class is partial, every
-        // mapping file sees it.
-        sb.AppendLine();
-        sb.AppendLine($"        private static {destFullName} {entry.CoreMethodName}({sourceFullName} source)");
-        sb.AppendLine("        {");
+            // ------------------------------------------------------------------
+            // Method 1 without the null check: MapToDestTypeCore(SourceType source) → DestType
+            // ------------------------------------------------------------------
+            // Called by Method 1 and, in every mapping file of the class, by nested objects, by the nullable annotations
+            // (NullHandling): after their own check for a nullable property, without one for a non-nullable property. No
+            // second check and no throw in the nested call, so the JIT can inline it. Private: the class is partial, every
+            // mapping file sees it. Only for a pair that something calls so (MappingPlanEntry.UsesCore): otherwise the
+            // body stays in Method 1, the code of 2.0.0 (the split cost ~30 % more text per mapping and two methods).
+            sb.AppendLine();
+            sb.AppendLine($"        private static {destFullName} {entry.CoreMethodName}({sourceFullName} source)");
+            sb.AppendLine("        {");
+        }
+        else
+        {
+            sb.AppendLine($"        {accessibility} static {destFullName} {methodName}(this {sourceFullName} source)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {options.NullCheck("source", "return default!;")}"); // safe: `default!` is part of the emitted C# text
+        }
 
         if (descriptor.WhenConditionBody is not null)
         {
@@ -243,70 +258,77 @@ internal static class MapperCodeEmitter
         // Method 2: MapToDestType(this SourceType source, DestType destination) → void  [in-place]
         // ------------------------------------------------------------------
         // Turned off (IronMapperGenerateInPlace / GenerateInPlace = false): a private method that only the IMapper
-        // registration calls, so IMapper.Map(source, destination) keeps working. Either checks both arguments and calls
-        // the in-place …Core (below).
-        sb.AppendLine();
+        // registration calls, so IMapper.Map(source, destination) keeps working; not generated without the registration
+        // (IronMapperRegistration=false). The body is in the method itself (2.0.0), or in the in-place …Core when an
+        // existing nested object of the pair is updated in place (MappingPlanEntry.UsesInPlaceCore).
         if (descriptor.UsesConstructor)
         {
             // Created by a constructor with parameters or a factory: no in-place update is generated (item 2.15 of the
             // plan: updating only the other properties would lose the values that only the constructor or the factory
             // takes, silently). IMapper.Map(source, destination) gets a clear exception.
-            string how = descriptor.Factory switch
+            if (registration)
             {
-                { Kind: FactoryKind.ConstructUsing } => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by ConstructUsing",
-                { } factory => $"{descriptor.DestTypeName} is created by {factory.Display}",
-                null => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by a constructor with parameters",
-            };
-            string message = $"No in-place mapping from {descriptor.SourceTypeName} to {descriptor.DestTypeName} is generated: "
-                             + $"{how}. Map to a new object instead.";
-            sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
-            sb.AppendLine($"            => throw new global::IronMapper.Exceptions.MappingException(\"{message}\");");
+                string how = descriptor.Factory switch
+                {
+                    { Kind: FactoryKind.ConstructUsing } => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by ConstructUsing",
+                    { } factory => $"{descriptor.DestTypeName} is created by {factory.Display}",
+                    null => $"{descriptor.DestTypeName} has no accessible parameterless constructor and is created by a constructor with parameters",
+                };
+                sb.AppendLine();
+                EmitInPlaceStub(sb, scope, sourceFullName, destFullName, $"No in-place mapping from {descriptor.SourceTypeName} to {descriptor.DestTypeName} is generated: {how}. Map to a new object instead.");
+            }
         }
         else
         {
+            // A value-type destination, ConvertUsing, only init properties: the overload changes nothing for the caller.
+            // Removing it would break the code that calls it, so in 2.x it stays, [Obsolete] (removed in 3.0.0), and
+            // IMapper.Map(source, destination) throws instead of doing nothing (the registration takes a stub).
+            string? noOp = descriptor.InPlaceNoOpReason;
             if (methods.InPlace)
             {
+                sb.AppendLine();
                 sb.AppendLine($"        /// <summary>Maps <see cref=\"{EscapeXml(sourceFullName)}\"/> into an existing <see cref=\"{EscapeXml(destFullName)}\"/> instance.</summary>");
                 sb.AppendLine($"        /// <param name=\"source\">The source <see cref=\"{EscapeXml(sourceFullName)}\"/> to read from.</param>");
                 sb.AppendLine($"        /// <param name=\"destination\">The <see cref=\"{EscapeXml(destFullName)}\"/> instance to populate. Init-only properties are not updated.</param>");
-                sb.AppendLine($"        {AggressiveInlining}");
-                sb.AppendLine($"        {accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
+                if (noOp is not null)
+                {
+                    string message = $"{methodName}(source, destination) does nothing: {noOp}. Map to a new object instead "
+                                     + $"(destination = source.{methodName}()), or turn this overload off (GenerateInPlace = false, "
+                                     + "GenerateMethods(inPlace: false), IronMapperGenerateInPlace). It will be removed in IronMapper 3.0.0.";
+                    sb.AppendLine($"        [global::System.Obsolete(\"{message}\")]");
+                }
+
+                EmitInPlace(sb, descriptor, entry, plan, options, scopedTransformers, scope,
+                    $"{accessibility} static void {methodName}(this {sourceFullName} source, {destFullName} destination)");
             }
-            else
+
+            if (registration && noOp is not null)
             {
-                sb.AppendLine($"        {AggressiveInlining}");
-                sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
+                sb.AppendLine();
+                EmitInPlaceStub(sb, scope, sourceFullName, destFullName,
+                    $"No in-place mapping from {descriptor.SourceTypeName} to {descriptor.DestTypeName}: {noOp}. Map to a new object instead.");
             }
-            sb.AppendLine("        {");
-            sb.AppendLine($"            {options.NullCheck("source", "return;")}");
-            sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
-            sb.AppendLine($"            {entry.CoreMethodName}(source, destination);");
-            sb.AppendLine("        }");
+            else if (registration && !methods.InPlace)
+            {
+                sb.AppendLine();
+                EmitInPlace(sb, descriptor, entry, plan, options, scopedTransformers, scope,
+                    $"private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
+            }
 
             // ------------------------------------------------------------------
             // Method 2 without the null checks: MapToDestTypeCore(SourceType source, DestType destination)
             // ------------------------------------------------------------------
-            // Generated for every mapping, also with the in-place overload turned off: the in-place overloads of other
-            // mappings call it to update an existing nested object (EmitNestedUpdate), so a tracked EF navigation keeps its
-            // instance instead of being replaced.
-            sb.AppendLine();
-            sb.AppendLine($"        private static void {entry.CoreMethodName}({sourceFullName} source, {destFullName} destination)");
-            sb.AppendLine("        {");
-            foreach (var prop in descriptor.PropertyMappings)
+            // The in-place body of a pair whose existing nested objects the in-place update of another mapping updates
+            // (EmitNestedUpdate), so a tracked EF navigation keeps its instance instead of being replaced; generated also
+            // with the in-place overload turned off.
+            if (entry.UsesInPlaceCore)
             {
-                if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
-                {
-                    continue;
-                }
-
-                if (EmitNestedUpdate(sb, descriptor, prop, plan))
-                {
-                    continue;
-                }
-
-                sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, scopedTransformers, scope, plan)};");
+                sb.AppendLine();
+                sb.AppendLine($"        private static void {entry.CoreMethodName}({sourceFullName} source, {destFullName} destination)");
+                sb.AppendLine("        {");
+                EmitInPlaceBody(sb, descriptor, plan, scopedTransformers, scope);
+                sb.AppendLine("        }");
             }
-            sb.AppendLine("        }");
         }
 
         // ------------------------------------------------------------------
@@ -876,6 +898,66 @@ internal static class MapperCodeEmitter
     /// </summary>
     private static string PrivateInPlaceName(string scope) => $"MapInto{scope}";
 
+    /// <summary>
+    /// An in-place method with the declaration <paramref name="declaration"/> (the public overload or the private
+    /// <c>MapInto</c>): checks both arguments, then calls the in-place <c>…Core</c> (with <see cref="AggressiveInlining"/>)
+    /// when the pair has one (<see cref="MappingPlanEntry.UsesInPlaceCore"/>), or contains the body, as in 2.0.0.
+    /// </summary>
+    private static void EmitInPlace(StringBuilder sb, MappingDescriptor descriptor, MappingPlanEntry entry, MappingPlan plan,
+        GeneratedCodeOptions options, ImmutableArray<ValueTransformerDescriptor> transformers, string scope, string declaration)
+    {
+        if (entry.UsesInPlaceCore)
+        {
+            sb.AppendLine($"        {AggressiveInlining}");
+        }
+
+        sb.AppendLine($"        {declaration}");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            {options.NullCheck("source", "return;")}");
+        sb.AppendLine($"            {options.NullCheck("destination", "return;")}");
+        if (entry.UsesInPlaceCore)
+        {
+            sb.AppendLine($"            {entry.CoreMethodName}(source, destination);");
+        }
+        else
+        {
+            EmitInPlaceBody(sb, descriptor, plan, transformers, scope);
+        }
+
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>The assignments of the in-place update: every mapped property except <c>init</c>-only ones; an existing nested object is updated in place (<see cref="EmitNestedUpdate"/>).</summary>
+    private static void EmitInPlaceBody(StringBuilder sb, MappingDescriptor descriptor, MappingPlan plan,
+        ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
+    {
+        foreach (var prop in descriptor.PropertyMappings)
+        {
+            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+            {
+                continue;
+            }
+
+            if (EmitNestedUpdate(sb, descriptor, prop, plan))
+            {
+                continue;
+            }
+
+            sb.AppendLine($"            destination.{prop.DestPropertyName} = {BuildRhs(descriptor, prop, transformers, scope, plan)};");
+        }
+    }
+
+    /// <summary>
+    /// The private <c>MapInto</c> of the registration for a pair without an in-place update (a constructor or a factory,
+    /// or an in-place overload that changes nothing): <c>IMapper.Map(source, destination)</c> throws
+    /// <c>MappingException</c> with <paramref name="message"/> (type names only: nothing to escape).
+    /// </summary>
+    private static void EmitInPlaceStub(StringBuilder sb, string scope, string sourceFullName, string destFullName, string message)
+    {
+        sb.AppendLine($"        private static void {PrivateInPlaceName(scope)}({sourceFullName} source, {destFullName} destination)");
+        sb.AppendLine($"            => throw new global::IronMapper.Exceptions.MappingException(\"{message}\");");
+    }
+
     /// <summary>The private helper with the lambda of <c>ConstructWith</c>; the helper scope makes it unique in the class.</summary>
     private static string FactoryHelperName(string scope) => $"ConstructWith{scope}";
 
@@ -941,13 +1023,8 @@ internal static class MapperCodeEmitter
     private static string MapNestedObject(MappingDescriptor descriptor, PropertyMappingDescriptor prop, MappingPlan plan)
     {
         string value = $"source.{prop.SourcePropertyName}";
-        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
-        string? handling = prop.NullHandling;
-        if (entry is null && prop.LiftedPairs.Length > 0 && plan.FindFirstGenerated(prop.LiftedPairs) is { } lifted)
-        {
-            entry = lifted;
-            handling = Analysis.NullHandling.Lifted;
-        }
+        var entry = FindNestedEntry(prop, plan, out bool lifted);
+        string? handling = lifted ? Analysis.NullHandling.Lifted : prop.NullHandling;
 
         string cast = prop.NestedResultCast is null ? string.Empty : $"({prop.NestedResultCast})";
         switch (handling)
@@ -963,6 +1040,45 @@ internal static class MapperCodeEmitter
                 return MapNested(prop, entry, value);
         }
     }
+
+    /// <summary>
+    /// The generated mapping whose <c>…Core(source)</c> maps the nested object or converted value <paramref name="prop"/>:
+    /// of its pair (or of a base type or interface of the source), otherwise of the underlying types of a
+    /// <c>Nullable&lt;T&gt;</c> (<paramref name="lifted"/>); <see langword="null"/> when it is not a mapped nested object or
+    /// a referenced assembly maps it (its public method is called). The plan uses it for <see cref="MappingPlanEntry.UsesCore"/>.
+    /// </summary>
+    internal static MappingPlanEntry? FindNestedEntry(PropertyMappingDescriptor prop, MappingPlan plan, out bool lifted)
+    {
+        lifted = false;
+        if (!IsMappedNestedObject(prop))
+        {
+            return null;
+        }
+
+        var entry = prop.MappingPairs.Length == 0 ? null : plan.FindFirstGenerated(prop.MappingPairs);
+        if (entry is null && prop.LiftedPairs.Length > 0 && plan.FindFirstGenerated(prop.LiftedPairs) is { } underlying)
+        {
+            lifted = true;
+            return underlying;
+        }
+
+        return entry;
+    }
+
+    /// <inheritdoc cref="FindNestedEntry(PropertyMappingDescriptor, MappingPlan, out bool)"/>
+    internal static MappingPlanEntry? FindNestedEntry(PropertyMappingDescriptor prop, MappingPlan plan)
+        => FindNestedEntry(prop, plan, out _);
+
+    /// <summary>
+    /// The generated mapping whose in-place <c>…Core(source, destination)</c> updates an existing nested object
+    /// <paramref name="prop"/> (<see cref="EmitNestedUpdate"/>), or <see langword="null"/> (a new object is assigned, or a
+    /// referenced assembly's in-place overload is called). The plan uses it for <see cref="MappingPlanEntry.UsesInPlaceCore"/>.
+    /// </summary>
+    internal static MappingPlanEntry? FindNestedInPlaceEntry(PropertyMappingDescriptor prop, MappingPlan plan)
+        => IsMappedNestedObject(prop) && prop.NestedUpdatesInPlace && prop.MappingPairs.Length > 0
+           && plan.FindFirstGenerated(prop.MappingPairs) is { CanUpdateInPlace: true } entry
+            ? entry
+            : null;
 
     // The new nested object: the …Core of the generated mapping, or the public method of a referenced assembly's mapping.
     private static string MapNested(PropertyMappingDescriptor prop, MappingPlanEntry? entry, string value)

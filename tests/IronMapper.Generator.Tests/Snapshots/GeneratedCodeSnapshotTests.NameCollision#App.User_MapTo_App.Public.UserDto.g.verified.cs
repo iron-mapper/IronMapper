@@ -9,15 +9,9 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.User"/> to a new <see cref="global::App.Public.UserDto"/>.</summary>
         /// <param name="source">The source <see cref="global::App.User"/> instance to map.</param>
         /// <returns>A new <see cref="global::App.Public.UserDto"/> populated from <paramref name="source"/>.</returns>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static global::App.Public.UserDto MapToPublicUserDto(this global::App.User source)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
-            return MapToPublicUserDtoCore(source);
-        }
-
-        private static global::App.Public.UserDto MapToPublicUserDtoCore(global::App.User source)
-        {
             return new global::App.Public.UserDto
             {
                 Name = source.Name,
@@ -27,16 +21,10 @@ namespace IronMapper.Generated
         /// <summary>Maps <see cref="global::App.User"/> into an existing <see cref="global::App.Public.UserDto"/> instance.</summary>
         /// <param name="source">The source <see cref="global::App.User"/> to read from.</param>
         /// <param name="destination">The <see cref="global::App.Public.UserDto"/> instance to populate. Init-only properties are not updated.</param>
-        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static void MapToPublicUserDto(this global::App.User source, global::App.Public.UserDto destination)
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
-            MapToPublicUserDtoCore(source, destination);
-        }
-
-        private static void MapToPublicUserDtoCore(global::App.User source, global::App.Public.UserDto destination)
-        {
             destination.Name = source.Name;
         }
 

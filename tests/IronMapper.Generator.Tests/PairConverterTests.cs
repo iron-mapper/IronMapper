@@ -24,7 +24,7 @@ public class PairConverterTests
 
     // Line endings of the generated code (Environment.NewLine) and of this file may differ.
     private static string Generated(IEnumerable<string> sources, string mapping)
-        => sources.Single(s => s.Contains($"private static global::App.{mapping} MapTo{mapping}Core(")).ReplaceLineEndings("\n");
+        => sources.Single(s => s.Contains($" global::App.{mapping} MapTo{mapping}(this ")).ReplaceLineEndings("\n");
 
     // A value object from a Guid: a private constructor, a factory that rejects Guid.Empty; back through Value.
     private const string MemberId = """
@@ -84,7 +84,7 @@ public class PairConverterTests
         Assert.Equal("True,True,t", run);
         // The …Core of the pair mapping, as for a nested object; the method group is called, the lambda is inlined.
         Assert.Contains("Assignee = MapToMemberIdCore(source.Assignee),", Generated(generated, "TaskCard"));
-        Assert.Contains("Assignee = MapToGuidCore(source.Assignee),", generated.Single(s => s.Contains("MapToTaskRowCore(global::App.TaskCard source)")));
+        Assert.Contains("Assignee = MapToGuidCore(source.Assignee),", generated.Single(s => s.Contains("MapToTaskRow(this global::App.TaskCard source)")));
         Assert.Contains("return global::App.MemberId.From(source);", Generated(generated, "MemberId"));
         Assert.Contains("return source.Value;", generated.Single(s => s.Contains("private static global::System.Guid MapToGuidCore(")));
     }
@@ -141,7 +141,7 @@ public class PairConverterTests
         Assert.Contains("Reviewer = source.Reviewer.HasValue ? (global::App.MemberId?)MapToMemberIdCore(source.Reviewer.Value) : null,", code);
         Assert.Contains("Author = MapToMemberIdCore(source.Author),", code);
         Assert.Contains("Reviewer = source.Reviewer.HasValue ? (global::System.Guid?)MapToGuidCore(source.Reviewer.Value) : null,",
-            generated.Single(s => s.Contains("MapToReviewRowCore(global::App.Review source)")));
+            generated.Single(s => s.Contains("MapToReviewRow(this global::App.Review source)")));
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class PairConverterTests
         AssertNoErrors(errors);
         Assert.Empty(diagnostics);
         Assert.Equal("True", run);
-        Assert.Contains("Owner = MapToNullableCore(source.Owner),", generated.Single(s => s.Contains("MapToCardCore(global::App.Row source)")));
+        Assert.Contains("Owner = MapToNullableCore(source.Owner),", generated.Single(s => s.Contains("MapToCard(this global::App.Row source)")));
     }
 
     [Fact]
@@ -490,7 +490,7 @@ public class PairConverterTests
         var (appCompilation, problems) = GeneratorTestHelper.CompileProject("App", app, reference);
 
         Assert.Empty(problems);
-        string code = appCompilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCardCore(global::App.Row source)"));
+        string code = appCompilation.SyntaxTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCard(this global::App.Row source)"));
         Assert.Contains("Owner = source.Owner.MapToMemberId(),", code);
         Assert.Contains("Deputy = source.Deputy.HasValue ? (global::Lib.MemberId?)source.Deputy.Value.MapToMemberId() : null,", code);
     }
@@ -535,7 +535,7 @@ public class PairConverterTests
 
         Assert.Empty(generatorDiagnostics);
         Assert.Empty(output.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning));
-        string code = driver.GetRunResult().GeneratedTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCardCore(global::App.Row source)"));
+        string code = driver.GetRunResult().GeneratedTrees.Select(t => t.ToString()).Single(s => s.Contains("MapToCard(this global::App.Row source)"));
         Assert.Contains("A = source.A.HasValue ? (global::App.Code?)MapToCodeCore(source.A.Value) : null,", code);
         Assert.Contains("B = source.B is null ? null : (global::App.Code?)MapToCodeCore(source.B),", code);
     }
@@ -585,7 +585,7 @@ public class PairConverterTests
         Assert.Equal("True,True,True,True,True", run);
         Assert.Contains("return source.Value;", generated.Single(s => s.Contains("private static global::System.Guid MapToGuidCore(global::App.MemberId source)")));
         Assert.Contains("owner: MapToMemberIdCore(source.Owner),", Generated(generated, "Board"));
-        string back = generated.Single(s => s.Contains("MapToMemberRowCore(global::App.Board source)")).ReplaceLineEndings("\n");
+        string back = generated.Single(s => s.Contains("MapToMemberRow(this global::App.Board source)")).ReplaceLineEndings("\n");
         Assert.Contains("Owner = MapToGuidCore(source.Owner),", back);
         Assert.Contains("Deputy = source.Deputy.HasValue ? (global::System.Guid?)MapToGuidCore(source.Deputy.Value) : null,", back);
     }

@@ -8,16 +8,20 @@
     registration and the registry: an application that only calls the generated extension methods does not carry them.
     Otherwise it is not set (on). Override with <IronMapperRegistration>true|false</IronMapperRegistration> in the
     application project. Imported after the project file, so PublishAot / PublishTrimmed set there are seen.
+    The automatic value goes only into the switch: IronMapperRegistration itself keeps what the project set, because
+    the source generator reads it (buildTransitive/IronMapper.props) and generates no registration only for an explicit
+    false.
   -->
   <PropertyGroup>
-    <IronMapperRegistration Condition="'$(IronMapperRegistration)' == ''
-                                       and '$(_IronMapperExtensionsDIReferenced)' != 'true'
-                                       and ('$(PublishAot)' == 'true' or '$(PublishTrimmed)' == 'true')">false</IronMapperRegistration>
+    <_IronMapperRegistrationSwitch>$(IronMapperRegistration)</_IronMapperRegistrationSwitch>
+    <_IronMapperRegistrationSwitch Condition="'$(_IronMapperRegistrationSwitch)' == ''
+                                              and '$(_IronMapperExtensionsDIReferenced)' != 'true'
+                                              and ('$(PublishAot)' == 'true' or '$(PublishTrimmed)' == 'true')">false</_IronMapperRegistrationSwitch>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(IronMapperRegistration)' != ''">
+  <ItemGroup Condition="'$(_IronMapperRegistrationSwitch)' != ''">
     <RuntimeHostConfigurationOption Include="IronMapper.Registration.IsSupported"
-                                    Value="$(IronMapperRegistration)"
+                                    Value="$(_IronMapperRegistrationSwitch)"
                                     Trim="true" />
   </ItemGroup>
 
