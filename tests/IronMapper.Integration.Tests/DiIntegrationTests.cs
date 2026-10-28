@@ -135,14 +135,9 @@ public class DiIntegrationTests
     public void Mapper_WithCustomConverter_ViaServiceProvider()
     {
         // PricedEntity has [MapTo(PricedDto)] with [MapConverter(PriceConverter)] on Amount.
-        // The generated code calls new PriceConverter().Convert(...).
-        // AddConverter registers PriceConverter so it is also resolvable from DI.
+        // The generated code creates the converter itself (not from DI), so nothing registers it in the container.
         var services = new ServiceCollection();
-        services.AddIronMapper(opt =>
-        {
-            opt.AddProfilesFromAssembly(typeof(DiIntegrationTests).Assembly);
-            opt.AddConverter<PriceConverter>();
-        });
+        services.AddIronMapper(opt => opt.AddProfilesFromAssembly(typeof(DiIntegrationTests).Assembly));
         using var sp = services.BuildServiceProvider();
         var mapper = sp.GetRequiredService<IMapper>();
 
@@ -151,7 +146,23 @@ public class DiIntegrationTests
 
         Assert.Equal(3, dto.Id);
         Assert.Equal("12.50", dto.Amount);
-        // Converter is also resolvable from DI.
+        Assert.Null(sp.GetService<PriceConverter>());
+    }
+
+    [Fact]
+    public void AddConverter_IsObsolete_AndStillOnlyRegistersTheType()
+    {
+        System.Reflection.MethodInfo method = typeof(IronMapperOptions).GetMethod(nameof(IronMapperOptions.AddConverter))!;
+        object obsolete = Assert.Single(method.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false));
+        Assert.Contains("will be removed in 3.0.0", ((ObsoleteAttribute)obsolete).Message);
+
+        // Unchanged in 2.x: a transient registration, which mapping does not use.
+        var services = new ServiceCollection();
+#pragma warning disable CS0618 // AddConverter is obsolete: this test checks that it keeps working until 3.0.0.
+        services.AddIronMapper(opt => opt.AddConverter<PriceConverter>());
+#pragma warning restore CS0618
+        using var sp = services.BuildServiceProvider();
+
         Assert.NotNull(sp.GetService<PriceConverter>());
     }
 

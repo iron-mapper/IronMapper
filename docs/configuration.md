@@ -745,19 +745,24 @@ fields, this only matters if it keeps state elsewhere, for example in a static f
 `tests/IronMapper.Tests/ConverterCacheTests.cs` (one instance, a new instance per call with a field in the class, in a
 base class or an auto-property, a constructor with code, first use from 16 threads).
 
-### `AddConverter<T>()` does not affect mapping
+### Converters from DI are not supported (`AddConverter<T>()` is obsolete)
 
-`IronMapperOptions.AddConverter<T>()` registers the converter type in the DI container as a transient service, and that
-is all it does: the generated code does not resolve converters from DI (see [Converter instances](#converter-instances)),
-so a converter registered this way, with its dependencies, is **not** the one used for mapping. A converter with
-constructors that all take parameters gets `IM0015` whether it is registered or not. `AddProfilesFromAssembly` and `AddProfile<T>()`
-register the generated mappings of the assembly for `IMapper`; the profiles themselves are not added to the container
-(up to 1.1.4 they were, as singletons).
+A converter cannot take services from the DI container. The generated code creates the converter itself: `new T()`, or
+one cached instance (see [Converter instances](#converter-instances)). So a converter needs a parameterless
+constructor. A converter whose constructors all take parameters gets
+[`IM0015`](diagnostics.md#im0015--converter-cannot-be-created-by-generated-code), and its mapping is not generated.
+
+When a value needs a service, get it outside the mapping:
+
+- compute the value before mapping and put it into the source;
+- or map first, with the property ignored, then set it yourself.
 
 ```csharp
-services.AddIronMapper(opt =>
-{
-    opt.AddProfilesFromAssembly(typeof(Program).Assembly);
-    opt.AddConverter<DateToStringConverter>();
-});
+var dto = order.MapToOrderDto();
+dto.Price = priceFormatter.Format(order.Price, order.Currency);   // the value that needs a service
 ```
+
+`AddConverter<T>()` does nothing for mapping. It only registers the type in the container, and the mapping never takes it
+from there. From 2.1.0 the method is `[Obsolete]` (warning `CS0618`, an error with `TreatWarningsAsErrors`), and it will
+be removed in 3.0.0. Remove the call. If your own code resolves the converter from the container, register it yourself:
+`services.AddTransient<DateToStringConverter>()`.
