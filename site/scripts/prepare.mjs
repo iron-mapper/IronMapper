@@ -10,7 +10,9 @@
 //     follows the title and is dropped (the site has a language switcher);
 //   - README.md and README.ru.md contain the Quick Start between `<!-- quickstart:begin -->` and
 //     `<!-- quickstart:end -->`, once;
-//   - docs/diagnostics.md and docs/diagnostics.ru.md describe the same set of codes, one `## IMxxxx — Title` each;
+//   - docs/diagnostics.md and docs/diagnostics.ru.md describe the same set of codes, one `## IMxxxx — Title` each
+//     (each becomes its own page, /diagnostics/imxxxx/, the address that the library's DiagnosticDescriptor.helpLinkUri
+//     will point to; the text before the first code stays at /diagnostics/, with the codes of its table linked);
 //   - relative links between these files point to existing files and existing headings.
 // Benchmark numbers: benchmarks/results/summary.json (written by benchmarks/scripts/generate-report.ps1) is copied to
 // src/generated/benchmarks.json after a check of its `schemaVersion`; the methodology and caveats of the benchmarks
@@ -167,7 +169,9 @@ function rewriteTarget(repoPath, lineNo, target, ownHeadings) {
   const anchor = anchorPart === undefined ? '' : `#${anchorPart}`;
   if (path === '') {
     if (!ownHeadings.has(anchorPart)) fail(repoPath, lineNo, `link to a heading that does not exist: ${target}`);
-    return target;
+    // Inside the diagnostics doc a link to a code's heading is a link to that code's page.
+    const diag = isDiagnosticsDoc(repoPath) ? diagnosticsAnchorTarget(repoPath, anchorPart) : null;
+    return diag ?? target;
   }
   if (path.startsWith('/')) fail(repoPath, lineNo, `absolute path in a link, use a relative one: ${target}`);
   const targetRepoPath = resolveTarget(repoPath, path);
@@ -178,13 +182,108 @@ function rewriteTarget(repoPath, lineNo, target, ownHeadings) {
   if (anchorPart !== undefined && /\.md$/.test(targetRepoPath) && !headingsOf(targetRepoPath).has(anchorPart)) {
     fail(repoPath, lineNo, `link to a heading that does not exist in ${targetRepoPath}: #${anchorPart}`);
   }
+  if (isDiagnosticsDoc(targetRepoPath) && anchorPart !== undefined) {
+    const diag = diagnosticsAnchorTarget(targetRepoPath, anchorPart);
+    if (diag) return diag;
+  }
   return sitePath(page.locale, page.slug, anchor);
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Diagnostics: one page per code
+// ---------------------------------------------------------------------------------------------------------------------
+
+const DIAGNOSTIC_HEADING = /^##\s+(IM\d{4})\s+—\s+(\S.*?)\s*$/;
+
+function isDiagnosticsDoc(repoPath) {
+  return repoPath === 'docs/diagnostics.md' || repoPath === 'docs/diagnostics.ru.md';
+}
+
+/** Anchor id → code of the `## IMxxxx — Title` heading it belongs to (null before the first code). Cached per file. */
+const diagnosticsAnchorCache = new Map();
+function diagnosticsAnchors(repoPath) {
+  if (!diagnosticsAnchorCache.has(repoPath)) {
+    const slugger = new GithubSlugger();
+    const map = new Map();
+    let code = null;
+    eachLine(readRepo(repoPath).split('\n'), (line, _i, inFence) => {
+      if (inFence) return;
+      const h = line.match(/^#{1,6}\s+(.*?)\s*#*\s*$/);
+      if (!h) return;
+      const d = line.match(DIAGNOSTIC_HEADING);
+      if (d) code = d[1].toLowerCase();
+      map.set(slugger.slug(headingText(h[1])), { code, isCodeHeading: Boolean(d) });
+    });
+    diagnosticsAnchorCache.set(repoPath, map);
+  }
+  return diagnosticsAnchorCache.get(repoPath);
+}
+
+/** Site address of an anchor of the diagnostics doc: the code's page (no anchor for its own heading), else null. */
+function diagnosticsAnchorTarget(repoPath, anchorPart) {
+  const entry = diagnosticsAnchors(repoPath).get(anchorPart);
+  if (!entry || !entry.code) return null;
+  const locale = repoPath.endsWith('.ru.md') ? 'ru' : 'en';
+  return sitePath(locale, `diagnostics/${entry.code}`, entry.isCodeHeading ? '' : `#${anchorPart}`);
+}
+
+/**
+ * Writes the diagnostics doc as pages: the intro (everything before the first code) at /diagnostics/ with the codes of
+ * its table linked, and one page per `## IMxxxx — Title` at /diagnostics/imxxxx/ — the stable address for helpLinkUri.
+ */
+function writeDiagnosticsPages(repoPath, locale, title, body) {
+  const written = [];
+  const sections = [];
+  let current = { code: null, title: null, lines: [] };
+  eachLine(body, (line, _i, inFence) => {
+    const d = inFence ? null : line.match(DIAGNOSTIC_HEADING);
+    if (d) {
+      sections.push(current);
+      current = { code: d[1], title: d[2], lines: [] };
+      return;
+    }
+    current.lines.push(line);
+  });
+  sections.push(current);
+  const intro = sections.shift();
+  if (!sections.length) fail(repoPath, 0, 'no `## IMxxxx — Title` sections');
+
+  // Intro page: the codes of the status table become links; a trailing horizontal rule is dropped.
+  const introLines = intro.lines.map((line) => {
+    const m = line.match(/^\|\s*(IM\d{4})\s*\|/);
+    if (!m) return line;
+    return line.replace(m[0], `| [${m[1]}](${sitePath(locale, `diagnostics/${m[1].toLowerCase()}`)}) |`);
+  });
+  while (introLines.length && /^(\s*|---)$/.test(introLines[introLines.length - 1])) introLines.pop();
+  const introText = frontmatter({ title, slug: pageSlug(locale, 'diagnostics'), editUrl: blobUrl(repoPath) }) + introLines.join('\n') + '\n';
+  written.push(writePage(locale, 'diagnostics', introText));
+
+  for (const s of sections) {
+    const code = s.code.toLowerCase();
+    const lines = s.lines.slice();
+    while (lines.length && /^(\s*|---)$/.test(lines[lines.length - 1])) lines.pop();
+    const text = frontmatter({
+      title: `${s.code} — ${s.title}`,
+      description: s.title,
+      slug: pageSlug(locale, `diagnostics/${code}`),
+      editUrl: blobUrl(repoPath),
+      sidebar: { label: s.code },
+      // A code's page has no sub-headings; the right-hand outline would show only "Overview".
+      tableOfContents: false,
+    }) + lines.join('\n') + '\n';
+    written.push(writePage(locale, `diagnostics/${code}`, text));
+  }
+  return written;
+}
+
 function frontmatter(fields) {
+  const line = (k, v, indent = '') =>
+    v && typeof v === 'object'
+      ? `${indent}${k}:\n` + Object.entries(v).filter(([, x]) => x !== undefined).map(([k2, v2]) => line(k2, v2, indent + '  ')).join('\n')
+      : `${indent}${k}: ${typeof v === 'string' ? JSON.stringify(v) : v}`;
   const yaml = Object.entries(fields)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}: ${typeof v === 'string' ? JSON.stringify(v) : v}`)
+    .map(([k, v]) => line(k, v))
     .join('\n');
   return `---\n${yaml}\n---\n`;
 }
@@ -239,6 +338,10 @@ function prepareDocs() {
       const lines = readRepo(repoPath).split('\n');
       const { title, body } = splitDoc(repoPath, lines);
       const rewritten = rewriteLinks(repoPath, body, headingsOf(repoPath));
+      if (isDiagnosticsDoc(repoPath)) {
+        written.push(...writeDiagnosticsPages(repoPath, locale, title, rewritten));
+        continue;
+      }
       // `slug` keeps the file name as the address (Astro would turn `upgrading-to-2.1` into `upgrading-to-21`).
       const text = frontmatter({ title, slug: pageSlug(locale, name), editUrl: blobUrl(repoPath) }) + rewritten.join('\n');
       written.push(writePage(locale, name, text));
