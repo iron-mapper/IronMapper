@@ -685,6 +685,35 @@ public class GeneratedCodeSnapshotTests
         public struct PointDto { public int X { get; set; } }
         """, new Dictionary<string, string> { ["IronMapperNullSourceReturnsNull"] = "true" });
 
+    // init-only properties in the in-place overload (issue #58, PR 10 of 2.1.0): Code and Version (required init) are
+    // skipped and listed in IM0025; the init-only nested Customer is updated in place when the destination has one.
+    [Fact]
+    public Task InitInPlace() => Verify("""
+        using IronMapper.Attributes;
+
+        namespace App;
+
+        [MapTo(typeof(OrderDto), GenerateList = false, GenerateArray = false)]
+        public class Order
+        {
+            public string Name { get; set; } = "";
+            public string Code { get; set; } = "";
+            public int Version { get; set; }
+            public Customer? Customer { get; set; }
+        }
+        public class OrderDto
+        {
+            public string Name { get; set; } = "";
+            public string Code { get; init; } = "";
+            public required int Version { get; init; }
+            public CustomerDto? Customer { get; init; }
+        }
+
+        [MapTo(typeof(CustomerDto), GenerateList = false, GenerateArray = false)]
+        public class Customer { public string Name { get; set; } = ""; }
+        public class CustomerDto { public string Name { get; set; } = ""; }
+        """);
+
     private static Task Verify(string source, IReadOnlyDictionary<string, string>? buildProperties = null)
     {
         var compilation = GeneratorTestHelper.CreateCompilation(new[] { source });

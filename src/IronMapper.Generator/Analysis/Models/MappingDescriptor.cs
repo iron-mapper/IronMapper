@@ -174,6 +174,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// the destination is a value type (passed by copy), the mapping uses <c>ConvertUsing</c> (the in-place overload does
     /// not apply it) or no property can be set (every mapped property is <c>init</c>-only, or there is none). Such an
     /// overload is <c>[Obsolete]</c> (removed in 3.0.0), and <c>IMapper.Map(source, destination)</c> throws for the pair.
+    /// An <c>init</c>-only nested object that may be updated in place (<see cref="PropertyMappingDescriptor.NestedUpdatesInPlace"/>,
+    /// from PR 10 of 2.1.0) counts as a property the overload updates.
     /// Not used for a destination created by a constructor or a factory (<see cref="UsesConstructor"/>), which has no
     /// in-place overload.
     /// </summary>
@@ -198,7 +200,7 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
 
             foreach (var property in PropertyMappings)
             {
-                if (!property.IsIgnored && !property.IsInitOnly)
+                if (!property.IsIgnored && (!property.IsInitOnly || property.UpdatesNestedObjectInPlace))
                 {
                     return null;
                 }

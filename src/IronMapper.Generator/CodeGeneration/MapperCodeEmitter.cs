@@ -993,14 +993,24 @@ internal static class MapperCodeEmitter
         sb.AppendLine("        }");
     }
 
-    /// <summary>The assignments of the in-place update: every mapped property except <c>init</c>-only ones; an existing nested object is updated in place (<see cref="EmitNestedUpdate"/>).</summary>
+    /// <summary>
+    /// The assignments of the in-place update: every mapped property except <c>init</c>-only ones; an existing nested object
+    /// is updated in place (<see cref="EmitNestedUpdate"/>), also an <c>init</c>-only one (<see cref="EmitInitNestedUpdate"/>).
+    /// The other <c>init</c>-only properties are skipped, and IM0025 lists them (<see cref="InPlaceSkippedProperties"/>).
+    /// </summary>
     private static void EmitInPlaceBody(StringBuilder sb, MappingDescriptor descriptor, MappingPlan plan,
         ImmutableArray<ValueTransformerDescriptor> transformers, string scope)
     {
         foreach (var prop in descriptor.PropertyMappings)
         {
-            if (prop.IsIgnored || prop.IsInitOnly || IsMappingMissing(prop, plan))
+            if (prop.IsIgnored || IsMappingMissing(prop, plan))
             {
+                continue;
+            }
+
+            if (prop.IsInitOnly)
+            {
+                EmitInitNestedUpdate(sb, descriptor, prop, plan);
                 continue;
             }
 
@@ -1206,6 +1216,83 @@ internal static class MapperCodeEmitter
             ? $"            else {value}.{prop.NestedMapMethod}({target});"
             : $"            else {entry.CoreMethodName}({value}, {target});");
         return true;
+    }
+
+    /// <summary>
+    /// An <c>init</c>-only nested object (PR 10 of 2.1.0, issue #58): it cannot be assigned after construction, but an
+    /// existing one is updated in place through its getter, as a settable one (<see cref="EmitNestedUpdate"/>). A
+    /// <see langword="null"/> destination value cannot get a new object, and a <see langword="null"/> source value cannot be
+    /// assigned: both leave the property as it is (IM0025 says so at the mapping). Nothing for any other <c>init</c>-only
+    /// property (a value, a collection, a struct, a pair whose mapping cannot update an object), which is skipped.
+    /// </summary>
+    private static void EmitInitNestedUpdate(StringBuilder sb, MappingDescriptor descriptor, PropertyMappingDescriptor prop,
+        MappingPlan plan)
+    {
+        if (!UpdatesInitPropertyInPlace(prop, plan, out var entry))
+        {
+            return;
+        }
+
+        string value = $"source.{prop.SourcePropertyName}";
+        string target = $"destination.{prop.DestPropertyName}";
+        string update = entry is null ? $"{value}.{prop.NestedMapMethod}({target});" : $"{entry.CoreMethodName}({value}, {target});";
+        if (prop.NullHandling == Analysis.NullHandling.Throw)
+        {
+            // As for a new object: the source property is declared non-nullable for a non-nullable destination.
+            sb.AppendLine($"            if ({value} is null) {NestedObjectIsNull(descriptor, prop)};");
+            sb.AppendLine($"            else if ({target} is not null) {update}");
+        }
+        else if (prop.NullHandling == Analysis.NullHandling.Check)
+        {
+            sb.AppendLine($"            if ({value} is not null && {target} is not null) {update}");
+        }
+        else
+        {
+            sb.AppendLine($"            if ({target} is not null) {update}");
+        }
+    }
+
+    /// <summary>
+    /// An <c>init</c>-only property that the in-place overload updates: a nested object updated in place through its getter
+    /// (the in-place <c>…Core</c> of a pair of this compilation that can update an object, or the public in-place overload of
+    /// a referenced assembly's mapping, <paramref name="entry"/> <see langword="null"/>). The same condition as
+    /// <see cref="EmitNestedUpdate"/>.
+    /// </summary>
+    internal static bool UpdatesInitPropertyInPlace(PropertyMappingDescriptor prop, MappingPlan plan, out MappingPlanEntry? entry)
+    {
+        entry = null;
+        if (!prop.IsInitOnly || !prop.UpdatesNestedObjectInPlace)
+        {
+            return false;
+        }
+
+        if (prop.MappingPairs.Length == 0)
+        {
+            return true;
+        }
+
+        entry = plan.FindFirstGenerated(prop.MappingPairs);
+        return entry is { CanUpdateInPlace: true };
+    }
+
+    /// <summary>
+    /// The mapped <c>init</c>-only properties of <paramref name="descriptor"/> that its in-place overload does not fully
+    /// update (IM0025): <paramref name="skipped"/> are not updated at all, <paramref name="whenNotNull"/> are nested objects
+    /// updated in place only when the destination already has one (and the source has a value). Explicitly ignored
+    /// properties and properties without a generated mapping (IM0002) are not listed.
+    /// </summary>
+    internal static void InPlaceSkippedProperties(MappingDescriptor descriptor, MappingPlan plan, List<string> skipped,
+        List<string> whenNotNull)
+    {
+        foreach (var prop in descriptor.PropertyMappings)
+        {
+            if (!prop.IsInitOnly || prop.IsIgnored || IsMappingMissing(prop, plan))
+            {
+                continue;
+            }
+
+            (UpdatesInitPropertyInPlace(prop, plan, out _) ? whenNotNull : skipped).Add(prop.DestPropertyName);
+        }
     }
 
     /// <summary>

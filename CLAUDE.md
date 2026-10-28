@@ -204,6 +204,17 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   choice. Never updated in place. `ConvertUsing` also takes a static method group (`FactoryAnalyzer.ConvertUsing`,
   `return D.From(source);`); anything else the generated code cannot call is IM0022. `ReverseMap(Func<TDest, TSource>)` (an extension in `MappingExpressionExtensions`) gives the reverse mapping that converter, read the same way. Tests: `PairConverterTests`
   (generator and runtime), `PairConverterMapperTests`, snapshot `PairConverters`.
+- **`init`-only properties in place, IM0025** (issue #58, PR 10 of 2.1.0): the in-place body
+  (`MapperCodeEmitter.EmitInPlaceBody`) skips `init`-only properties, except a nested object updated in place through
+  its getter (`EmitInitNestedUpdate`: `if (source.X is not null && destination.X is not null) …Core(source.X, destination.X);`,
+  `UpdatesInitPropertyInPlace` — `PropertyMappingDescriptor.UpdatesNestedObjectInPlace` and a pair whose mapping
+  `CanUpdateInPlace`, or a referenced assembly's in-place overload); the planner follows it for `UsesInPlaceCore`.
+  Warning IM0025 (`IronMapperGenerator.CollectDiagnostics`, at `OriginLocation`; it needs the overloads and the plan):
+  the public in-place overload is generated, the destination is not created by a constructor, the overload is not a no-op,
+  and `InPlaceSkippedProperties` finds mapped, not ignored `init` properties (skipped, or nested updated only when not
+  null); the hint depends on attribute / profile / `ReverseMap()`. `InPlaceNoOpReason` counts an `init` nested object
+  that may be updated in place as an updated property. Tests: `InitInPlaceTests` (generator and runtime, `#pragma` with
+  `TreatWarningsAsErrors`), `InitInPlaceMapperTests` (`IMapper`), snapshot `InitInPlace`.
 - **Configuration that 2.0.0 dropped** (PR 8 of 2.1.0): a method group in `MapFrom` (issue #59, `ForMember` and
   `ForCtorParam`, the `Func<TSource, object?>` overload), `When`, `BeforeMap`, `AfterMap` — a static method is called,
   `Helper.Compute(source)`, a hook `Audit.Stamp(source, destination);` (`FactoryAnalyzer.MapFrom`/`When`/`Hook`, sharing

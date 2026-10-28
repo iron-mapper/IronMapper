@@ -33,6 +33,7 @@ IronMapper's source generator reports diagnostics with IDs `IM0001`–`IM0023`. 
 | IM0022 | Error | Converter of `ConvertUsing` cannot be used | Yes — profiles (from 2.1.0) |
 | IM0023 | Warning | Nullable value mapped to a non-nullable member | Yes — attributes and profiles (from 2.1.0) |
 | IM0024 | Error | Method of a profile setting cannot be used | Yes — profiles (from 2.1.0) |
+| IM0025 | Warning | In-place overload does not update init-only properties | Yes — attributes and profiles (from 2.1.0) |
 
 Each diagnostic points to a place in your code (**Points to** below): the IDE underlines it and the build output
 shows its file and line. The severity is set the standard way, in `.editorconfig` (or a `.globalconfig`):
@@ -657,3 +658,37 @@ a `MapFrom` method is checked like the type of a lambda
 **Fix:** pass a public or internal static method, or a lambda that does not use locals or the profile instance:
 `MapFrom(s => formats.Title(s))` is not allowed either (it captures `formats`), `MapFrom(s => Formats.Title(s))` with a
 static `Title` is.
+
+---
+
+## IM0025 — In-place overload does not update init-only properties
+
+**Severity:** Warning (from 2.1.0; issue [#58](https://github.com/iron-mapper/IronMapper/issues/58))
+
+**Points to:** the mapping: the `[MapTo]`/`[MapFrom]` attribute, the `CreateMap` call, or `ReverseMap()`.
+
+**Message:** `In-place mapping from '{0}' to '{1}' does not update every mapped property: {2}. {3}.` — `{2}` lists the
+properties, for example `Code and Version are init-only, so an existing object keeps their values; Customer is an
+init-only nested object: an existing one is updated in place, but a null one stays null and a null source value is not
+assigned`; `{3}` is the fix for the kind of mapping.
+
+**Cause:** the in-place overload `source.MapToX(destination)` (and `IMapper.Map(source, destination)`) is generated, and
+the destination has mapped properties that cannot be set on an existing object: `init` and `required init` properties.
+An `init`-only nested object is updated in place through its getter when the destination already has one (from 2.1.0);
+`null` there cannot be replaced, so it is listed too. A struct, a collection, or a nested object whose own mapping cannot
+update an object (it has `init` properties itself, or `ConvertUsing`) is skipped. Up to 2.0.0 all of them were skipped
+silently. Not reported:
+
+- for a property that is ignored (`[Ignore]`, `ForMember(..., o => o.Ignore())`);
+- when the in-place overload is turned off (`GenerateInPlace = false`, `GenerateMethods(inPlace: false)`,
+  `IronMapperGenerateInPlace=false`);
+- when every mapped property is `init`-only: that overload changes nothing and is `[Obsolete]` instead
+  ([Upgrading to 2.1](upgrading-to-2.1.md#4-in-place-overloads-that-do-nothing-are-obsolete));
+- for a destination created by a constructor or a factory (no in-place overload).
+
+**Behavior:** the overload is generated and updates the other properties (it is not `[Obsolete]`: it works in part).
+
+**Fix:** if the properties need not be mapped, ignore them (a new object then does not get them either); if the in-place
+update is not needed, turn the overload off; or make the properties settable. To keep everything as it is, suppress the
+warning (`#pragma warning disable IM0025` around the attribute or the `CreateMap` line, or
+`dotnet_diagnostic.IM0025.severity = none`).

@@ -33,6 +33,7 @@ Source generator IronMapper выдаёт диагностики с иденти�
 | IM0022 | Error | Converter `ConvertUsing` нельзя использовать | Да — профили (с 2.1.0) |
 | IM0023 | Warning | nullable-значение для ненулевого члена | Да — атрибуты и профили (с 2.1.0) |
 | IM0024 | Error | Метод настройки профиля нельзя использовать | Да — профили (с 2.1.0) |
+| IM0025 | Warning | In-place перегрузка не обновляет init-свойства | Да — атрибуты и профили (с 2.1.0) |
 
 Каждая диагностика указывает на место в вашем коде (**Куда указывает** ниже): IDE подчёркивает его, в выводе сборки
 видны файл и строка. Уровень задаётся стандартно, в `.editorconfig` (или `.globalconfig`):
@@ -656,3 +657,37 @@ source и destination и что написать, например:
 **Как исправить:** передайте public или internal статический метод либо лямбду, которая не использует локальные
 переменные и экземпляр профиля: `MapFrom(s => formats.Title(s))` тоже нельзя (захватывает `formats`), а
 `MapFrom(s => Formats.Title(s))` со статическим `Title` — можно.
+
+---
+
+## IM0025 — In-place перегрузка не обновляет init-свойства
+
+**Уровень:** Warning (с 2.1.0; issue [#58](https://github.com/iron-mapper/IronMapper/issues/58))
+
+**Куда указывает:** на маппинг: атрибут `[MapTo]`/`[MapFrom]`, вызов `CreateMap` или `ReverseMap()`.
+
+**Сообщение:** `In-place mapping from '{0}' to '{1}' does not update every mapped property: {2}. {3}.` — `{2}` перечисляет
+свойства, например `Code and Version are init-only, so an existing object keeps their values; Customer is an
+init-only nested object: an existing one is updated in place, but a null one stays null and a null source value is not
+assigned`; `{3}` — исправление для вида маппинга.
+
+**Причина:** in-place перегрузка `source.MapToX(destination)` (и `IMapper.Map(source, destination)`) генерируется, а у
+destination есть сопоставленные свойства, которые нельзя задать у существующего объекта: `init` и `required init`.
+Вложенный объект в `init`-свойстве обновляется на месте через getter, если в destination он уже есть (с 2.1.0); `null`
+там заменить нельзя, поэтому он тоже в списке. Struct, коллекция и вложенный объект, маппинг которого сам не может
+обновить объект (у него свои `init`-свойства или `ConvertUsing`), пропускаются. До 2.0.0 включительно все они
+пропускались молча. Не выдаётся:
+
+- для проигнорированного свойства (`[Ignore]`, `ForMember(..., o => o.Ignore())`);
+- если in-place перегрузка выключена (`GenerateInPlace = false`, `GenerateMethods(inPlace: false)`,
+  `IronMapperGenerateInPlace=false`);
+- если все сопоставленные свойства `init`: такая перегрузка ничего не меняет и вместо этого помечена `[Obsolete]`
+  ([Переход на 2.1](upgrading-to-2.1.ru.md#4-in-place-перегрузки-которые-ничего-не-делают--obsolete));
+- для destination, который создаётся конструктором или фабрикой (in-place перегрузки нет).
+
+**Поведение:** перегрузка генерируется и обновляет остальные свойства (не `[Obsolete]`: она работает частично).
+
+**Как исправить:** если свойства маппить не нужно — проигнорируйте их (тогда их не получит и новый объект); если
+in-place обновление не нужно — выключите перегрузку; или сделайте свойства изменяемыми (`set`). Чтобы оставить всё как
+есть, подавите предупреждение (`#pragma warning disable IM0025` вокруг атрибута или строки `CreateMap`, или
+`dotnet_diagnostic.IM0025.severity = none`).

@@ -19,6 +19,7 @@ and `IronMapperRegistration=false` now also applies to the project that sets it.
 | [`MapFrom`, `When` and hooks with a static method group are called](#6-mapfrom-when-and-hooks-with-a-static-method-group-are-called) | Profiles with `MapFrom(SomeType.Method)` in `ForMember`/`ForCtorParam`, `.When(SomeType.Method)`, `.BeforeMap(SomeType.Method)` or `.AfterMap(SomeType.Method)` |
 | [`[Ignore]` applies in profiles](#7-ignore-applies-in-profiles) | Profile mappings between types with `[Ignore]` on a property that the other type also has |
 | [`null` source can return `null` (opt-in)](#8-null-source-can-return-null-opt-in) | Projects that set `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>` (nothing changes without it) |
+| [`init`-only properties in place: nested objects updated, warning `IM0025`](#9-init-only-properties-in-place-nested-objects-updated-warning-im0025) | Mappings with in-place overloads to types that have `init` properties (warning `IM0025`; a build error with `TreatWarningsAsErrors`) |
 
 To find the first two, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type
 argument (`ConvertUsing<TConverter>()`); sections 6 and 7 say how to find theirs. For all of them at once, compare the
@@ -239,3 +240,50 @@ result is `null` instead.
 
 **What to do.** Nothing, unless you want `null` → `null`: then set the property and remove the `?.`/`null` checks around
 the calls (optional), or prepare for 3.0.0.
+
+---
+
+## 9. `init`-only properties in place: nested objects updated, warning `IM0025`
+
+**Was.** The in-place overload `source.MapToX(destination)` (and `IMapper.Map(source, destination)`) skipped every
+`init`-only property silently, also an `init`-only nested object
+([#58](https://github.com/iron-mapper/IronMapper/issues/58)). A destination with only `init` properties is already
+covered by section 4.
+
+```csharp
+public class OrderDto
+{
+    public string Name { get; set; } = "";
+    public string Code { get; init; } = "";
+    public CustomerDto? Customer { get; init; }
+}
+
+order.MapToOrderDto(existing);
+// 2.0.0: Name updated; Code and Customer unchanged, no warning
+// 2.1.0: Name updated; Code unchanged; an existing existing.Customer updated in place; warning IM0025 at the mapping
+```
+
+**Now.**
+
+- An existing object in an `init`-only nested property is updated in place through the getter (the same object, new
+  values), as a settable nested property is. A `null` there stays `null`, and a `null` source value is not assigned.
+- Warning [`IM0025`](diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties) at the mapping lists
+  the mapped `init`-only properties (also `required init`) that the in-place overload does not update, and the nested
+  ones it updates only when they exist. Not for ignored properties, an in-place overload that is turned off, or one that
+  is `[Obsolete]` (section 4).
+- A type that has only `init` properties but an `init`-only nested object that can be updated is no longer
+  `[Obsolete]`: its in-place overload updates that object.
+
+**What you may see.** **The result at run time changes** only for `init`-only nested objects: an existing one now gets
+the source's values (up to 2.0.0 it kept its old values). The other `init` properties are skipped as before. With
+`TreatWarningsAsErrors` the new warning is a build error.
+
+**What to do.** Check the mappings that `IM0025` points to. Then one of:
+
+- the properties need not be mapped: ignore them (`[Ignore]`, `ForMember(d => d.Code, o => o.Ignore())`; a new object
+  then does not get them either);
+- the in-place update is not needed: turn it off (`GenerateInPlace = false`, `.GenerateMethods(inPlace: false)`,
+  `IronMapperGenerateInPlace=false`);
+- the properties should be updated: make them settable (`set`);
+- keep it as it is: `#pragma warning disable IM0025` around the attribute or the `CreateMap` line, or
+  `dotnet_diagnostic.IM0025.severity = none` in `.editorconfig` (`<NoWarn>IM0025</NoWarn>` for the whole project).

@@ -141,9 +141,12 @@ you need the update in place:
 | The destination property has no getter the generated code can call (set-only, or a non-public getter) | the existing object cannot be read | add a public (or internal) getter |
 
 A referenced project's in-place overload is called as it is: if that mapping has `ConvertUsing` or `init` properties,
-its in-place overload ignores the converter and skips them (as for a top-level call). An `init`-only nested property
-itself is skipped by the in-place overload, as every `init` property (decided together with `init` in the in-place
-overload, item 2.15 of the plan). Properties of the
+its in-place overload ignores the converter and skips them (as for a top-level call). An **`init`-only nested property**
+(`public CustomerDto Customer { get; init; }`) cannot be assigned after construction, but from 2.1.0 an existing object
+in it is updated in place through the getter, by the same rules; when `destination.Customer` is `null` (no object to
+update) or `source.Customer` is `null` (nothing to assign), the property stays as it is, and warning
+[`IM0025`](diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties) says so at the mapping (up to
+2.0.0 the property was skipped silently). Properties of the
 nested object that the mapping does not set (an `Id` with `[Ignore]` or `Ignore()`) keep their values. Like the in-place
 overload itself, the update of a nested object ignores `When`, `ConvertUsing` and the hooks of the pair's mapping.
 
@@ -527,7 +530,10 @@ The in-place overload only assigns the mapped properties. It:
 - is not generated for a destination created by a constructor with parameters or a factory (`ConstructWith`)
   ([Constructors and positional records](#constructors-and-positional-records));
 - ignores `ConstructUsing` (the existing object is updated);
-- skips `init`-only destination properties;
+- skips `init`-only destination properties (also `required init`), with warning
+  [`IM0025`](diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties) at the mapping that lists them
+  (from 2.1.0; ignored properties are not listed); an existing `init`-only nested object is updated in place
+  ([above](#in-place-update-of-nested-objects));
 - does **not** apply `When`, `ConvertUsing`, `BeforeMap` or `AfterMap`;
 - throws `ArgumentNullException` for a `null` source or destination, also with `IronMapperNullSourceReturnsNull` (which
   changes only `MapToX(source)`).
