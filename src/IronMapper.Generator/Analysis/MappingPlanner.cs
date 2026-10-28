@@ -229,7 +229,8 @@ internal static class MappingPlanner
             var targets = new List<string>();
             foreach (var property in mapping.PropertyMappings)
             {
-                if (!property.IsInitOnly && !MapperCodeEmitter.IsMappingMissing(property, plan)
+                // Also an init-only nested object: it is updated through its getter (PR 10 of 2.1.0).
+                if (!MapperCodeEmitter.IsMappingMissing(property, plan)
                     && MapperCodeEmitter.FindNestedInPlaceEntry(property, plan) is { } target)
                 {
                     targets.Add(target.Origin);

@@ -225,6 +225,22 @@ internal static class DiagnosticDescriptors
         description: "MapFrom, When, BeforeMap and AfterMap take a lambda or a static method group (MapFrom(Helper.Compute), When(Rules.IsActive), AfterMap(Audit.Stamp)), read at compile time: the generated method calls it with the source (and the destination for a hook). A delegate in a variable, a local function or an instance method cannot be called by the generated class; the method must be public or internal. The message says what is wrong. Other mappings in the project are still generated.");
 
     /// <summary>
+    /// IM0025 — The in-place overload of a mapping is generated, and it cannot update every mapped property: an
+    /// <c>init</c>-only property (also <c>required init</c>) cannot be assigned after construction, so an existing object
+    /// keeps its value; an <c>init</c>-only nested object is updated in place through its getter, but only when the
+    /// destination already has one. Up to 2.0.0 these were skipped silently. Reported once per mapping, at the mapping;
+    /// not for an in-place overload that changes nothing (it is <c>[Obsolete]</c>) or one that is turned off.
+    /// </summary>
+    public static readonly DiagnosticDescriptor InPlaceSkipsInitProperties = new(
+        id: "IM0025",
+        title: "In-place overload does not update init-only properties",
+        messageFormat: "In-place mapping from '{0}' to '{1}' does not update every mapped property: {2}. {3}.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "An init-only destination property cannot be set on an existing object, so source.MapToX(destination) and IMapper.Map(source, destination) leave it as it is; an init-only nested object is updated through its getter when the destination has one. Ignore the properties if they need not be mapped (a new object then does not get them either), or turn the in-place overload off if it is not needed. The overload is still generated: it updates the other properties.");
+
+    /// <summary>
     /// IM0023 — A value that can be <see langword="null"/> (a nullable reference type) goes where the generated code needs
     /// a non-nullable one: a non-nullable destination property or parameter (<c>string?</c> → <c>string</c>), a converter,
     /// a transformer or an element mapping that takes a non-nullable value. Up to 2.0.0 the compiler reported it inside

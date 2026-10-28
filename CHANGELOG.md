@@ -214,6 +214,15 @@
   destination property still wins. **The result at run time changes:** the destination property keeps its default value
   (in place: its current value); check such mappings when you upgrade. Same section of
   [Upgrading to 2.1](docs/upgrading-to-2.1.md#7-ignore-applies-in-profiles).
+- **`init`-only properties in the in-place overload** ([#58](https://github.com/iron-mapper/IronMapper/issues/58)):
+  `source.MapToX(destination)` and `IMapper.Map(source, destination)` skipped them silently up to 2.0.0. An existing
+  object in an `init`-only nested property is now updated in place through its getter, as a settable one (a `null` one
+  stays `null`). **The result at run time changes** for such nested objects: they get the source's values instead of
+  keeping the old ones; check such mappings when you upgrade. The other `init` properties (also `required init`) are
+  still skipped, now with the new warning `IM0025` at the mapping, which lists them (not for ignored properties, an
+  in-place overload that is turned off, or one that is `[Obsolete]`); with `TreatWarningsAsErrors` it is a build error.
+  See [Upgrading to 2.1](docs/upgrading-to-2.1.md#9-init-only-properties-in-place-nested-objects-updated-warning-im0025)
+  and [IM0025](docs/diagnostics.md#im0025--in-place-overload-does-not-update-init-only-properties).
 
 ### Performance
 

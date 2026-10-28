@@ -1,0 +1,25 @@
+﻿{
+  Diagnostics: [
+    {
+      Location: /*
+
+[MapTo(typeof(OrderDto), GenerateList = false, GenerateArray = false)]
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+public class Order
+*/
+ : (4,1)-(4,69),
+      Message: In-place mapping from 'App.Order' to 'App.OrderDto' does not update every mapped property: Code and Version are init-only, so an existing object keeps their values; Customer is an init-only nested object: an existing one is updated in place, but a null one stays null and a null source value is not assigned. If they need not be mapped, mark them [Ignore] (a new object then does not get them either); if the in-place update is not needed, turn it off with GenerateInPlace = false.,
+      Severity: Warning,
+      WarningLevel: 1,
+      Descriptor: {
+        Id: IM0025,
+        Title: In-place overload does not update init-only properties,
+        Description: An init-only destination property cannot be set on an existing object, so source.MapToX(destination) and IMapper.Map(source, destination) leave it as it is; an init-only nested object is updated through its getter when the destination has one. Ignore the properties if they need not be mapped (a new object then does not get them either), or turn the in-place overload off if it is not needed. The overload is still generated: it updates the other properties.,
+        MessageFormat: In-place mapping from '{0}' to '{1}' does not update every mapped property: {2}. {3}.,
+        Category: IronMapper,
+        DefaultSeverity: Warning,
+        IsEnabledByDefault: true
+      }
+    }
+  ]
+}

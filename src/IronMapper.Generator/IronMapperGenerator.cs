@@ -297,8 +297,61 @@ public sealed class IronMapperGenerator : IIncrementalGenerator
                     }
                     builder.Add(diagnostic);
                 }
+
+                if (descriptor.SourceTypeName.Length != 0 && InPlaceSkipsInitProperties(descriptor, isProfile) is { } skipped)
+                {
+                    builder.Add(skipped);
+                }
             }
         }
+
+        // IM0025: the in-place overload is generated (the assembly setting with the mapping's override) and leaves mapped
+        // init-only properties as they are. Not for one that changes nothing ([Obsolete], InPlaceIsNoOp) or a destination
+        // created by a constructor or a factory (no in-place overload).
+        DiagnosticInfo? InPlaceSkipsInitProperties(MappingDescriptor descriptor, bool isProfile)
+        {
+            var entry = plan.Find(descriptor.Origin)!;
+            if (descriptor.UsesConstructor || entry.InPlaceIsNoOp || !settings.Methods.With(entry.MethodOverrides).InPlace)
+            {
+                return null;
+            }
+
+            var skipped = new List<string>();
+            var whenNotNull = new List<string>();
+            MapperCodeEmitter.InPlaceSkippedProperties(descriptor, plan, skipped, whenNotNull);
+            if (skipped.Count == 0 && whenNotNull.Count == 0)
+            {
+                return null;
+            }
+
+            var what = new List<string>();
+            if (skipped.Count > 0)
+            {
+                what.Add(skipped.Count == 1
+                    ? $"{skipped[0]} is init-only, so an existing object keeps its value"
+                    : $"{Join(skipped)} are init-only, so an existing object keeps their values");
+            }
+
+            if (whenNotNull.Count > 0)
+            {
+                what.Add(whenNotNull.Count == 1
+                    ? $"{whenNotNull[0]} is an init-only nested object: an existing one is updated in place, but a null one stays null and a null source value is not assigned"
+                    : $"{Join(whenNotNull)} are init-only nested objects: an existing one is updated in place, but a null one stays null and a null source value is not assigned");
+            }
+
+            string first = skipped.Count > 0 ? skipped[0] : whenNotNull[0];
+            string hint = !isProfile
+                ? "If they need not be mapped, mark them [Ignore] (a new object then does not get them either); if the in-place update is not needed, turn it off with GenerateInPlace = false"
+                : descriptor.OriginRank == 1
+                    ? $"The reverse mapping of ReverseMap() takes no ForMember: declare it with CreateMap<{descriptor.SourceTypeName}, {descriptor.DestTypeName}>() to configure it, or turn the in-place overloads off with IronMapperGenerateInPlace=false"
+                    : $"If they need not be mapped, use ForMember(d => d.{first}, o => o.Ignore()) for each (a new object then does not get them either); if the in-place update is not needed, use GenerateMethods(inPlace: false)";
+            return new DiagnosticInfo(DiagnosticDescriptors.InPlaceSkipsInitProperties, descriptor.SourceFullName!.Replace("global::", string.Empty),
+                    descriptor.DestFullName!.Replace("global::", string.Empty), string.Join("; ", what), hint)
+                .WithLocation(descriptor.OriginLocation);
+        }
+
+        static string Join(List<string> names)
+            => names.Count == 2 ? $"{names[0]} and {names[1]}" : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1];
 
         IEnumerable<MappingDescriptor> Generated()
             => fromMapTo.Concat(fromMapFrom).Concat(fromProfiles)

@@ -123,6 +123,14 @@ internal sealed class PropertyMappingDescriptor : IEquatable<PropertyMappingDesc
     public bool NestedUpdatesInPlace { get; }
 
     /// <summary>
+    /// A nested object mapped by a mapping that the in-place overload may call to update an existing object
+    /// (<see cref="NestedUpdatesInPlace"/>, no <c>MapFrom</c> or converter): for an <c>init</c>-only property, the only way the
+    /// in-place overload changes it (the plan still decides whether the pair's mapping can update an object).
+    /// </summary>
+    public bool UpdatesNestedObjectInPlace
+        => !IsIgnored && LambdaBody is null && ConverterType is null && NestedMapMethod is not null && NestedUpdatesInPlace;
+
+    /// <summary>
     /// Fully qualified source type of a nested object (<see cref="NestedMapMethod"/>, without <c>?</c>): the type argument
     /// of <c>NestedObjectIsNull&lt;T&gt;</c> for <see cref="Analysis.NullHandling.Throw"/>; <see langword="null"/> for
     /// other properties.
