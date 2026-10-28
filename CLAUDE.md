@@ -446,7 +446,11 @@ analytics, no third-party scripts. `cd site && npm ci && npm run dev` for a loca
 - relative links between docs, README and CHANGELOG point to existing files and existing headings (anchors as on
   GitHub: `diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping`);
 - `docs/diagnostics.md` and `docs/diagnostics.ru.md`: every `##` heading is `## IMxxxx — Title`, the same codes in
-  both files (the site makes one page per code, `/diagnostics/im0002/`, which later becomes `helpLinkUri`);
+  both files. The site makes one page per code — `https://iron-mapper.ru/diagnostics/im0002/` (lowercase code, trailing
+  slash; Russian under `/ru/`) — and the text before the first code is `/diagnostics/` with the codes of its table
+  linked. That address is stable: it is what `helpLinkUri` of the `DiagnosticDescriptor`s will point to (a separate
+  PR in the library once the site is published), so a code is never renamed or removed from the doc; a withdrawn
+  diagnostic keeps its section and says so.
 - the README Quick Start stays between `<!-- quickstart:begin -->` / `<!-- quickstart:end -->` as one ```csharp block
   (also compiled by `verify-package.ps1`).
 - Benchmark numbers on the site come only from `benchmarks/results/summary.json` (written by `generate-report.ps1`);
