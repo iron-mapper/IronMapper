@@ -28,6 +28,8 @@
     <!-- Verified snapshots are generated code, not part of the test assembly. -->
     <Compile Remove="Snapshots\**" />
     <None Include="Snapshots\**" />
+    <!-- DiagnosticHelpLinkTests: every helpLinkUri needs its section in the docs. -->
+    <None Include="..\..\docs\diagnostics.md;..\..\docs\diagnostics.ru.md" Link="Docs\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

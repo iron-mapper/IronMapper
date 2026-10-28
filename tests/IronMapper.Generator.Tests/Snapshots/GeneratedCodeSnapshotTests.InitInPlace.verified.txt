@@ -15,6 +15,7 @@ public class Order
         Id: IM0025,
         Title: In-place overload does not update init-only properties,
         Description: An init-only destination property cannot be set on an existing object, so source.MapToX(destination) and IMapper.Map(source, destination) leave it as it is; an init-only nested object is updated through its getter when the destination has one. Ignore the properties if they need not be mapped (a new object then does not get them either), or turn the in-place overload off if it is not needed. The overload is still generated: it updates the other properties.,
+        HelpLink: https://iron-mapper.ru/diagnostics/im0025/,
         MessageFormat: In-place mapping from '{0}' to '{1}' does not update every mapped property: {2}. {3}.,
         Category: IronMapper,
         DefaultSeverity: Warning,
