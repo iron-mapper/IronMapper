@@ -175,7 +175,8 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
     /// not apply it) or no property can be set (every mapped property is <c>init</c>-only, or there is none). Such an
     /// overload is <c>[Obsolete]</c> (removed in 3.0.0), and <c>IMapper.Map(source, destination)</c> throws for the pair.
     /// An <c>init</c>-only nested object that may be updated in place (<see cref="PropertyMappingDescriptor.NestedUpdatesInPlace"/>,
-    /// from PR 10 of 2.1.0) counts as a property the overload updates.
+    /// from PR 10 of 2.1.0) counts as a property the overload updates; so does <c>BeforeMap</c>/<c>AfterMap</c>, which the
+    /// in-place overload runs from PR 11 of 2.1.0.
     /// Not used for a destination created by a constructor or a factory (<see cref="UsesConstructor"/>), which has no
     /// in-place overload.
     /// </summary>
@@ -196,6 +197,12 @@ internal sealed class MappingDescriptor : IEquatable<MappingDescriptor>
             if (WholeObjectConverterType is not null || WholeObjectLambdaBody is not null)
             {
                 return "the mapping uses ConvertUsing, which only creates a new object";
+            }
+
+            // BeforeMap/AfterMap run in place too (issue #62), and they may change the destination.
+            if (BeforeMapLambdaBody is not null || AfterMapLambdaBody is not null)
+            {
+                return null;
             }
 
             foreach (var property in PropertyMappings)

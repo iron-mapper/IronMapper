@@ -108,7 +108,7 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   a turned-off List/Array is passed as `null` to `MapperRegistry.Register`, and the registry loops over `map` itself
   (`MapperEntry`). `MapToX(source)` is always generated (nested collections call it). **An in-place overload that
   changes nothing** (`MappingDescriptor.InPlaceNoOpReason`: a value-type destination, `ConvertUsing`, no settable mapped
-  property; `MappingPlanEntry.InPlaceIsNoOp`) is `[Obsolete(reason)]` (removed in 3.0.0), and the registration calls a
+  property and no hook; `MappingPlanEntry.InPlaceIsNoOp`) is `[Obsolete(reason)]` (removed in 3.0.0), and the registration calls a
   private `MapInto{scope}` that throws `MappingException` (`EmitInPlaceStub`, also for a constructor or a factory); a
   referenced assembly's `[Obsolete]` in-place overload is never called for a nested object
   (`PropertyTypeCheck.IsUpdatedByExistingMethod`). Tests: `GeneratedCodeSizeTests`, `NoOpInPlaceMapperTests`. The class declaration
@@ -215,6 +215,17 @@ The **Roslyn Incremental Source Generator** (`IIncrementalGenerator`).
   null); the hint depends on attribute / profile / `ReverseMap()`. `InPlaceNoOpReason` counts an `init` nested object
   that may be updated in place as an updated property. Tests: `InitInPlaceTests` (generator and runtime, `#pragma` with
   `TreatWarningsAsErrors`), `InitInPlaceMapperTests` (`IMapper`), snapshot `InitInPlace`.
+- **Hooks, `When`, `required`** (issues #60 and #62, PR 11 of 2.1.0): with `BeforeMap`/`AfterMap` the destination is
+  created with an object initializer of the mapped `required` and `init` properties (`MapperCodeEmitter.SetInInitializer`,
+  `PropertyMappingDescriptor.IsRequired` via `AsRequired()`; after the arguments of a constructor; not after a factory),
+  then `BeforeMap`, the other assignments, `AfterMap`. The in-place body (`EmitInPlaceBody`, so also `…Core` and
+  `MapInto`) starts with `if (!(when)) return;` and calls the hooks around the properties, except with `ConvertUsing`;
+  a mapping without hooks and `When` gets the same code. `InPlaceNoOpReason`: a hook makes the overload not a no-op.
+  IM0026 (error, `ProfileAnalyzer`/`MappingAnalyzer`, at the mapping, the mapping is not generated): a `required`
+  property without a value (ignored, no source, value unusable), unless a factory, `ConvertUsing` or a constructor with
+  `[SetsRequiredMembers]` (`ConstructorSelection.SetsRequiredMembers`) creates the object — instead of CS9035 in the
+  generated file. Per-member conditions do not exist (`When` is per mapping). Tests: `HooksAndWhenTests` (generator and
+  runtime), `HooksAndWhenMapperTests` (`IMapper`), snapshot `HooksAndWhen`.
 - **Configuration that 2.0.0 dropped** (PR 8 of 2.1.0): a method group in `MapFrom` (issue #59, `ForMember` and
   `ForCtorParam`, the `Func<TSource, object?>` overload), `When`, `BeforeMap`, `AfterMap` — a static method is called,
   `Helper.Compute(source)`, a hook `Audit.Stamp(source, destination);` (`FactoryAnalyzer.MapFrom`/`When`/`Hook`, sharing

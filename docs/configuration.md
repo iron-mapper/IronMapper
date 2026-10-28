@@ -651,7 +651,10 @@ CreateMap<OrderRow, Order>().ConstructUsing(s => new Order("#" + s.Code));
 
 ### `When(src => condition)`
 
-Adds a guard: the mapping only executes when the predicate is true; otherwise `default` (`null` for classes) is returned. Not applied by the in-place overload.
+Adds a guard: the mapping only executes when the predicate is true; otherwise `default` (`null` for classes) is returned.
+The in-place overload (and `IMapper.Map(source, destination)`) leaves the destination as it is when the predicate is
+false, and does not call `BeforeMap`/`AfterMap` then (from 2.1.0; up to 2.0.0 it did not apply `When`). `When` is per
+mapping: a condition per member (AutoMapper's `opt.Condition`) is not supported, use `MapFrom(s => cond ? s.X : default)`.
 
 ```csharp
 CreateMap<UserEntity, UserDto>()

@@ -27,8 +27,10 @@ namespace IronMapper.Generated
         {
             global::System.ArgumentNullException.ThrowIfNull(source, nameof(source));
             global::System.ArgumentNullException.ThrowIfNull(destination, nameof(destination));
+            if (!(global::App.ArticleFormat.IsPublished(source))) return;
             destination.Title = global::App.ArticleFormat.Title(source);
             destination.Slug = global::App.ArticleFormat.Slug(source);
+            AfterMap_ArticleRow_ArticleCard(source, destination);
         }
 
         private static void AfterMap_ArticleRow_ArticleCard(global::App.ArticleRow source, global::App.ArticleCard destination)

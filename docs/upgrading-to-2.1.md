@@ -5,6 +5,7 @@
 2.1.0 follows 2.0.0. Fixes of configuration that profiles silently ignored (`ConvertUsing`, `MapFrom`, `When`,
 `BeforeMap` and `AfterMap` with a method group, `[Ignore]` on a property) can change what a mapping that built with 2.0.0 does or whether it builds,
 nullable warnings move from the generated file to your code, in-place overloads that do nothing are marked `[Obsolete]`,
+the in-place overload applies `When` and hooks, `init` properties of mappings with hooks are mapped,
 and `IronMapperRegistration=false` now also applies to the project that sets it. Everything else in
 2.1.0 is new functionality or a fix that only affects code that did not build with 2.0.0
 ([CHANGELOG](../CHANGELOG.md)).
@@ -20,6 +21,8 @@ and `IronMapperRegistration=false` now also applies to the project that sets it.
 | [`[Ignore]` applies in profiles](#7-ignore-applies-in-profiles) | Profile mappings between types with `[Ignore]` on a property that the other type also has |
 | [`null` source can return `null` (opt-in)](#8-null-source-can-return-null-opt-in) | Projects that set `<IronMapperNullSourceReturnsNull>true</IronMapperNullSourceReturnsNull>` (nothing changes without it) |
 | [`init`-only properties in place: nested objects updated, warning `IM0025`](#9-init-only-properties-in-place-nested-objects-updated-warning-im0025) | Mappings with in-place overloads to types that have `init` properties (warning `IM0025`; a build error with `TreatWarningsAsErrors`) |
+| [Hooks and `When` in the in-place overload](#10-hooks-and-when-in-the-in-place-overload) | In-place calls (`source.MapToX(existing)`, `IMapper.Map(source, existing)`) of profile mappings with `When`, `BeforeMap` or `AfterMap` |
+| [`required` and `init` properties with `BeforeMap`/`AfterMap`](#11-required-and-init-properties-with-beforemapaftermap) | Profile mappings with hooks to types with `init` properties; `required` properties without a value (`IM0026` instead of `CS9035`) |
 
 To find the first two, search the profiles for `ConvertUsing(` whose argument is not a lambda (`s => …`) and not a type
 argument (`ConvertUsing<TConverter>()`); sections 6 and 7 say how to find theirs. For all of them at once, compare the
@@ -283,7 +286,75 @@ the source's values (up to 2.0.0 it kept its old values). The other `init` prope
 - the properties need not be mapped: ignore them (`[Ignore]`, `ForMember(d => d.Code, o => o.Ignore())`; a new object
   then does not get them either);
 - the in-place update is not needed: turn it off (`GenerateInPlace = false`, `.GenerateMethods(inPlace: false)`,
-  `IronMapperGenerateInPlace=false`);
+  `IronMapperGenerateInPlace=false`). The warning then goes, but `IMapper.Map(source, destination)` still updates such
+  a type in part, without a warning (the registration keeps a private in-place method with the same body): if you call
+  it for the pair, keep that in mind;
 - the properties should be updated: make them settable (`set`);
 - keep it as it is: `#pragma warning disable IM0025` around the attribute or the `CreateMap` line, or
   `dotnet_diagnostic.IM0025.severity = none` in `.editorconfig` (`<NoWarn>IM0025</NoWarn>` for the whole project).
+
+
+---
+
+## 10. Hooks and `When` in the in-place overload
+
+**Was.** The in-place overload `source.MapToX(destination)` (and `IMapper.Map(source, destination)`) assigned the
+mapped properties only: it did not evaluate `When` and did not call `BeforeMap`/`AfterMap`
+([#62](https://github.com/iron-mapper/IronMapper/issues/62)). AutoMapper's `Map(source, destination)` applies them, so
+a migrated call silently skipped that logic.
+
+```csharp
+CreateMap<Row, Dto>().When(s => s.Active).AfterMap((s, d) => d.Version++);
+
+row.MapToDto(existing);
+// 2.0.0: properties assigned whatever Active is; Version unchanged
+// 2.1.0: Active == false: existing unchanged; otherwise BeforeMap, the properties, AfterMap (Version + 1)
+```
+
+**Now.** The in-place body runs as a new object does: `When` first (`false`: the destination is left as it is, no hook
+runs), then `BeforeMap`, the properties and `AfterMap`. Also for an existing nested object updated in place: the `When`
+and hooks of its pair's mapping apply to it. `ConvertUsing` is not applied in place (that overload is `[Obsolete]`,
+section 4). A destination with only `init` properties and a hook is no longer `[Obsolete]`: the hook may change it (the
+`init` properties are listed in `IM0025`, section 9). Mappings without hooks and `When` get the same code as before.
+
+**What you may see.** **The result at run time changes** for in-place calls of mappings with `When`, `BeforeMap` or
+`AfterMap`: a destination for which `When` is false is no longer updated, and the hooks run (once per call). With
+`TreatWarningsAsErrors`, a mapping to a type with only `init` properties and a hook gets `IM0025` instead of `CS0618` at
+its calls.
+
+**What to do.** Find the in-place calls (`source.MapToX(existing)`, `mapper.Map(source, existing)`) of mappings with
+`When`, `BeforeMap` or `AfterMap`, and check that the hooks can run on an existing object (for example, a counter or a
+timestamp that a hook sets). If the old behavior is needed, update the object without the mapping's logic yourself, or
+declare a second mapping without the hooks for the in-place update.
+
+---
+
+## 11. `required` and `init` properties with `BeforeMap`/`AfterMap`
+
+**Was.** A mapping with `BeforeMap` or `AfterMap` created the destination with `new D()` and assigned the properties one
+by one ([#60](https://github.com/iron-mapper/IronMapper/issues/60)): a `required` property failed the build inside the
+generated file (`CS9035`), and an `init` property was silently left at its default value. A `required` property that the
+mapping gives no value (ignored, nothing maps it) failed with `CS9035` there too, also without hooks.
+
+```csharp
+public class Dto { public required string Code { get; set; } public string Name { get; init; } = ""; public int Id { get; set; } }
+
+CreateMap<Row, Dto>().AfterMap((s, d) => d.Id++);
+// 2.0.0: CS9035 in the generated file (Code); without required: Name not mapped
+// 2.1.0: new Dto { Code = …, Name = … }, then BeforeMap, Id, AfterMap
+```
+
+**Now.** The object initializer sets the mapped `required` and `init` properties, then `BeforeMap` runs, the other
+properties are assigned, and `AfterMap` runs; with a constructor, the initializer follows its arguments. After a factory
+(`ConstructWith`, `ConstructUsing`) the properties are assigned as before (an `init` property there is `IM0021`). A
+`required` property without a value is the new error
+[`IM0026`](diagnostics.md#im0026--required-property-is-not-mapped) at the mapping, and the mapping is not generated,
+instead of `CS9035` inside the generated file (not with a constructor that has `[SetsRequiredMembers]`).
+
+**What you may see.** **The result at run time changes** for `init` properties of mappings with hooks: they now get the
+source's values (up to 2.0.0 they kept their defaults). `BeforeMap` sees the `required` and `init` properties already set
+(the other properties not yet). `IM0026` only appears where the build failed with `CS9035`.
+
+**What to do.** Check the `BeforeMap` hooks of such mappings that read or set a `required` or `init` property: the
+initializer has set it before the hook runs, and a hook that sets it overrides the mapped value. For `IM0026`, map the
+property, remove `required`, or create the destination with a `[SetsRequiredMembers]` constructor or a factory.

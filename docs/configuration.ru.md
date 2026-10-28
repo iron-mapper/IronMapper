@@ -649,7 +649,11 @@ CreateMap<OrderRow, Order>().ConstructUsing(s => new Order("#" + s.Code));
 
 ### `When(src => condition)`
 
-Добавляет guard: mapping выполняется только когда предикат истинен; иначе возвращается `default` (`null` для классов). Не применяется в in-place перегрузке.
+Добавляет guard: mapping выполняется только когда предикат истинен; иначе возвращается `default` (`null` для классов).
+In-place перегрузка (и `IMapper.Map(source, destination)`) при ложном предикате оставляет destination без изменений и
+тогда не вызывает `BeforeMap`/`AfterMap` (с 2.1.0; до 2.0.0 включительно `When` в ней не применялся). `When` задаётся на
+маппинг: условие на отдельный член (`opt.Condition` в AutoMapper) не поддерживается, используйте
+`MapFrom(s => cond ? s.X : default)`.
 
 ```csharp
 CreateMap<UserEntity, UserDto>()

@@ -336,8 +336,8 @@ public record PendingChangeState(string? NewAddress, DateTimeOffset? ExpiresAt);
 [In-place-обновление вложенных объектов](#in-place-обновление-вложенных-объектов)).
 
 Прочее: исключение из конструктора доходит до вызывающего кода как есть; `ConvertUsing` создаёт объект сам, конструктор
-не нужен; с `BeforeMap`/`AfterMap` сначала вызывается конструктор, затем `BeforeMap`, присваивания свойств с `set` и
-`AfterMap`. Как и для свойства, nullable source для ненулевого ссылочного параметра (`string?` → `string`) передаёт `null`
+не нужен; с `BeforeMap`/`AfterMap` сначала вызывается конструктор (с инициализатором объекта для `required`- и
+`init`-свойств, с 2.1.0), затем `BeforeMap`, присваивания остальных свойств с `set` и `AfterMap`. Как и для свойства, nullable source для ненулевого ссылочного параметра (`string?` → `string`) передаёт `null`
 дальше с предупреждением [`IM0023`](diagnostics.ru.md#im0023--nullable-значение-для-ненулевого-члена) в вашем маппинге
 (до 2.0.0 включительно — предупреждение nullable внутри сгенерированного файла, `CS8604`; у свойства `CS8601`).
 
@@ -534,12 +534,17 @@ In-place перегрузка только присваивает замапле
   [`IM0025`](diagnostics.ru.md#im0025--in-place-перегрузка-не-обновляет-init-свойства) у маппинга, которое их перечисляет
   (с 2.1.0; проигнорированные свойства не перечисляются); существующий вложенный объект в `init`-свойстве обновляется на
   месте ([выше](#in-place-обновление-вложенных-объектов));
-- **не** применяет `When`, `ConvertUsing`, `BeforeMap` и `AfterMap`;
+- сначала проверяет `When` (`false` — destination не меняется), вызывает `BeforeMap` перед свойствами и `AfterMap` после
+  них — как при создании нового объекта и как `Map(source, destination)` в AutoMapper (с 2.1.0, issue
+  [#62](https://github.com/iron-mapper/IronMapper/issues/62); до 2.0.0 включительно пропускала их). Существующий
+  вложенный объект обновляется in-place телом своей пары, с `When` и хуками её маппинга;
+- **не** применяет `ConvertUsing` (такая перегрузка — `[Obsolete]`, см. ниже);
 - бросает `ArgumentNullException` для `null` в source или destination, в том числе с `IronMapperNullSourceReturnsNull`
   (оно меняет только `MapToX(source)`).
 
 **In-place перегрузка, которая ничего не делает, помечена `[Obsolete]`** (с 2.1.0; удаляется в 3.0.0): для destination —
-value-типа (метод получает копию), маппинга с `ConvertUsing` и destination, у которого все сопоставленные свойства `init`.
+value-типа (метод получает копию), маппинга с `ConvertUsing` и destination, у которого все сопоставленные свойства `init` (и нет `BeforeMap`/`AfterMap`,
+которые могут его изменить).
 Каждый вызов получает предупреждение `CS0618` с причиной и исправлением (маппить в новый объект или выключить перегрузку:
 `GenerateInPlace = false`, `GenerateMethods(inPlace: false)` или `IronMapperGenerateInPlace=false`), а
 `IMapper.Map(source, destination)` для такой пары вместо бездействия бросает `MappingException` с той же причиной. См.
