@@ -1,7 +1,8 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import { project, githubUrl, blobUrl } from './project.config.mjs';
+import starlightLlmsTxt from 'starlight-llms-txt';
+import { project, githubUrl, blobUrl, nugetUrl } from './project.config.mjs';
 
 // Sidebar entries use `slug`, which Starlight resolves per locale (`/configuration/` and `/ru/configuration/`)
 // and prefixes with `base` itself. The slugs are the file names in docs/ (see scripts/prepare.mjs).
@@ -77,6 +78,37 @@ export default defineConfig({
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+      ],
+      plugins: [
+        // /llms.txt (project summary + links), /llms-full.txt (every English page as Markdown, without the site
+        // chrome) and /llms-small.txt, for AI tools a user points at the site. English only (the default locale);
+        // the pages are the built ones, so the benchmark numbers are the same summary.json values as everywhere.
+        starlightLlmsTxt({
+          projectName: project.name,
+          description: project.tagline.en,
+          details: [
+            `${project.name} is a free (MIT) object-to-object mapper for .NET. A Roslyn incremental source generator`,
+            'reads `[MapTo]`/`[MapFrom]` attributes and `MappingProfile` classes and writes plain C# mapping code at build',
+            'time: no reflection, NativeAOT-compatible, configuration mistakes reported as compiler diagnostics (`IM0001`…).',
+            `NuGet: ${project.nuget.map((p) => `[${p}](${nugetUrl(p)})`).join(', ')}. Source: [GitHub](${githubUrl}).`,
+            '',
+            '## Key pages',
+            '',
+            `- [Getting started](${project.site}${project.base}/getting-started/): install, first mapping, the generated code`,
+            `- [Configuration](${project.site}${project.base}/configuration/): attributes, profiles, converters, collections, IMapper and DI, MSBuild properties`,
+            `- [Advanced](${project.site}${project.base}/advanced/): nested objects, constructors and records, factories, value conversions, NativeAOT`,
+            `- [Migrating from AutoMapper](${project.site}${project.base}/migration-from-automapper/): API equivalence table, step-by-step migration`,
+            `- [Diagnostics](${project.site}${project.base}/diagnostics/): every IM diagnostic, one page per code (\`/diagnostics/im0001/\` …)`,
+            `- [Benchmarks](${project.site}${project.base}/benchmarks/): against Mapperly, Mapster, AutoMapper and hand-written code; methodology`,
+            `- [Changelog](${project.site}${project.base}/changelog/)`,
+          ].join('\n'),
+          // Order in llms-full.txt: home and getting started first, release notes last.
+          promote: ['index*', 'getting-started', 'configuration', 'advanced', 'migration-from-automapper', 'diagnostics', 'diagnostics/**', 'benchmarks'],
+          demote: ['upgrading-*', 'changelog', 'roadmap'],
+          exclude: ['404'],
+          // The "Section titled …" anchor links of headings are navigation, not content.
+          customSelectors: { all: ['.sl-anchor-link'] },
+        }),
       ],
       expressiveCode: {
         // C# is the language of nearly every block; the themes follow the site's light/dark mode.
