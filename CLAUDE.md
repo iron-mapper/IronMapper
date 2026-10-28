@@ -48,6 +48,7 @@ IronMapper/
 │   ├── IronMapper.Integration.Domain/      # Entities for the multi-project IMapper test (no IronMapper reference)
 │   └── IronMapper.Integration.Application/ # Profiles and DTOs for that test (generator attached)
 ├── benchmarks/                        # Comparison suite vs Mapperly, Mapster, AutoMapper (own solution, not in the .slnx)
+├── site/                              # Project website (Astro Starlight, GitHub Pages); built from docs/, README, CHANGELOG (see "Site")
 ├── samples/IronMapper.Demo/           # Demo application
 ├── eng/verify-package.ps1            # dotnet pack + .nupkg layout check + consumer build
 ├── eng/verify-aot.ps1                # dotnet pack + NativeAOT publish of the AOT probes (net8.0, net10.0)
@@ -393,6 +394,30 @@ pwsh ./scripts/run-all.ps1            # full run -> results/RESULTS.md; -Quick f
 ./bench.ps1                           # CLI: menu; or ./bench.ps1 quick --dry / full --check-only / results
 ./bench.ps1 quick --filter 'Nested,InPlace' --frameworks 'net10.0,net8.0'   # lists in single quotes (pwsh and bash)
 ```
+
+### `site/` — project website (Astro Starlight, static, GitHub Pages)
+
+Built from the repository, nothing is written twice: `site/scripts/prepare.mjs` generates the pages from `docs/*.md`
+(+ `*.ru.md`), `CHANGELOG.md` and the README Quick Start before `npm run dev`/`npm run build`; hand-written pages
+(home, roadmap) are in `site/pages/`. `site/project.config.mjs` is the only place with the library's name and
+addresses. `cd site && npm ci && npm run dev` for a local preview; details in `site/README.md`.
+
+**Format contract** (`prepare.mjs` fails the build when it is broken):
+- every `docs/<name>.md` has a `docs/<name>.ru.md` and vice versa; a doc starts with one `# Title` (the page title)
+  and has no other level-1 heading; the optional language banner (`> 📖 **[Русская версия](…)**`) follows the title;
+- relative links between docs, README and CHANGELOG point to existing files and existing headings (anchors as on
+  GitHub: `diagnostics.md#im0002--property-types-are-incompatible-or-have-no-mapping`);
+- `docs/diagnostics.md` and `docs/diagnostics.ru.md`: every `##` heading is `## IMxxxx — Title`, the same codes in
+  both files (the site makes one page per code, `/diagnostics/im0002/`, which later becomes `helpLinkUri`);
+- the README Quick Start stays between `<!-- quickstart:begin -->` / `<!-- quickstart:end -->` as one ```csharp block
+  (also compiled by `verify-package.ps1`).
+- Benchmark numbers on the site come only from `benchmarks/results/summary.json` (to be written by
+  `generate-report.ps1`, with `schemaVersion`; not there yet — the benchmarks page is the next step of the site); never
+  typed into the site.
+
+The site gets its own workflow (`.github/workflows/site.yml`, path-filtered: `site/**`, `docs/**`,
+`benchmarks/results/**`, `CHANGELOG.md`, `README*.md`; not written yet); `ci.yml` stays untouched, and the PR check of
+the site is not a required check.
 
 ---
 

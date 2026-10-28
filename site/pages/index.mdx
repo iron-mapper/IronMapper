@@ -1,0 +1,44 @@
+---
+title: IronMapper
+description: A compile-time object mapper for .NET. A Roslyn source generator writes the mapping code as plain C# when you build.
+template: splash
+hero:
+  tagline: A compile-time object mapper for .NET. A Roslyn source generator writes the mapping code as plain C# when you build. Free, MIT.
+  actions:
+    - text: Get started
+      link: ../../docs/getting-started.md
+      icon: right-arrow
+    - text: Migrating from AutoMapper
+      link: ../../docs/migration-from-automapper.md
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/iron-mapper/IronMapper
+      icon: external
+      variant: minimal
+---
+
+import { Content as QuickStart } from '@generated/quickstart.en.md';
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+## Install
+
+```bash
+dotnet add package IronMapper
+```
+
+## Quick Start
+
+`Program.cs` of a console app (`dotnet new console`):
+
+<QuickStart />
+
+Mapping code for every type pair is generated into your assembly: `MapTo*` extension methods with explicit property
+assignments and no reflection, so the mapping can be read and stepped through in the IDE. Configuration mistakes are
+reported at build time as [diagnostics](../../docs/diagnostics.md) at your code.
+
+<CardGrid>
+  <LinkCard title="Configuration" description="Attributes, profiles, converters, collections, IMapper and DI." href="../../docs/configuration.md" />
+  <LinkCard title="Advanced" description="Nested objects, constructors and records, factories, value conversions, NativeAOT." href="../../docs/advanced.md" />
+  <LinkCard title="Diagnostics" description="Every IM diagnostic: what it points to, why, and how to fix it." href="../../docs/diagnostics.md" />
+  <LinkCard title="Changelog" description="What changed in every release." href="../../CHANGELOG.md" />
+</CardGrid>

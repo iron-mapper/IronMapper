@@ -1,0 +1,23 @@
+/* Accent: a muted steel blue in both themes. Everything else is Starlight's default. */
+:root {
+  --sl-color-accent-low: #1e2a3a;
+  --sl-color-accent: #4a7fb5;
+  --sl-color-accent-high: #b9d3ec;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d9e6f3;
+  --sl-color-accent: #2f6397;
+  --sl-color-accent-high: #1d3d5c;
+}
+
+/* Tables in the docs are wide (benchmark summaries, API equivalence); let them scroll instead of overflowing. */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Expressive Code frames: keep a flat look. */
+.expressive-code .frame {
+  box-shadow: none;
+}
