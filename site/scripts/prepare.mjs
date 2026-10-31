@@ -37,6 +37,11 @@ const base = project.base.replace(/\/+$/, '');
 const LOCALES = /** @type {const} */ (['en', 'ru']);
 const CHANGELOG_SLUG = 'changelog';
 
+// Repository instructions are not user documentation and do not need translated pages.
+function isInstructionFile(name) {
+  return name === 'AGENTS.md' || name === 'AGENTS.override.md';
+}
+
 /** @typedef {{ repoPath: string, locale: 'en' | 'ru', slug: string, lines: string[], headings: Set<string> }} Page */
 
 class ContractError extends Error {}
@@ -330,7 +335,7 @@ function splitDoc(repoPath, lines) {
 
 function prepareDocs() {
   const docsDir = join(repoDir, 'docs');
-  const files = readdirSync(docsDir).filter((f) => f.endsWith('.md'));
+  const files = readdirSync(docsDir).filter((f) => f.endsWith('.md') && !isInstructionFile(f));
   const names = new Set(files.map((f) => f.replace(/(\.ru)?\.md$/, '')));
   const written = [];
   for (const name of [...names].sort()) {
@@ -414,6 +419,7 @@ function preparePages() {
   const written = [];
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (isInstructionFile(entry.name)) continue;
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (/\.mdx?$/.test(entry.name)) {

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Documentation site preparation excludes repository instruction files (`AGENTS.md` and `AGENTS.override.md`)
+  from documentation and hand-written pages, while retaining EN/RU pairing checks for user documentation.
+
 ### Added
 
 - **Constructors and positional records** ([#24](https://github.com/iron-mapper/IronMapper/issues/24)): a destination
